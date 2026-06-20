@@ -26,3 +26,13 @@ Recommended reading order:
 MVP thesis:
 
 Dependency Hell is a room-based action roguelite where upgrades mutate a live dependency graph. The prototype succeeds if players can understand that their package choices create both power and future risk, then lose or win in ways that feel funny, legible, and traceable to earlier decisions.
+
+## Visual Smoke Checks
+
+The prototype is still zero-build and can be opened directly from `index.html`. For repeatable UI review with an installed Chrome-compatible browser, run:
+
+```sh
+node scripts/visual-smoke.js
+```
+
+The script launches a temporary headless browser, serves the repo locally, and writes desktop screenshots for the main view, package choice, graph view, route choice, and report states to `artifacts/visual-smoke/`.

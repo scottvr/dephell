@@ -943,6 +943,26 @@ button:focus-visible {
     width: min(290px, calc(100% - 36px));
   }
 
+  .overlay {
+    padding: 10px;
+  }
+
+  .choice-frame,
+  .report-frame,
+  .graph-frame,
+  .route-frame {
+    width: min(100%, calc(100vw - 20px));
+    max-height: calc(100% - 20px);
+    padding: 16px;
+  }
+
+  .choice-frame h1,
+  .report-frame h1,
+  .graph-frame h1,
+  .route-frame h1 {
+    font-size: clamp(20px, 6vw, 28px);
+  }
+
   .choices {
     grid-template-columns: 1fr;
   }
@@ -960,8 +980,21 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .choice-graph {
+    padding: 10px;
+  }
+
+  #choiceGraphSvg {
+    height: 200px;
+    min-height: 200px;
+  }
+
+  #choiceGraphCaption {
+    min-height: 0;
+    font-size: 11px;
+  }
+
   #pauseGraphSvg,
-  #choiceGraphSvg,
   #routeGraphSvg,
   .graph-details {
     min-height: 290px;

@@ -94,6 +94,7 @@
     logEvent("run_started", "Run started: Release Candidate Pipeline.");
     loadRoom("local_dev");
     renderAllUi();
+    applyVisualSmokeMode();
   }
 
   function logEvent(type, text, data = {}) {
@@ -721,6 +722,52 @@
     if (room?.mapEdge) return { type: "edge", id: room.mapEdge };
     if (room?.mapNode) return { type: "node", id: room.mapNode };
     return { type: "node", id: "app" };
+  }
+
+  function applyVisualSmokeMode() {
+    const mode = new URLSearchParams(window.location.search).get("visualSmoke");
+    if (!mode || mode === "main") return;
+    window.setTimeout(() => {
+      if (mode === "choice") {
+        showPackageChoice();
+        return;
+      }
+      if (mode === "graph") {
+        selectedGraphEntity = { type: "node", id: "libglitch" };
+        openGraphOverlay();
+        return;
+      }
+      if (mode === "route") {
+        showRouteChoice(availableRoutes(game.currentRoom));
+        return;
+      }
+      if (mode === "report") {
+        seedVisualSmokeReport();
+      }
+    }, 0);
+  }
+
+  function seedVisualSmokeReport() {
+    const legacyAuth = packages.find((pkg) => pkg.id === "legacy_auth");
+    if (legacyAuth && !game.run.installedPackages.includes(legacyAuth.id)) {
+      game.run.installedPackages.push(legacyAuth.id);
+      applyPackageEffects(game.run, legacyAuth, logEvent);
+    }
+    const conflict = game.run.graph.edges.find((edge) => edge.relation === "conflicts");
+    if (conflict) {
+      conflict.visibility = "known";
+      conflict.active = true;
+      game.run.incident = {
+        id: "build_failure",
+        name: "Build Failure",
+        cause: conflict,
+        stabilityDrain: 9,
+      };
+    }
+    game.run.techDebt = Math.max(game.run.techDebt, 16);
+    game.run.stability = 0;
+    logEvent("incident_started", "Build Failure started: visual smoke conflict edge activated.", { incident: "build_failure" });
+    endRun(false, "Memory Leak collided with active code.");
   }
 
   function openGraphOverlay() {
