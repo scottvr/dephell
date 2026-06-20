@@ -74,7 +74,8 @@
       const selected = selectedType === "edge" && selectedId === edge.id;
       const isPreview = preview.edgeIds.has(edge.id);
       const current = currentLocation?.type === "edge" && currentLocation.id === edge.id;
-      const classes = ["edge", edge.relation, edge.visibility, selected ? "selected" : "", isPreview ? "preview" : ""].join(" ");
+      const flagged = run.activeFlag?.type === "edge" && run.activeFlag.target === edge.id;
+      const classes = ["edge", edge.relation, edge.visibility, selected ? "selected" : "", isPreview ? "preview" : "", flagged ? "flagged" : ""].join(" ");
       const currentMarker = current ? `<line class="edge-current" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>Current graph locus</title></line>` : "";
       const visual = `${currentMarker}<line class="${classes}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>${edge.source} ${edge.relation} ${edge.target}</title></line>`;
       if (!options.interactive || isPreview) return visual;
@@ -87,11 +88,12 @@
       const selected = selectedType === "node" && selectedId === node.id;
       const isPreview = preview.nodeIds.has(node.id);
       const current = currentLocation?.type === "node" && currentLocation.id === node.id;
+      const flagged = run.activeFlag?.type === "node" && run.activeFlag.target === node.id;
       const dataAttrs = isPreview ? "" : `data-entity-type="node" data-entity-id="${node.id}"`;
       const currentMarker = current ? `<circle class="node-current-ring" cx="${p[0]}" cy="${p[1]}" r="16"><title>Current graph locus</title></circle>` : "";
       return `
         ${currentMarker}
-        <rect class="node ${risk ? "risk" : ""} ${hazard ? "hazard" : ""} ${selected ? "selected" : ""} ${isPreview ? "preview" : ""}" ${dataAttrs} x="${p[0] - 9}" y="${p[1] - 9}" width="18" height="18"></rect>
+        <rect class="node ${risk ? "risk" : ""} ${hazard ? "hazard" : ""} ${selected ? "selected" : ""} ${isPreview ? "preview" : ""} ${flagged ? "flagged" : ""}" ${dataAttrs} x="${p[0] - 9}" y="${p[1] - 9}" width="18" height="18"></rect>
         <text class="node-label" x="${p[0]}" y="${p[1] + 24}">${shortName(node.name)}</text>
       `;
     });

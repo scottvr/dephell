@@ -4,6 +4,8 @@
 
 The current first slice is a zero-build browser prototype. That keeps the earliest playable loop easy to run, inspect, and throw away if a stronger engine choice emerges.
 
+As of the `mvp` branch, the prototype has graduated from concept proof to MVP foundation. New work should follow `docs/MVP_Sprint_Plan.md` unless we deliberately revise the plan.
+
 ## Implemented Prototype Target
 
 - Four side-view rooms: two combat rooms, one package-reactive verification room, and one staging incident.
@@ -50,6 +52,7 @@ New package/content tuning should start in `content.js`. New reusable graph oper
 - Verification Fork is a post-package branch room. It changes enemy pressure and event-log consequences based on the installed package before Staging Incident.
 - Current rooms now have graph anchors, so the minimap and paused graph can show where the player is in the dependency topology without introducing a separate dungeon map.
 - Room progression is now route-based instead of array-index teleportation. Local Development offers a graph route choice: fast path to Package Gate or Runtime Detour for an extra fight and small Stability reward. One-exit rooms still auto-follow their graph exit.
+- Feature Flag is the first active package/tool candidate. It unlocks `F`, temporarily flags the current graph locus, suppresses incident drain and enemy pressure, and leaves configuration-drift debt for reports.
 
 ## Next Useful Tasks
 

@@ -29,6 +29,7 @@ Use these after a short run. The goal is not to win; it is to test whether the p
 - LegacyAuth: watch for conflict and security-exception story.
 - Test Suite: watch for revealed edges, a cleaner Verification Fork, and softened staging incident.
 - Compatibility Shim: watch for stronger blade damage, fast verification, and TDR/audit pressure.
+- Feature Flag: use `F` during Staging Incident and check whether the graph highlight, pressure relief, TDR increase, and report note all feel connected.
 
 ## Pass Plan
 
@@ -37,3 +38,4 @@ A single pass only tests one package branch, so it is not enough for this slice.
 - LegacyAuth pass: confirm the graph adds a legacy node and suspected conflict, Verification Fork creates a package-specific checkpoint consequence, Staging Incident becomes a traceable Build Failure, and the final report connects the conflict or approval to the outcome.
 - Compatibility Shim pass: confirm combat feels stronger, TDR rises, Verification Fork reads as fast verification with extra debt, and Staging Incident reads as debt/audit pressure rather than arbitrary punishment.
 - Test Suite pass: confirm Observability rises, graph information becomes clearer, combat feels slightly slower, Verification Fork is cleaner, and the later consequence is softer and more explainable.
+- Feature Flag pass: confirm the package unlocks a new verb rather than a passive stat bump, the player can predict when to use it, and each use reads as both tactical relief and future configuration drift.

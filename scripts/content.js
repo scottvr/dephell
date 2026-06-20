@@ -45,6 +45,19 @@
         { op: "increaseDebt", amount: 18, tag: "compatibility_shim" },
       ],
     },
+    {
+      id: "feature_flag",
+      name: "Feature Flag",
+      benefit: "Grants F: flag the current graph locus to briefly suppress incident pressure.",
+      risk: "Each use adds configuration-drift debt and can haunt later reports.",
+      tags: ["tool", "control", "drift"],
+      effects: [
+        { op: "addNode", id: "feature_flag", name: "Feature Flag", tags: ["control", "drift"] },
+        { op: "addEdge", source: "feature_flag", target: "ci", relation: "flags", strength: 2, visibility: "known" },
+        { op: "addTool", tool: "feature_flag" },
+        { op: "increaseDebt", amount: 8, tag: "flag_infrastructure" },
+      ],
+    },
   ];
 
   const rooms = [

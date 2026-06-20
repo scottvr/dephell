@@ -75,6 +75,8 @@
       dashGhosts: [],
       enemies: [],
       roomIntroTimer: ROOM_INTRO_SECONDS,
+      toolCooldowns: { feature_flag: 0 },
+      featureFlagTimer: 0,
     };
     ui.choiceOverlay.classList.add("hidden");
     ui.reportOverlay.classList.add("hidden");
@@ -118,6 +120,8 @@
     choiceShown = false;
     pendingRoutes = [];
     activeRouteChoice = null;
+    game.featureFlagTimer = 0;
+    game.run.activeFlag = null;
     ui.routeOverlay.classList.add("hidden");
     if (room.incident) startIncident();
     logEvent("room_entered", `Entered ${room.name}.`, { room: room.id, route: route?.id });
@@ -340,6 +344,7 @@
 
   function update(dt) {
     if (game.run.ended || isOverlayOpen()) return;
+    updateToolTimers(dt);
     if (hitFreezeTimer > 0) {
       hitFreezeTimer -= dt;
       return;
@@ -354,6 +359,18 @@
     updateHitSparks(dt);
     updateDashGhosts(dt);
     updateRoomFlow(dt);
+  }
+
+  function updateToolTimers(dt) {
+    game.toolCooldowns.feature_flag = Math.max(0, game.toolCooldowns.feature_flag - dt);
+    if (game.featureFlagTimer > 0) {
+      game.featureFlagTimer = Math.max(0, game.featureFlagTimer - dt);
+      if (game.featureFlagTimer === 0 && game.run.activeFlag) {
+        logEvent("feature_flag_expired", `Feature Flag expired on ${flagLabel(game.run.activeFlag)}.`, { flag: game.run.activeFlag.id });
+        game.run.activeFlag = null;
+        renderAllUi();
+      }
+    }
   }
 
   function updatePlayer(dt) {
@@ -380,6 +397,49 @@
     p.dashTimer -= dt;
     p.invulnTimer -= dt;
     if ((mouse.down || keys.has(" ")) && p.attackTimer <= 0) swing();
+  }
+
+  function useFeatureFlag() {
+    if (!game.run.tools.includes("feature_flag")) {
+      logEvent("tool_unavailable", "Feature Flag not installed.");
+      renderAllUi();
+      return;
+    }
+    if (game.toolCooldowns.feature_flag > 0 || game.run.activeFlag) return;
+
+    const location = currentGraphLocation();
+    const flag = {
+      id: `${location.type}_${location.id}_${game.run.featureFlags.length + 1}`,
+      type: location.type,
+      target: location.id,
+      room: game.currentRoom.id,
+    };
+    game.run.activeFlag = flag;
+    game.run.featureFlags.push(flag);
+    game.featureFlagTimer = 5.5;
+    game.toolCooldowns.feature_flag = 9;
+    game.run.techDebt += 4;
+    game.run.debtTags.push("configuration_drift");
+    weakenCurrentWave();
+    logEvent("feature_flag_used", `Feature Flag disabled ${flagLabel(flag)} for this firefight. TDR +4.`, { flag: flag.id, room: flag.room });
+    renderAllUi();
+  }
+
+  function weakenCurrentWave() {
+    for (const enemy of game.enemies) {
+      if (!enemy.alive) continue;
+      enemy.attackTimer += 0.5;
+      enemy.telegraph = Math.max(enemy.telegraph, 0.18);
+    }
+    game.enemyShots.length = 0;
+  }
+
+  function featureFlagActive() {
+    return Boolean(game.run.activeFlag && game.featureFlagTimer > 0);
+  }
+
+  function flagLabel(flag) {
+    return `${flag.type} ${flag.target}`;
   }
 
   function swing() {
@@ -444,7 +504,8 @@
       if (!enemy.alive) continue;
       const p = game.player;
       const dir = Math.sign(p.x - enemy.x) || 1;
-      const behaviorSpeed = enemy.type === "memory_leak" ? enemy.speed + (enemy.maxHp - enemy.hp) * 0.5 : enemy.speed;
+      const flagSlow = featureFlagActive() ? 0.58 : 1;
+      const behaviorSpeed = (enemy.type === "memory_leak" ? enemy.speed + (enemy.maxHp - enemy.hp) * 0.5 : enemy.speed) * flagSlow;
       enemy.x += dir * behaviorSpeed * dt;
       enemy.x = clamp(enemy.x, 88, 900);
       enemy.attackTimer -= dt;
@@ -462,10 +523,10 @@
         enemy.attackTimer = enemy.type === "breaking_change" ? 1.2 : 1.8;
         enemy.contactTimer = 1.1;
       } else if (enemy.type === "breaking_change" && enemy.attackTimer <= 0.05) {
-        enemy.attackTimer = 1.7;
+        enemy.attackTimer = featureFlagActive() ? 2.4 : 1.7;
         enemy.telegraph = 0.32;
         const angle = Math.atan2(p.y - enemy.y, p.x - enemy.x);
-        game.enemyShots.push({ x: enemy.x, y: enemy.y - 22, vx: Math.cos(angle) * 220, vy: Math.sin(angle) * 220, life: 2.4, damage: enemy.damage, source: enemy.name });
+        if (!featureFlagActive()) game.enemyShots.push({ x: enemy.x, y: enemy.y - 22, vx: Math.cos(angle) * 220, vy: Math.sin(angle) * 220, life: 2.4, damage: enemy.damage, source: enemy.name });
       }
     }
   }
@@ -522,7 +583,7 @@
 
   function damagePlayer(amount, reason) {
     if (game.player.invulnTimer > 0) return;
-    const drain = game.run.incident?.stabilityDrain ?? 0;
+    const drain = featureFlagActive() ? 0 : game.run.incident?.stabilityDrain ?? 0;
     const adjusted = amount + (drain > 0 ? Math.ceil(drain / 4) : 0);
     game.run.stability = Math.max(0, game.run.stability - adjusted);
     game.player.invulnTimer = 0.75;
@@ -647,6 +708,15 @@
     if (game.run.incident) {
       ctx.fillStyle = "rgba(255, 66, 101, 0.08)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    if (featureFlagActive()) {
+      ctx.fillStyle = "rgba(70, 255, 131, 0.08)";
+      ctx.fillRect(86, 130, 830, 228);
+      ctx.strokeStyle = "rgba(70, 255, 131, 0.64)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 8]);
+      ctx.strokeRect(92, 136, 818, 216);
+      ctx.setLineDash([]);
     }
     ctx.fillStyle = "#7ccfc4";
     ctx.font = "14px Courier New";
@@ -791,6 +861,11 @@
       ctx.font = "16px Courier New";
       ctx.fillText(`INCIDENT: ${game.run.incident.name}`, 236, 122);
     }
+    if (featureFlagActive()) {
+      ctx.fillStyle = "#46ff83";
+      ctx.font = "16px Courier New";
+      ctx.fillText(`FLAGGED OFF: ${Math.ceil(game.featureFlagTimer)}s`, 236, game.run.incident ? 144 : 122);
+    }
   }
 
   function drawRoomBanner(room) {
@@ -851,6 +926,11 @@
       } else {
         closeGraphOverlay();
       }
+      return;
+    }
+    if (key === "f" && !isOverlayOpen()) {
+      event.preventDefault();
+      useFeatureFlag();
       return;
     }
     keys.add(key);

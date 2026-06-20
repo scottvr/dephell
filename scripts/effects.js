@@ -36,6 +36,10 @@
       if (!run[effect.list].includes(effect.tag)) run[effect.list].push(effect.tag);
       logEvent("tag_added", `${pkg.name} added ${effect.tag}.`, { tag: effect.tag });
     }
+    if (effect.op === "addTool") {
+      if (!run.tools.includes(effect.tool)) run.tools.push(effect.tool);
+      logEvent("tool_unlocked", `${pkg.name} unlocked ${toolName(effect.tool)}.`, { tool: effect.tool });
+    }
     if (effect.op === "revealEdges") {
       let revealedCount = 0;
       for (const edge of run.graph.edges) {
@@ -61,6 +65,7 @@
       if (effect.op === "increaseDebt") debt += effect.amount;
       if (effect.op === "revealEdges") parts.push("reveals suspected edges");
       if (effect.op === "addTag") parts.push(`adds ${effect.tag}`);
+      if (effect.op === "addTool") parts.push(`unlocks ${toolName(effect.tool)}`);
     }
     if (debt) parts.push(`TDR +${debt}`);
     return parts.slice(0, 5).join("; ");
@@ -74,6 +79,11 @@
     if (effect.stat === "fireRate") return effect.amount > 0 ? "slower swing" : "faster swing";
     if (effect.stat === "damage") return `damage ${signed(effect.amount)}`;
     return `${effect.stat} ${signed(effect.amount)}`;
+  }
+
+  function toolName(tool) {
+    if (tool === "feature_flag") return "Feature Flag tool";
+    return tool;
   }
 
   namespace.effects = { applyPackageEffects, packagePreviewText };

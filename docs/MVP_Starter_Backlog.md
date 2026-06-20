@@ -272,6 +272,18 @@ Acceptance criteria:
 - Debug controls can force incident and boss selection.
 - Debug output shows current graph and active effects.
 
+### Story: Content Can Be Audited For Coherence
+
+As a designer, I need tooling that catches incoherent content before it enters the game.
+
+Acceptance criteria:
+
+- Content linter reports unknown tags, unknown effect verbs, missing graph roles, missing risk models, missing counterplay, and missing explanation paths.
+- Content that can kill the player, block routes, alter major resources, trigger incidents, affect boss selection, or materially affect reports must register a causal trace.
+- Linter can flag packages that are only stat changes or have no dependency-graph consequence.
+- Linter can detect interactions that have no specific rule and no fallback tag/domain/risk rule.
+- A seeded simulation benchmark can report package pick rates, average TDR, common deaths, unmitigated conflicts, no-counterplay incidents, and dominant choices.
+
 ### Story: Playtest Data Answers MVP Questions
 
 As a PM, I can evaluate whether the concept is working.

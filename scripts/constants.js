@@ -13,6 +13,7 @@
       modern_crypto: [214, 42],
       test_suite: [52, 42],
       shim: [190, 154],
+      feature_flag: [238, 84],
     },
   };
 })(window.DepHell = window.DepHell || {});

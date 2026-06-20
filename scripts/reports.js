@@ -10,6 +10,7 @@
   }
 
   function buildIdentity(run) {
+    if (run.installedPackages.includes("feature_flag")) return "flag-controlled build with deliberate configuration drift";
     if (run.installedPackages.includes("test_suite")) return "observability build with slower, clearer decisions";
     if (run.installedPackages.includes("legacy_auth")) return "legacy compatibility build with audit pressure";
     if (run.installedPackages.includes("compatibility_shim")) return "high-velocity shortcut build with patch debt";
@@ -18,6 +19,7 @@
 
   function consequenceLine(run, conflict) {
     if (conflict) return `${conflict.source} ${conflict.relation} ${conflict.target}, revealed when Staging Incident loaded.`;
+    if (run.featureFlags.length) return `${run.featureFlags.length} Feature Flag ${run.featureFlags.length === 1 ? "override" : "overrides"} reduced immediate pressure and left configuration drift.`;
     if (run.techDebt >= 16) return "Shortcut debt raised incident pressure and empowered the staging wave.";
     return "Low graph risk produced a smaller incident; combat was the main failure surface.";
   }
@@ -32,6 +34,7 @@
         <ul>
           <li>Technical Debt closed at ${run.techDebt}.</li>
           <li>Observability closed at ${run.observability} of 5.</li>
+          <li>${run.featureFlags.length ? `${run.featureFlags.length} Feature Flag ${run.featureFlags.length === 1 ? "override was" : "overrides were"} documented for cleanup.` : "No runtime flags were left behind."}</li>
           <li>${run.approvals.length ? `${run.approvals[0].id} remains documented for follow-up.` : "No approval hook was granted; compliance has nothing useful to chase."}</li>
         </ul>
       </div>
@@ -51,6 +54,7 @@
         <ul>
           <li>Technical Debt peaked at ${run.techDebt}.</li>
           <li>Observability ended at ${run.observability} of 5.</li>
+          <li>${run.featureFlags.length ? `${run.featureFlags.length} Feature Flag ${run.featureFlags.length === 1 ? "override" : "overrides"} complicated the rollback notes.` : "No runtime flags were available to absorb pressure."}</li>
           <li>${run.approvals.length ? `${run.approvals[0].id} remained queryable in the incident log.` : "No approval hook was granted; the process found this suspicious."}</li>
         </ul>
       </div>

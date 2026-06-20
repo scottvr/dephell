@@ -14,10 +14,12 @@ Recommended reading order:
 
 1. [MVP Game Design Document](./MVP_Game_Design_Document.md)
 2. [MVP Product Plan](./MVP_Product_Plan.md)
-3. [MVP Implementation And Art Brief](./MVP_Implementation_And_Art_Brief.md)
-4. [MVP Content Matrix](./MVP_Content_Matrix.md)
-5. [MVP Starter Backlog](./MVP_Starter_Backlog.md)
-6. [Open Questions And Risks](./Open_Questions_And_Risks.md)
+3. [MVP Sprint Plan](./MVP_Sprint_Plan.md)
+4. [MVP Implementation And Art Brief](./MVP_Implementation_And_Art_Brief.md)
+5. [MVP Content Matrix](./MVP_Content_Matrix.md)
+6. [MVP Starter Backlog](./MVP_Starter_Backlog.md)
+7. [Open Questions And Risks](./Open_Questions_And_Risks.md)
+8. [Content Coherence Model](./Content_Coherence_Model.md)
 
 MVP thesis:
 

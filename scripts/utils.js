@@ -20,6 +20,7 @@
     const labels = {
       "Compatibility Shim": "Compat Shim",
       "Modern Crypto": "Mod Crypto",
+      "Feature Flag": "Flag",
     };
     return (labels[name] || name).slice(0, 12);
   }
