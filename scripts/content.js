@@ -52,6 +52,7 @@
       id: "local_dev",
       name: "Local Development",
       subtitle: "Two regressions in a quiet service chamber.",
+      mapNode: "app",
       enemies: [
         { type: "regression", x: 640, y: FLOOR_Y },
         { type: "regression", x: 765, y: FLOOR_Y },
@@ -61,6 +62,7 @@
       id: "package_gate",
       name: "Package Gate",
       subtitle: "Break the yellow change, then inspect the package offer.",
+      mapNode: "libglitch",
       packageChoice: true,
       enemies: [
         { type: "breaking_change", x: 700, y: FLOOR_Y },
@@ -71,6 +73,7 @@
       id: "verification_fork",
       name: "Verification Fork",
       subtitle: "The chosen package changes this checkpoint.",
+      mapEdge: "edge_libglitch_ci",
       branchEncounter: true,
       enemies: [],
     },
@@ -78,6 +81,7 @@
       id: "staging_incident",
       name: "Staging Incident",
       subtitle: "A consequence arrives wearing a process badge.",
+      mapNode: "ci",
       incident: true,
       enemies: [
         { type: "memory_leak", x: 720, y: FLOOR_Y },

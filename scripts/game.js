@@ -475,14 +475,22 @@
 
   function renderGraph() {
     const { visibleNodes, edges, preview } = getPreviewGraph(game.run, activePreviewPackage);
-    ui.graphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: false, preview });
+    ui.graphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: false, preview, currentLocation: currentGraphLocation() });
     ui.graphCaption.textContent = activePreviewPackage ? `previewing ${activePreviewPackage.name}; install to commit graph changes.` : graphCaption(game.run, edges);
   }
 
   function renderPauseGraph() {
     const { visibleNodes, edges, preview } = getPreviewGraph(game.run, activePreviewPackage);
-    ui.pauseGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: true, preview });
+    ui.pauseGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: true, preview, currentLocation: currentGraphLocation() });
     ui.graphDetails.innerHTML = graphDetails(game.run, selectedGraphEntity, ui.graphCaption.textContent);
+  }
+
+  function currentGraphLocation() {
+    const room = game.currentRoom || rooms[game.run.roomIndex];
+    if (room?.incident && game.run.incident?.cause?.id) return { type: "edge", id: game.run.incident.cause.id };
+    if (room?.mapEdge) return { type: "edge", id: room.mapEdge };
+    if (room?.mapNode) return { type: "node", id: room.mapNode };
+    return { type: "node", id: "app" };
   }
 
   function openGraphOverlay() {
