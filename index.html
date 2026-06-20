@@ -37,17 +37,39 @@
         </section>
 
         <aside class="graph-card" aria-label="Dependency graph">
-          <div class="panel-title">DEPENDENCY GRAPH</div>
+          <div class="panel-row">
+            <div class="panel-title">DEPENDENCY GRAPH</div>
+            <button id="graphInspectButton" type="button" title="Inspect graph">INSPECT</button>
+          </div>
           <svg id="graphSvg" viewBox="0 0 280 190" role="img" aria-label="Current dependency graph"></svg>
           <p id="graphCaption">app requires runtime. unknown edge suspected.</p>
         </aside>
+
+        <section id="graphOverlay" class="overlay hidden" aria-label="Graph inspection">
+          <div class="graph-frame">
+            <header class="graph-header">
+              <div>
+                <p class="kicker">PAUSED GRAPH VIEW</p>
+                <h1>Graph Trace</h1>
+              </div>
+              <button id="graphCloseButton" type="button">CLOSE</button>
+            </header>
+            <div class="graph-inspector">
+              <svg id="pauseGraphSvg" viewBox="0 0 280 190" role="img" aria-label="Inspectable dependency graph"></svg>
+              <aside id="graphDetails" class="graph-details" aria-live="polite">
+                <h2>Select a node or edge.</h2>
+                <p>Click graph entities to inspect relation, visibility, tags, and matching run-log facts.</p>
+              </aside>
+            </div>
+          </div>
+        </section>
 
         <section id="choiceOverlay" class="overlay hidden" aria-label="Package selection">
           <div class="choice-frame">
             <div>
               <p class="kicker">UPGRADE PATH</p>
               <h1>Select one package to patch libglitch-v3.</h1>
-              <p id="choicePrompt">Choose one upgrade; the graph keeps the receipt.</p>
+              <p id="choicePrompt">Choose one upgrade; the graph keeps the receipt. Press G to inspect.</p>
             </div>
             <div id="packageChoices" class="choices"></div>
           </div>
@@ -68,6 +90,7 @@
         <span>Aim with mouse</span>
         <span>Fire <b>Mouse</b> or <b>Space</b></span>
         <span>Dash <b>Shift</b></span>
+        <span>Graph <b>G</b></span>
       </footer>
     </main>
     <script src="./scripts/game.js"></script>

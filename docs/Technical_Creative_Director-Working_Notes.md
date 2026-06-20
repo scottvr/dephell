@@ -25,11 +25,12 @@ Graph-scale interaction begins as pause/between-room inspection and package choi
 - Room transitions now show a short pause banner. Combat room subtitles should describe the immediate threat; package-choice language belongs on the paused upgrade overlay.
 - Victory reports should use release language, not postmortem language. "Cause" and "contributing factors" are reserved for failures unless a success is explicitly framed as a barely-contained incident.
 - Package claims must match reusable effect operations. Test Suite now reveals suspected graph edges broadly, so the yellow CI relation becomes known instead of staying visually unchanged.
+- The minimap can stay compact if the player has a paused graph view. `G`, the minimap, or `INSPECT` opens a larger clickable graph with node/edge cause tracing from run-state and event-log facts.
 
 ## Next Useful Tasks
 
 1. Improve combat feel: enemy telegraphs, hit feedback, jump/dash tuning.
 2. Split package/content data out of `scripts/game.js` once the operation vocabulary stabilizes.
-3. Add a pause graph view with selectable nodes and cause tracing.
+3. Expand cause tracing into package-preview diffs before install.
 4. Add a second consequence branch for Observability builds so safe choices still create stories.
 5. Add quick playtest prompts that measure whether the choice/consequence loop is legible.

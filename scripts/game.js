@@ -11,6 +11,11 @@ const ui = {
   eventLog: document.querySelector("#eventLog"),
   graphSvg: document.querySelector("#graphSvg"),
   graphCaption: document.querySelector("#graphCaption"),
+  graphInspectButton: document.querySelector("#graphInspectButton"),
+  graphOverlay: document.querySelector("#graphOverlay"),
+  graphCloseButton: document.querySelector("#graphCloseButton"),
+  pauseGraphSvg: document.querySelector("#pauseGraphSvg"),
+  graphDetails: document.querySelector("#graphDetails"),
   choiceOverlay: document.querySelector("#choiceOverlay"),
   packageChoices: document.querySelector("#packageChoices"),
   reportOverlay: document.querySelector("#reportOverlay"),
@@ -125,6 +130,7 @@ const mouse = { x: 480, y: 270, down: false };
 let lastTime = performance.now();
 let roomClearTimer = 0;
 let choiceShown = false;
+let selectedGraphEntity = null;
 let game;
 
 function makeInitialRunState() {
@@ -140,6 +146,7 @@ function makeInitialRunState() {
     incident: null,
     ended: false,
     eventLog: [],
+    graphSelectionHint: "Select a node or edge.",
     graph: {
       nodes: [
         { id: "app", name: "app", tags: ["core"] },
@@ -173,6 +180,8 @@ function resetGame() {
   };
   ui.choiceOverlay.classList.add("hidden");
   ui.reportOverlay.classList.add("hidden");
+  ui.graphOverlay.classList.add("hidden");
+  selectedGraphEntity = null;
   roomClearTimer = 0;
   choiceShown = false;
   logEvent("run_started", "Run started: Release Candidate Pipeline.");
@@ -276,12 +285,13 @@ function applyEffect(effect, pkg) {
   if (effect.op === "addNode") {
     if (!run.graph.nodes.some((node) => node.id === effect.id)) {
       run.graph.nodes.push({ id: effect.id, name: effect.name, tags: effect.tags });
+      run.graph.nodes[run.graph.nodes.length - 1].createdBy = pkg.id;
       logEvent("graph_node_added", `${pkg.name} added node ${effect.name}.`, { node: effect.id });
     }
   }
   if (effect.op === "addEdge") {
     const id = `edge_${effect.source}_${effect.target}_${effect.relation}`;
-    run.graph.edges.push({ id, source: effect.source, target: effect.target, relation: effect.relation, strength: effect.strength, visibility: effect.visibility, active: true });
+    run.graph.edges.push({ id, source: effect.source, target: effect.target, relation: effect.relation, strength: effect.strength, visibility: effect.visibility, active: true, createdBy: pkg.id });
     logEvent("graph_edge_added", `${effect.source} ${effect.relation} ${effect.target}.`, { edge: id, relation: effect.relation });
   }
   if (effect.op === "modifyStat") {
@@ -339,7 +349,7 @@ function visibleRiskText(pkg) {
 }
 
 function update(dt) {
-  if (game.run.ended || !ui.choiceOverlay.classList.contains("hidden") || !ui.reportOverlay.classList.contains("hidden")) return;
+  if (game.run.ended || isOverlayOpen()) return;
   if (game.roomIntroTimer > 0) {
     game.roomIntroTimer -= dt;
     return;
@@ -562,30 +572,70 @@ function renderAllUi() {
   ui.debtValue.textContent = String(run.techDebt);
   ui.eventLog.innerHTML = run.eventLog.slice(-9).map((event) => `<li>${event.text}</li>`).join("");
   renderGraph();
+  if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
 }
 
-function renderGraph() {
+function getVisibleGraph() {
   const run = game.run;
   const visibleNodes = run.graph.nodes.filter((node) => !node.hidden || run.observability >= 4 || run.graph.edges.some((edge) => (edge.source === node.id || edge.target === node.id) && edge.visibility !== "hidden"));
   const nodeIds = new Set(visibleNodes.map((node) => node.id));
   const edges = run.graph.edges.filter((edge) => edge.visibility !== "hidden" && nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  return { visibleNodes, edges };
+}
+
+function renderGraph() {
+  const { visibleNodes, edges } = getVisibleGraph();
+  ui.graphSvg.innerHTML = graphMarkup(visibleNodes, edges, { interactive: false });
+  ui.graphCaption.textContent = graphCaption(edges);
+}
+
+function renderPauseGraph() {
+  const { visibleNodes, edges } = getVisibleGraph();
+  ui.pauseGraphSvg.innerHTML = graphMarkup(visibleNodes, edges, { interactive: true });
+  renderGraphDetails();
+}
+
+function graphMarkup(visibleNodes, edges, options = {}) {
+  const run = game.run;
+  const selectedType = selectedGraphEntity?.type;
+  const selectedId = selectedGraphEntity?.id;
   const svgEdges = edges.map((edge) => {
     const a = graphPositions[edge.source];
     const b = graphPositions[edge.target];
-    const classes = ["edge", edge.relation, edge.visibility].join(" ");
-    return `<line class="${classes}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>${edge.source} ${edge.relation} ${edge.target}</title></line>`;
+    const selected = selectedType === "edge" && selectedId === edge.id;
+    const classes = ["edge", edge.relation, edge.visibility, selected ? "selected" : ""].join(" ");
+    const visual = `<line class="${classes}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>${edge.source} ${edge.relation} ${edge.target}</title></line>`;
+    if (!options.interactive) return visual;
+    return `${visual}<line class="edge-hit" data-entity-type="edge" data-entity-id="${edge.id}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"></line>`;
   });
   const svgNodes = visibleNodes.map((node) => {
     const p = graphPositions[node.id] || [140, 96];
     const hazard = run.incident?.cause && (run.incident.cause.source === node.id || run.incident.cause.target === node.id);
     const risk = node.tags?.some((tag) => ["legacy", "debt", "security_risk", "unstable"].includes(tag));
+    const selected = selectedType === "node" && selectedId === node.id;
     return `
-      <rect class="node ${risk ? "risk" : ""} ${hazard ? "hazard" : ""}" x="${p[0] - 9}" y="${p[1] - 9}" width="18" height="18"></rect>
+      <rect class="node ${risk ? "risk" : ""} ${hazard ? "hazard" : ""} ${selected ? "selected" : ""}" data-entity-type="node" data-entity-id="${node.id}" x="${p[0] - 9}" y="${p[1] - 9}" width="18" height="18"></rect>
       <text class="node-label" x="${p[0]}" y="${p[1] + 24}">${shortName(node.name)}</text>
     `;
   });
-  ui.graphSvg.innerHTML = [...svgEdges, ...svgNodes].join("");
-  ui.graphCaption.textContent = graphCaption(edges);
+  return [...svgEdges, ...svgNodes].join("");
+}
+
+function renderGraphDetails() {
+  if (!selectedGraphEntity) {
+    ui.graphDetails.innerHTML = `
+      <h2>Select a node or edge.</h2>
+      <p>Click graph entities to inspect relation, visibility, tags, and matching run-log facts.</p>
+      <h3>Current Read</h3>
+      <p>${escapeHtml(ui.graphCaption.textContent)}</p>
+    `;
+    return;
+  }
+  if (selectedGraphEntity.type === "node") {
+    ui.graphDetails.innerHTML = nodeDetails(selectedGraphEntity.id);
+  } else {
+    ui.graphDetails.innerHTML = edgeDetails(selectedGraphEntity.id);
+  }
 }
 
 function graphCaption(edges) {
@@ -597,8 +647,104 @@ function graphCaption(edges) {
   return "known requires edges are stable; suspected relations need observability.";
 }
 
+function nodeDetails(nodeId) {
+  const node = game.run.graph.nodes.find((item) => item.id === nodeId);
+  if (!node) return `<h2>Unknown node.</h2>`;
+  const events = traceEventsForNode(nodeId);
+  const incidentLine = game.run.incident?.cause && (game.run.incident.cause.source === nodeId || game.run.incident.cause.target === nodeId)
+    ? `<p><b>Incident:</b> ${game.run.incident.name} is currently touching this node.</p>`
+    : "";
+  return `
+    <h2>${escapeHtml(node.name)}</h2>
+    <p><b>ID:</b> ${escapeHtml(node.id)}</p>
+    <p><b>Tags:</b> ${escapeHtml((node.tags || ["none"]).join(", "))}</p>
+    <p><b>Created By:</b> ${escapeHtml(packageName(node.createdBy) || "initial graph")}</p>
+    ${incidentLine}
+    <h3>Connected Edges</h3>
+    <ul>${connectedEdges(nodeId).map((edge) => `<li>${escapeHtml(edge.source)} ${escapeHtml(edge.relation)} ${escapeHtml(edge.target)} (${escapeHtml(edge.visibility)})</li>`).join("") || "<li>No visible connected edges.</li>"}</ul>
+    <h3>Trace</h3>
+    <ul>${eventListMarkup(events)}</ul>
+  `;
+}
+
+function edgeDetails(edgeId) {
+  const edge = game.run.graph.edges.find((item) => item.id === edgeId);
+  if (!edge) return `<h2>Unknown edge.</h2>`;
+  const events = traceEventsForEdge(edge);
+  const incidentLine = game.run.incident?.cause?.id === edge.id
+    ? `<p><b>Incident:</b> ${game.run.incident.name} activated this relation.</p>`
+    : "";
+  return `
+    <h2>${escapeHtml(edge.source)} ${escapeHtml(edge.relation)} ${escapeHtml(edge.target)}</h2>
+    <p><b>Visibility:</b> ${escapeHtml(edge.visibility)}</p>
+    <p><b>Strength:</b> ${edge.strength}</p>
+    <p><b>State:</b> ${edge.active ? "active" : "inactive"}</p>
+    <p><b>Created By:</b> ${escapeHtml(packageName(edge.createdBy) || "initial graph")}</p>
+    ${incidentLine}
+    <h3>Trace</h3>
+    <ul>${eventListMarkup(events)}</ul>
+  `;
+}
+
+function traceEventsForNode(nodeId) {
+  return game.run.eventLog.filter((event) => {
+    if (event.node === nodeId || event.target === nodeId) return true;
+    const edge = event.edge ? game.run.graph.edges.find((item) => item.id === event.edge) : null;
+    return edge && (edge.source === nodeId || edge.target === nodeId);
+  });
+}
+
+function traceEventsForEdge(edge) {
+  return game.run.eventLog.filter((event) => {
+    if (event.edge === edge.id) return true;
+    if (event.type === "graph_revealed" && edge.visibility === "known") return true;
+    if (event.type === "incident_started" && game.run.incident?.cause?.id === edge.id) return true;
+    return event.node === edge.source || event.node === edge.target;
+  });
+}
+
+function connectedEdges(nodeId) {
+  return getVisibleGraph().edges.filter((edge) => edge.source === nodeId || edge.target === nodeId);
+}
+
+function eventListMarkup(events) {
+  if (!events.length) return "<li>No run-log facts yet. This entity began in the initial graph.</li>";
+  return events.slice(-8).map((event) => `<li>${escapeHtml(event.text)}</li>`).join("");
+}
+
+function packageName(packageId) {
+  return packages.find((pkg) => pkg.id === packageId)?.name;
+}
+
+function openGraphOverlay() {
+  selectedGraphEntity ||= { type: "node", id: "app" };
+  ui.graphOverlay.classList.remove("hidden");
+  renderPauseGraph();
+}
+
+function closeGraphOverlay() {
+  ui.graphOverlay.classList.add("hidden");
+}
+
+function isOverlayOpen() {
+  return !ui.choiceOverlay.classList.contains("hidden") || !ui.reportOverlay.classList.contains("hidden") || !ui.graphOverlay.classList.contains("hidden");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function shortName(name) {
-  return name.replace("Modern ", "Crypto ").replace("Compatibility ", "Compat ").slice(0, 12);
+  const labels = {
+    "Compatibility Shim": "Compat Shim",
+    "Modern Crypto": "Mod Crypto",
+  };
+  return (labels[name] || name).slice(0, 12);
 }
 
 function draw() {
@@ -762,10 +908,24 @@ function frame(now) {
 }
 
 window.addEventListener("keydown", (event) => {
-  if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(event.key.toLowerCase())) {
+  const key = event.key.toLowerCase();
+  if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
     event.preventDefault();
   }
-  keys.add(event.key.toLowerCase());
+  if (key === "escape" && !ui.graphOverlay.classList.contains("hidden")) {
+    closeGraphOverlay();
+    return;
+  }
+  if (key === "g" && ui.reportOverlay.classList.contains("hidden")) {
+    event.preventDefault();
+    if (ui.graphOverlay.classList.contains("hidden")) {
+      openGraphOverlay();
+    } else {
+      closeGraphOverlay();
+    }
+    return;
+  }
+  keys.add(key);
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 canvas.addEventListener("mousemove", (event) => {
@@ -780,6 +940,18 @@ canvas.addEventListener("mousedown", (event) => {
 window.addEventListener("mouseup", () => (mouse.down = false));
 ui.restartButton.addEventListener("click", resetGame);
 ui.reportRestartButton.addEventListener("click", resetGame);
+ui.graphInspectButton.addEventListener("click", openGraphOverlay);
+ui.graphSvg.addEventListener("click", openGraphOverlay);
+ui.graphCloseButton.addEventListener("click", closeGraphOverlay);
+ui.pauseGraphSvg.addEventListener("click", (event) => {
+  const target = event.target.closest("[data-entity-type]");
+  if (!target) return;
+  selectedGraphEntity = {
+    type: target.dataset.entityType,
+    id: target.dataset.entityId,
+  };
+  renderPauseGraph();
+});
 
 resetGame();
 requestAnimationFrame(frame);
