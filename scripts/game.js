@@ -50,6 +50,7 @@
   let roomClearTimer = 0;
   let choiceShown = false;
   let selectedGraphEntity = null;
+  let hitFreezeTimer = 0;
   let game;
 
   function resetGame() {
@@ -57,9 +58,10 @@
     mouse.down = false;
     game = {
       run: makeInitialRunState(),
-      player: { x: 170, y: FLOOR_Y, w: 24, h: 42, vx: 0, vy: 0, facing: 1, shootTimer: 0, dashTimer: 0 },
-      projectiles: [],
+      player: { x: 170, y: FLOOR_Y, w: 24, h: 42, vx: 0, vy: 0, facing: 1, attackTimer: 0, dashTimer: 0, invulnTimer: 0 },
+      slashes: [],
       enemyShots: [],
+      hitSparks: [],
       enemies: [],
       roomIntroTimer: ROOM_INTRO_SECONDS,
     };
@@ -83,7 +85,7 @@
     game.run.roomIndex = index;
     game.player.x = 150;
     game.player.y = FLOOR_Y;
-    game.projectiles.length = 0;
+    game.slashes.length = 0;
     game.enemyShots.length = 0;
     game.enemies = room.enemies.map((spawn, idx) => makeEnemy(spawn, idx));
     game.roomIntroTimer = ROOM_INTRO_SECONDS;
@@ -125,29 +127,30 @@
   function startIncident() {
     const run = game.run;
     const conflict = findActiveConflict();
+    const tested = run.mitigations.includes("test_coverage");
     if (conflict) {
       conflict.visibility = "known";
       run.incident = {
         id: "build_failure",
         name: "Build Failure",
         cause: conflict,
-        stabilityDrain: 9,
+        stabilityDrain: tested ? 4 : 9,
       };
-      logEvent("incident_started", "Build Failure started: conflict edge activated.", { incident: "build_failure" });
+      logEvent("incident_started", tested ? "Build Failure started, but Test Suite reduced blast radius." : "Build Failure started: conflict edge activated.", { incident: "build_failure" });
     } else if (run.techDebt >= 16) {
       run.incident = {
         id: "audit_pressure",
         name: "Audit Pressure",
-        stabilityDrain: 7,
+        stabilityDrain: tested ? 3 : 7,
       };
-      logEvent("incident_started", "Audit Pressure started: previous shortcut selected for review.", { incident: "audit_pressure" });
+      logEvent("incident_started", tested ? "Audit Pressure started with test evidence attached." : "Audit Pressure started: previous shortcut selected for review.", { incident: "audit_pressure" });
     } else {
       run.incident = {
         id: "minor_regression",
         name: "Minor Regression",
-        stabilityDrain: 4,
+        stabilityDrain: tested ? 2 : 4,
       };
-      logEvent("incident_started", "Minor Regression started: CI noticed something unsettling.", { incident: "minor_regression" });
+      logEvent("incident_started", tested ? "Minor Regression started; tests isolated the noisy path." : "Minor Regression started: CI noticed something unsettling.", { incident: "minor_regression" });
     }
   }
 
@@ -194,6 +197,11 @@
       run.approvals.push({ id: effect.id, target: effect.target, reason: effect.reason });
       logEvent("approval_granted", `Security Exception approved for ${effect.target}.`, { approval: effect.id });
     }
+    if (effect.op === "addTag") {
+      if (!run[effect.list]) run[effect.list] = [];
+      if (!run[effect.list].includes(effect.tag)) run[effect.list].push(effect.tag);
+      logEvent("tag_added", `${pkg.name} added ${effect.tag}.`, { tag: effect.tag });
+    }
     if (effect.op === "revealEdges") {
       let revealedCount = 0;
       for (const edge of run.graph.edges) {
@@ -218,12 +226,39 @@
         <h2>${pkg.name}</h2>
         <p><b>Benefit:</b> ${pkg.benefit}</p>
         <p><b>Risk:</b> ${visibleRiskText(pkg)}</p>
+        <p><b>Preview:</b> ${packagePreviewText(pkg)}</p>
         <div class="tag-row">${pkg.tags.map((tag) => `<span class="tag">${tag}</span>`).join("")}</div>
       `;
       button.addEventListener("click", () => applyPackage(pkg));
       ui.packageChoices.appendChild(button);
     }
     ui.choiceOverlay.classList.remove("hidden");
+  }
+
+  function packagePreviewText(pkg) {
+    const parts = [];
+    let debt = 0;
+    for (const effect of pkg.effects) {
+      if (effect.op === "addNode") parts.push(`+node ${effect.name}`);
+      if (effect.op === "addEdge") parts.push(`+${effect.relation} edge`);
+      if (effect.op === "modifyResource") parts.push(`${effect.resource} ${signed(effect.amount)}`);
+      if (effect.op === "modifyStat") parts.push(statPreview(effect));
+      if (effect.op === "increaseDebt") debt += effect.amount;
+      if (effect.op === "revealEdges") parts.push("reveals suspected edges");
+      if (effect.op === "addTag") parts.push(`adds ${effect.tag}`);
+    }
+    if (debt) parts.push(`TDR +${debt}`);
+    return parts.slice(0, 4).join("; ");
+  }
+
+  function signed(value) {
+    return value > 0 ? `+${value}` : String(value);
+  }
+
+  function statPreview(effect) {
+    if (effect.stat === "fireRate") return effect.amount > 0 ? "slower swing" : "faster swing";
+    if (effect.stat === "damage") return `damage ${signed(effect.amount)}`;
+    return `${effect.stat} ${signed(effect.amount)}`;
   }
 
   function visibleRiskText(pkg) {
@@ -234,13 +269,18 @@
 
   function update(dt) {
     if (game.run.ended || isOverlayOpen()) return;
+    if (hitFreezeTimer > 0) {
+      hitFreezeTimer -= dt;
+      return;
+    }
     if (game.roomIntroTimer > 0) {
       game.roomIntroTimer -= dt;
       return;
     }
     updatePlayer(dt);
-    updateProjectiles(dt);
+    updateAttacks(dt);
     updateEnemies(dt);
+    updateHitSparks(dt);
     updateRoomFlow(dt);
   }
 
@@ -263,31 +303,34 @@
     p.x = clamp(p.x + p.vx * dt, 92, 900);
     p.y = Math.min(FLOOR_Y, p.y + p.vy * dt);
     if (p.y >= FLOOR_Y) p.vy = 0;
-    p.shootTimer -= dt;
+    p.attackTimer -= dt;
     p.dashTimer -= dt;
-    if ((mouse.down || keys.has(" ")) && p.shootTimer <= 0) shoot();
+    p.invulnTimer -= dt;
+    if ((mouse.down || keys.has(" ")) && p.attackTimer <= 0) swing();
   }
 
-  function shoot() {
+  function swing() {
     const p = game.player;
     const aim = worldMouse();
     const angle = Math.atan2(aim.y - (p.y - 18), aim.x - (p.x + p.w / 2));
-    game.projectiles.push({
+    p.facing = Math.cos(angle) >= 0 ? 1 : -1;
+    game.slashes.push({
       x: p.x + p.w / 2,
       y: p.y - 18,
-      vx: Math.cos(angle) * 560,
-      vy: Math.sin(angle) * 560,
-      life: 0.8,
+      angle,
+      arc: 1.55,
+      range: 78,
+      life: 0.16,
+      maxLife: 0.16,
       damage: game.run.stats.damage,
+      hitIds: [],
     });
-    p.shootTimer = game.run.stats.fireRate;
+    p.attackTimer = game.run.stats.fireRate;
   }
 
-  function updateProjectiles(dt) {
-    for (const shot of game.projectiles) {
-      shot.x += shot.vx * dt;
-      shot.y += shot.vy * dt;
-      shot.life -= dt;
+  function updateAttacks(dt) {
+    for (const slash of game.slashes) {
+      slash.life -= dt;
     }
     for (const shot of game.enemyShots) {
       shot.x += shot.vx * dt;
@@ -300,11 +343,18 @@
     }
     for (const enemy of game.enemies) {
       if (!enemy.alive) continue;
-      for (const shot of game.projectiles) {
-        if (shot.life <= 0) continue;
-        if (rectsOverlap(shot.x - 5, shot.y - 5, 10, 10, enemy.x, enemy.y - enemy.h, enemy.w, enemy.h)) {
-          enemy.hp -= shot.damage;
-          shot.life = 0;
+      for (const slash of game.slashes) {
+        if (slash.life <= 0 || slash.hitIds.includes(enemy.id)) continue;
+        const enemyCenterX = enemy.x;
+        const enemyCenterY = enemy.y - enemy.h / 2;
+        const dx = enemyCenterX - slash.x;
+        const dy = enemyCenterY - slash.y;
+        const distance = Math.hypot(dx, dy);
+        const withinArc = Math.abs(angleDiff(Math.atan2(dy, dx), slash.angle)) <= slash.arc / 2;
+        if (distance <= slash.range && withinArc) {
+          enemy.hp -= slash.damage;
+          slash.hitIds.push(enemy.id);
+          addHitSpark(enemyCenterX, enemyCenterY, enemyDefs[enemy.type].color);
           if (enemy.hp <= 0) {
             enemy.alive = false;
             logEvent("enemy_defeated", `${enemy.name} patched out.`);
@@ -312,7 +362,7 @@
         }
       }
     }
-    game.projectiles = game.projectiles.filter((shot) => shot.life > 0 && shot.x > -20 && shot.x < 1000);
+    game.slashes = game.slashes.filter((slash) => slash.life > 0);
     game.enemyShots = game.enemyShots.filter((shot) => shot.life > 0 && shot.x > -20 && shot.x < 1000);
   }
 
@@ -368,12 +418,25 @@
   }
 
   function damagePlayer(amount, reason) {
+    if (game.player.invulnTimer > 0) return;
     const drain = game.run.incident?.stabilityDrain ?? 0;
     const adjusted = amount + (drain > 0 ? Math.ceil(drain / 4) : 0);
     game.run.stability = Math.max(0, game.run.stability - adjusted);
+    game.player.invulnTimer = 0.75;
+    hitFreezeTimer = 0.06;
+    addHitSpark(game.player.x, game.player.y - 24, "#dfffee");
     logEvent("stability_damage", `${reason} Stability -${adjusted}.`);
     renderAllUi();
     if (game.run.stability <= 0) endRun(false, reason);
+  }
+
+  function addHitSpark(x, y, color) {
+    game.hitSparks.push({ x, y, color, life: 0.24, maxLife: 0.24 });
+  }
+
+  function updateHitSparks(dt) {
+    for (const spark of game.hitSparks) spark.life -= dt;
+    game.hitSparks = game.hitSparks.filter((spark) => spark.life > 0);
   }
 
   function endRun(victory, cause) {
@@ -438,9 +501,10 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackdrop(room);
     drawPlatforms();
-    drawProjectiles();
+    drawAttacks();
     drawEnemies();
     drawPlayer();
+    drawHitSparks();
     drawRoomTitle(room);
     drawRoomBanner(room);
   }
@@ -486,15 +550,21 @@
     const p = game.player;
     ctx.save();
     ctx.translate(p.x, p.y);
-    ctx.fillStyle = "#20f7ee";
-    ctx.shadowColor = "#20f7ee";
-    ctx.shadowBlur = 16;
+    const invulnFlash = p.invulnTimer > 0 && Math.floor(p.invulnTimer * 18) % 2 === 0;
+    ctx.fillStyle = invulnFlash ? "#dfffee" : "#20f7ee";
+    ctx.shadowColor = invulnFlash ? "#dfffee" : "#20f7ee";
+    ctx.shadowBlur = invulnFlash ? 24 : 16;
     ctx.fillRect(-10, -42, 20, 18);
     ctx.fillRect(-8, -24, 16, 26);
     ctx.fillRect(-16, -18, 9, 24);
     ctx.fillRect(7, -18, 9, 24);
-    ctx.fillStyle = "#dfffee";
-    ctx.fillRect(p.facing > 0 ? 8 : -42, -25, 34, 7);
+    ctx.strokeStyle = "#dfffee";
+    ctx.lineWidth = 6;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(p.facing > 0 ? 8 : -8, -24);
+    ctx.lineTo(p.facing > 0 ? 48 : -48, -36);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -502,9 +572,16 @@
     for (const enemy of game.enemies) {
       if (!enemy.alive) continue;
       const def = enemyDefs[enemy.type];
-      ctx.save();
-      ctx.translate(enemy.x, enemy.y);
-      ctx.fillStyle = def.color;
+    ctx.save();
+    ctx.translate(enemy.x, enemy.y);
+      if (enemy.telegraph > 0) {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, -enemy.h / 2, enemy.w + 12, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    ctx.fillStyle = def.color;
       ctx.shadowColor = def.color;
       ctx.shadowBlur = enemy.telegraph > 0 ? 24 : 10;
       const scale = enemy.type === "memory_leak" ? 1 + (enemy.maxHp - enemy.hp) / 120 : 1;
@@ -521,18 +598,45 @@
     }
   }
 
-  function drawProjectiles() {
-    ctx.fillStyle = "#dfffee";
-    for (const shot of game.projectiles) {
+  function drawAttacks() {
+    for (const slash of game.slashes) {
+      const t = slash.life / slash.maxLife;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, t + 0.15);
+      ctx.strokeStyle = "#dfffee";
+      ctx.lineWidth = 9;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#20f7ee";
+      ctx.shadowBlur = 18;
       ctx.beginPath();
-      ctx.arc(shot.x, shot.y, 5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(slash.x, slash.y, slash.range, slash.angle - slash.arc / 2, slash.angle + slash.arc / 2);
+      ctx.stroke();
+      ctx.restore();
     }
     ctx.fillStyle = "#ffcf66";
     for (const shot of game.enemyShots) {
       ctx.beginPath();
       ctx.rect(shot.x - 5, shot.y - 5, 10, 10);
       ctx.fill();
+    }
+  }
+
+  function drawHitSparks() {
+    for (const spark of game.hitSparks) {
+      const t = spark.life / spark.maxLife;
+      ctx.save();
+      ctx.globalAlpha = t;
+      ctx.strokeStyle = spark.color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = spark.color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(spark.x - 14 * t, spark.y);
+      ctx.lineTo(spark.x + 14 * t, spark.y);
+      ctx.moveTo(spark.x, spark.y - 14 * t);
+      ctx.lineTo(spark.x, spark.y + 14 * t);
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -575,6 +679,10 @@
       x: ((mouse.x - rect.left) / rect.width) * canvas.width,
       y: ((mouse.y - rect.top) / rect.height) * canvas.height,
     };
+  }
+
+  function angleDiff(a, b) {
+    return Math.atan2(Math.sin(a - b), Math.cos(a - b));
   }
 
   function frame(now) {

@@ -21,7 +21,7 @@
       id: "test_suite",
       name: "Test Suite",
       benefit: "Reveals hidden/suspected risks and weakens the next incident.",
-      risk: "Lower fire rate while tests run before every room.",
+      risk: "Slower swing cadence while tests run before every room.",
       tags: ["observability", "process", "safer"],
       effects: [
         { op: "addNode", id: "test_suite", name: "Test Suite", tags: ["observability", "process"] },
@@ -29,12 +29,13 @@
         { op: "modifyResource", resource: "observability", amount: 2 },
         { op: "modifyStat", stat: "fireRate", amount: 0.08 },
         { op: "revealEdges", visibility: "suspected" },
+        { op: "addTag", list: "mitigations", tag: "test_coverage" },
       ],
     },
     {
       id: "compatibility_shim",
       name: "Compatibility Shim",
-      benefit: "Patches one conflict and increases patch projectile damage.",
+      benefit: "Patches one conflict and increases patch blade damage.",
       risk: "Adds Technical Debt. Future build failure blames the shim first.",
       tags: ["debt", "fix", "short-term"],
       effects: [

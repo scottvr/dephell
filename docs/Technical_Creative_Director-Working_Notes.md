@@ -40,6 +40,7 @@ New package/content tuning should start in `content.js`. New reusable graph oper
 - Victory reports should use release language, not postmortem language. "Cause" and "contributing factors" are reserved for failures unless a success is explicitly framed as a barely-contained incident.
 - Package claims must match reusable effect operations. Test Suite now reveals suspected graph edges broadly, so the yellow CI relation becomes known instead of staying visually unchanged.
 - The minimap can stay compact if the player has a paused graph view. `G`, the minimap, or `INSPECT` opens a larger clickable graph with node/edge cause tracing from run-state and event-log facts.
+- The Resolver starts with a close-range glowing patch blade, matching the mockups. Ranged weapons can arrive later as package/tool upgrades rather than the default verb.
 
 ## Next Useful Tasks
 

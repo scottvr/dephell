@@ -9,6 +9,7 @@
       installedPackages: [],
       approvals: [],
       debtTags: [],
+      mitigations: [],
       incident: null,
       ended: false,
       eventLog: [],
