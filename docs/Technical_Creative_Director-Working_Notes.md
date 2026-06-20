@@ -26,10 +26,11 @@ The prototype stays zero-build and directly openable from `index.html`. Browser 
 - `scripts/run-state.js`: initial serializable run-state shape.
 - `scripts/utils.js`: generic helpers with no game-state ownership.
 - `scripts/reports.js`: release report, postmortem, package-name, and build-identity text helpers.
+- `scripts/effects.js`: package effect execution and package-preview text.
 - `scripts/graph.js`: visible graph filtering, graph SVG markup, captions, and cause-trace details.
 - `scripts/game.js`: runtime orchestration, combat update, canvas drawing, input, UI wiring, package effects, incidents, and room flow.
 
-New package/content tuning should start in `content.js`. New reusable graph operations should be added to package effects in `game.js` only until the operation vocabulary stabilizes, then moved into a dedicated effect-system module.
+New package/content tuning should start in `content.js`. New reusable graph operations should be added to `effects.js`, with preview language kept beside the operation behavior.
 
 ## UAT Notes
 
@@ -44,8 +45,16 @@ New package/content tuning should start in `content.js`. New reusable graph oper
 
 ## Next Useful Tasks
 
-1. Improve combat feel: enemy telegraphs, hit feedback, jump/dash tuning.
-2. Split package/content data out of `scripts/game.js` once the operation vocabulary stabilizes.
-3. Expand cause tracing into package-preview diffs before install.
-4. Add a second consequence branch for Observability builds so safe choices still create stories.
-5. Add quick playtest prompts that measure whether the choice/consequence loop is legible.
+Completed in this pass:
+
+1. Combat feel now has clearer enemy telegraph rings, hit sparks, brief hit stop, player invulnerability flash, dash afterimages, and close-range patch blade combat.
+2. Package/content/effect/report/graph/run-state helpers are split out of `scripts/game.js`.
+3. Package choices show effect-preview diffs before install, generated from the same effect data that applies the package.
+4. Test Suite adds `test_coverage`, reveals suspected graph edges, and softens the staging incident so an Observability build has a distinct consequence branch.
+5. Quick playtest prompts live in `docs/UAT/First_Slice_Playtest_Prompts.md`.
+
+Next candidates:
+
+1. Add package-preview graph highlights before install.
+2. Add a visible dash cooldown indicator.
+3. Add one more room/event branch after the package choice.

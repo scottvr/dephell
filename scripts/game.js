@@ -9,6 +9,7 @@
     renderReleaseReport,
     renderFailureReport,
   } = namespace.reports;
+  const { applyPackageEffects, packagePreviewText } = namespace.effects;
   const {
     getVisibleGraph,
     graphCaption,
@@ -62,6 +63,7 @@
       slashes: [],
       enemyShots: [],
       hitSparks: [],
+      dashGhosts: [],
       enemies: [],
       roomIntroTimer: ROOM_INTRO_SECONDS,
     };
@@ -162,58 +164,10 @@
     const run = game.run;
     run.installedPackages.push(pkg.id);
     logEvent("package_installed", `Installed ${pkg.name}.`, { package: pkg.id });
-    for (const effect of pkg.effects) applyEffect(effect, pkg);
+    applyPackageEffects(run, pkg, logEvent);
     renderAllUi();
     ui.choiceOverlay.classList.add("hidden");
     choiceShown = true;
-  }
-
-  function applyEffect(effect, pkg) {
-    const run = game.run;
-    if (effect.op === "addNode") {
-      if (!run.graph.nodes.some((node) => node.id === effect.id)) {
-        run.graph.nodes.push({ id: effect.id, name: effect.name, tags: effect.tags, createdBy: pkg.id });
-        logEvent("graph_node_added", `${pkg.name} added node ${effect.name}.`, { node: effect.id });
-      }
-    }
-    if (effect.op === "addEdge") {
-      const id = `edge_${effect.source}_${effect.target}_${effect.relation}`;
-      run.graph.edges.push({ id, source: effect.source, target: effect.target, relation: effect.relation, strength: effect.strength, visibility: effect.visibility, active: true, createdBy: pkg.id });
-      logEvent("graph_edge_added", `${effect.source} ${effect.relation} ${effect.target}.`, { edge: id, relation: effect.relation });
-    }
-    if (effect.op === "modifyStat") {
-      run.stats[effect.stat] = Math.max(0.08, run.stats[effect.stat] + effect.amount);
-    }
-    if (effect.op === "modifyResource") {
-      run[effect.resource] = Math.max(0, Math.min(5, run[effect.resource] + effect.amount));
-      logEvent("resource_changed", `${effect.resource} changed by ${effect.amount}.`, { resource: effect.resource });
-    }
-    if (effect.op === "increaseDebt") {
-      run.techDebt += effect.amount;
-      run.debtTags.push(effect.tag);
-      logEvent("debt_added", `Technical Debt +${effect.amount}: ${effect.tag}.`, { debtTag: effect.tag });
-    }
-    if (effect.op === "addApproval") {
-      run.approvals.push({ id: effect.id, target: effect.target, reason: effect.reason });
-      logEvent("approval_granted", `Security Exception approved for ${effect.target}.`, { approval: effect.id });
-    }
-    if (effect.op === "addTag") {
-      if (!run[effect.list]) run[effect.list] = [];
-      if (!run[effect.list].includes(effect.tag)) run[effect.list].push(effect.tag);
-      logEvent("tag_added", `${pkg.name} added ${effect.tag}.`, { tag: effect.tag });
-    }
-    if (effect.op === "revealEdges") {
-      let revealedCount = 0;
-      for (const edge of run.graph.edges) {
-        const relationMatches = !effect.relation || edge.relation === effect.relation;
-        const visibilityMatches = !effect.visibility || edge.visibility === effect.visibility;
-        if (relationMatches && visibilityMatches) {
-          edge.visibility = "known";
-          revealedCount += 1;
-        }
-      }
-      logEvent("graph_revealed", `${pkg.name} revealed ${revealedCount} suspected graph ${revealedCount === 1 ? "edge" : "edges"}.`);
-    }
   }
 
   function showPackageChoice() {
@@ -233,32 +187,6 @@
       ui.packageChoices.appendChild(button);
     }
     ui.choiceOverlay.classList.remove("hidden");
-  }
-
-  function packagePreviewText(pkg) {
-    const parts = [];
-    let debt = 0;
-    for (const effect of pkg.effects) {
-      if (effect.op === "addNode") parts.push(`+node ${effect.name}`);
-      if (effect.op === "addEdge") parts.push(`+${effect.relation} edge`);
-      if (effect.op === "modifyResource") parts.push(`${effect.resource} ${signed(effect.amount)}`);
-      if (effect.op === "modifyStat") parts.push(statPreview(effect));
-      if (effect.op === "increaseDebt") debt += effect.amount;
-      if (effect.op === "revealEdges") parts.push("reveals suspected edges");
-      if (effect.op === "addTag") parts.push(`adds ${effect.tag}`);
-    }
-    if (debt) parts.push(`TDR +${debt}`);
-    return parts.slice(0, 4).join("; ");
-  }
-
-  function signed(value) {
-    return value > 0 ? `+${value}` : String(value);
-  }
-
-  function statPreview(effect) {
-    if (effect.stat === "fireRate") return effect.amount > 0 ? "slower swing" : "faster swing";
-    if (effect.stat === "damage") return `damage ${signed(effect.amount)}`;
-    return `${effect.stat} ${signed(effect.amount)}`;
   }
 
   function visibleRiskText(pkg) {
@@ -281,6 +209,7 @@
     updateAttacks(dt);
     updateEnemies(dt);
     updateHitSparks(dt);
+    updateDashGhosts(dt);
     updateRoomFlow(dt);
   }
 
@@ -296,6 +225,7 @@
     if (jump && p.y >= FLOOR_Y) p.vy = -410;
     if (down && p.y < FLOOR_Y) p.vy += 780 * dt;
     if ((keys.has("shift") || keys.has("shiftleft")) && p.dashTimer <= 0) {
+      game.dashGhosts.push({ x: p.x, y: p.y, facing: p.facing, life: 0.18, maxLife: 0.18 });
       p.x += p.facing * 96;
       p.dashTimer = game.run.stats.dashCooldown;
     }
@@ -439,6 +369,11 @@
     game.hitSparks = game.hitSparks.filter((spark) => spark.life > 0);
   }
 
+  function updateDashGhosts(dt) {
+    for (const ghost of game.dashGhosts) ghost.life -= dt;
+    game.dashGhosts = game.dashGhosts.filter((ghost) => ghost.life > 0);
+  }
+
   function endRun(victory, cause) {
     if (game.run.ended) return;
     game.run.ended = true;
@@ -503,6 +438,7 @@
     drawPlatforms();
     drawAttacks();
     drawEnemies();
+    drawDashGhosts();
     drawPlayer();
     drawHitSparks();
     drawRoomTitle(room);
@@ -568,12 +504,36 @@
     ctx.restore();
   }
 
+  function drawDashGhosts() {
+    for (const ghost of game.dashGhosts) {
+      const t = ghost.life / ghost.maxLife;
+      ctx.save();
+      ctx.globalAlpha = t * 0.38;
+      ctx.translate(ghost.x, ghost.y);
+      ctx.fillStyle = "#20f7ee";
+      ctx.shadowColor = "#20f7ee";
+      ctx.shadowBlur = 18;
+      ctx.fillRect(-10, -42, 20, 18);
+      ctx.fillRect(-8, -24, 16, 26);
+      ctx.fillRect(-16, -18, 9, 24);
+      ctx.fillRect(7, -18, 9, 24);
+      ctx.strokeStyle = "#dfffee";
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(ghost.facing > 0 ? 8 : -8, -24);
+      ctx.lineTo(ghost.facing > 0 ? 42 : -42, -34);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   function drawEnemies() {
     for (const enemy of game.enemies) {
       if (!enemy.alive) continue;
       const def = enemyDefs[enemy.type];
-    ctx.save();
-    ctx.translate(enemy.x, enemy.y);
+      ctx.save();
+      ctx.translate(enemy.x, enemy.y);
       if (enemy.telegraph > 0) {
         ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
         ctx.lineWidth = 3;
@@ -581,7 +541,7 @@
         ctx.arc(0, -enemy.h / 2, enemy.w + 12, 0, Math.PI * 2);
         ctx.stroke();
       }
-    ctx.fillStyle = def.color;
+      ctx.fillStyle = def.color;
       ctx.shadowColor = def.color;
       ctx.shadowBlur = enemy.telegraph > 0 ? 24 : 10;
       const scale = enemy.type === "memory_leak" ? 1 + (enemy.maxHp - enemy.hp) / 120 : 1;
