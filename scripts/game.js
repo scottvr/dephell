@@ -21,6 +21,10 @@ const ui = {
   reportRestartButton: document.querySelector("#reportRestartButton"),
 };
 
+const FLOOR_Y = 326;
+const GROUND_TOP = 334;
+const ROOM_INTRO_SECONDS = 1.35;
+
 const graphPositions = {
   app: [48, 88],
   runtime: [110, 58],
@@ -60,7 +64,7 @@ const packages = [
       { op: "addEdge", source: "test_suite", target: "app", relation: "observes", strength: 2, visibility: "known" },
       { op: "modifyResource", resource: "observability", amount: 2 },
       { op: "modifyStat", stat: "fireRate", amount: 0.08 },
-      { op: "revealRelations", relation: "conflicts" },
+      { op: "revealEdges", visibility: "suspected" },
     ],
   },
   {
@@ -82,20 +86,20 @@ const rooms = [
   {
     id: "local_dev",
     name: "Local Development",
-    subtitle: "Three regressions in a quiet service chamber.",
+    subtitle: "Two regressions in a quiet service chamber.",
     enemies: [
-      { type: "regression", x: 640, y: 402 },
-      { type: "regression", x: 765, y: 402 },
+      { type: "regression", x: 640, y: FLOOR_Y },
+      { type: "regression", x: 765, y: FLOOR_Y },
     ],
   },
   {
     id: "package_gate",
     name: "Package Gate",
-    subtitle: "Choose one upgrade; the graph keeps the receipt.",
+    subtitle: "Break the yellow change, then inspect the package offer.",
     packageChoice: true,
     enemies: [
-      { type: "breaking_change", x: 700, y: 402 },
-      { type: "regression", x: 820, y: 402 },
+      { type: "breaking_change", x: 700, y: FLOOR_Y },
+      { type: "regression", x: 820, y: FLOOR_Y },
     ],
   },
   {
@@ -104,8 +108,8 @@ const rooms = [
     subtitle: "A consequence arrives wearing a process badge.",
     incident: true,
     enemies: [
-      { type: "memory_leak", x: 720, y: 402 },
-      { type: "breaking_change", x: 840, y: 402 },
+      { type: "memory_leak", x: 720, y: FLOOR_Y },
+      { type: "breaking_change", x: 840, y: FLOOR_Y },
     ],
   },
 ];
@@ -157,13 +161,15 @@ function makeInitialRunState() {
 }
 
 function resetGame() {
+  keys.clear();
+  mouse.down = false;
   game = {
     run: makeInitialRunState(),
-    player: { x: 170, y: 402, w: 24, h: 42, vx: 0, vy: 0, facing: 1, shootTimer: 0, dashTimer: 0 },
+    player: { x: 170, y: FLOOR_Y, w: 24, h: 42, vx: 0, vy: 0, facing: 1, shootTimer: 0, dashTimer: 0 },
     projectiles: [],
     enemyShots: [],
     enemies: [],
-    roomTransition: 1,
+    roomIntroTimer: ROOM_INTRO_SECONDS,
   };
   ui.choiceOverlay.classList.add("hidden");
   ui.reportOverlay.classList.add("hidden");
@@ -182,10 +188,11 @@ function loadRoom(index) {
   const room = rooms[index];
   game.run.roomIndex = index;
   game.player.x = 150;
-  game.player.y = 402;
+  game.player.y = FLOOR_Y;
   game.projectiles.length = 0;
   game.enemyShots.length = 0;
   game.enemies = room.enemies.map((spawn, idx) => makeEnemy(spawn, idx));
+  game.roomIntroTimer = ROOM_INTRO_SECONDS;
   roomClearTimer = 0;
   if (room.incident) startIncident();
   logEvent("room_entered", `Entered ${room.name}.`, { room: room.id });
@@ -208,6 +215,8 @@ function makeEnemy(spawn, idx) {
     damage: def.damage,
     telegraph: 0,
     attackTimer: 0.8 + idx * 0.4,
+    contactTimer: 0,
+    windupTimer: 0,
     alive: true,
   };
 }
@@ -291,11 +300,17 @@ function applyEffect(effect, pkg) {
     run.approvals.push({ id: effect.id, target: effect.target, reason: effect.reason });
     logEvent("approval_granted", `Security Exception approved for ${effect.target}.`, { approval: effect.id });
   }
-  if (effect.op === "revealRelations") {
+  if (effect.op === "revealEdges") {
+    let revealedCount = 0;
     for (const edge of run.graph.edges) {
-      if (edge.relation === effect.relation) edge.visibility = "known";
+      const relationMatches = !effect.relation || edge.relation === effect.relation;
+      const visibilityMatches = !effect.visibility || edge.visibility === effect.visibility;
+      if (relationMatches && visibilityMatches) {
+        edge.visibility = "known";
+        revealedCount += 1;
+      }
     }
-    logEvent("graph_revealed", "Test Suite revealed conflict relations.");
+    logEvent("graph_revealed", `${pkg.name} revealed ${revealedCount} suspected graph ${revealedCount === 1 ? "edge" : "edges"}.`);
   }
 }
 
@@ -325,6 +340,10 @@ function visibleRiskText(pkg) {
 
 function update(dt) {
   if (game.run.ended || !ui.choiceOverlay.classList.contains("hidden") || !ui.reportOverlay.classList.contains("hidden")) return;
+  if (game.roomIntroTimer > 0) {
+    game.roomIntroTimer -= dt;
+    return;
+  }
   updatePlayer(dt);
   updateProjectiles(dt);
   updateEnemies(dt);
@@ -340,16 +359,16 @@ function updatePlayer(dt) {
   const axis = (right ? 1 : 0) - (left ? 1 : 0);
   p.vx = axis * game.run.stats.speed;
   if (axis) p.facing = axis;
-  if (jump && p.y >= 402) p.vy = -410;
-  if (down && p.y < 402) p.vy += 780 * dt;
+  if (jump && p.y >= FLOOR_Y) p.vy = -410;
+  if (down && p.y < FLOOR_Y) p.vy += 780 * dt;
   if ((keys.has("shift") || keys.has("shiftleft")) && p.dashTimer <= 0) {
     p.x += p.facing * 96;
     p.dashTimer = game.run.stats.dashCooldown;
   }
   p.vy += 920 * dt;
   p.x = clamp(p.x + p.vx * dt, 92, 900);
-  p.y = Math.min(402, p.y + p.vy * dt);
-  if (p.y >= 402) p.vy = 0;
+  p.y = Math.min(FLOOR_Y, p.y + p.vy * dt);
+  if (p.y >= FLOOR_Y) p.vy = 0;
   p.shootTimer -= dt;
   p.dashTimer -= dt;
   if ((mouse.down || keys.has(" ")) && p.shootTimer <= 0) shoot();
@@ -412,15 +431,19 @@ function updateEnemies(dt) {
     enemy.x += dir * behaviorSpeed * dt;
     enemy.x = clamp(enemy.x, 88, 900);
     enemy.attackTimer -= dt;
+    enemy.contactTimer -= dt;
+    enemy.windupTimer -= dt;
     enemy.telegraph = Math.max(0, enemy.telegraph - dt);
-    if (Math.abs(p.x - enemy.x) < 46 && enemy.attackTimer <= 0) {
+    if (enemy.windupTimer <= 0 && enemy.windupTimer > -dt) {
+      if (Math.abs(game.player.x - enemy.x) < 64) {
+        damagePlayer(enemy.damage, `${enemy.name} collided with active code.`);
+      }
+    }
+    if (Math.abs(p.x - enemy.x) < 46 && enemy.attackTimer <= 0 && enemy.contactTimer <= 0) {
       enemy.telegraph = 0.28;
+      enemy.windupTimer = 0.26;
       enemy.attackTimer = enemy.type === "breaking_change" ? 1.2 : 1.8;
-      setTimeout(() => {
-        if (!game.run.ended && enemy.alive && Math.abs(game.player.x - enemy.x) < 64) {
-          damagePlayer(enemy.damage, `${enemy.name} collided with active code.`);
-        }
-      }, 260);
+      enemy.contactTimer = 1.1;
     } else if (enemy.type === "breaking_change" && enemy.attackTimer <= 0.05) {
       enemy.attackTimer = 1.7;
       enemy.telegraph = 0.32;
@@ -474,8 +497,31 @@ function renderReport(victory, cause) {
   const identity = buildIdentity();
   ui.reportKicker.textContent = victory ? "RELEASE REPORT" : "MINI POSTMORTEM";
   ui.reportTitle.textContent = victory ? "Release candidate shipped." : "Build failed.";
-  ui.reportBody.innerHTML = `
-    <div><b>Primary Cause:</b> ${victory ? "Staging survived long enough for release." : cause}</div>
+  ui.reportBody.innerHTML = victory ? renderReleaseReport(run, installed, identity, conflict) : renderFailureReport(run, installed, identity, conflict, cause);
+}
+
+function renderReleaseReport(run, installed, identity, conflict) {
+  return `
+    <div><b>Ship Rationale:</b> Staging survived long enough for release.</div>
+    <div><b>Architecture:</b> ${identity}</div>
+    <div><b>Installed Package:</b> ${installed[0] || "No external package. Terrifying restraint."}</div>
+    <div><b>Known Caveat:</b> ${consequenceLine(conflict)}</div>
+    <div><b>Release Notes:</b>
+      <ul>
+        <li>Technical Debt closed at ${run.techDebt}.</li>
+        <li>Observability closed at ${run.observability} of 5.</li>
+        <li>${run.approvals.length ? `${run.approvals[0].id} remains documented for follow-up.` : "No approval hook was granted; compliance has nothing useful to chase."}</li>
+      </ul>
+    </div>
+    <div><b>Timeline:</b>
+      <ul>${run.eventLog.slice(-5).map((event) => `<li>${event.text}</li>`).join("")}</ul>
+    </div>
+  `;
+}
+
+function renderFailureReport(run, installed, identity, conflict, cause) {
+  return `
+    <div><b>Primary Cause:</b> ${cause}</div>
     <div><b>Architecture:</b> ${identity}</div>
     <div><b>Installed Package:</b> ${installed[0] || "No external package. Terrifying restraint."}</div>
     <div><b>Traceable Consequence:</b> ${consequenceLine(conflict)}</div>
@@ -546,6 +592,7 @@ function graphCaption(edges) {
   const conflict = edges.find((edge) => edge.relation === "conflicts");
   if (game.run.incident?.id === "build_failure") return "conflict edge activated; staging attacks are stronger.";
   if (conflict) return `${conflict.visibility} conflict: ${conflict.source} versus ${conflict.target}.`;
+  if (game.run.installedPackages.includes("test_suite")) return "test suite promoted suspected graph edges to known.";
   if (game.run.techDebt >= 16) return "debt is now a graph-level pressure source.";
   return "known requires edges are stable; suspected relations need observability.";
 }
@@ -563,6 +610,7 @@ function draw() {
   drawEnemies();
   drawPlayer();
   drawRoomTitle(room);
+  drawRoomBanner(room);
 }
 
 function drawBackdrop(room) {
@@ -595,8 +643,8 @@ function drawPlatforms() {
   ctx.fillStyle = "#061315";
   ctx.strokeStyle = "#20f7ee";
   ctx.lineWidth = 3;
-  ctx.fillRect(86, 410, 830, 24);
-  ctx.strokeRect(86, 410, 830, 24);
+  ctx.fillRect(86, GROUND_TOP, 830, 24);
+  ctx.strokeRect(86, GROUND_TOP, 830, 24);
   ctx.strokeStyle = "rgba(32, 247, 238, 0.34)";
   ctx.strokeRect(250, 322, 140, 16);
   ctx.strokeRect(540, 270, 150, 16);
@@ -665,6 +713,28 @@ function drawRoomTitle(room) {
     ctx.font = "16px Courier New";
     ctx.fillText(`INCIDENT: ${game.run.incident.name}`, 236, 122);
   }
+}
+
+function drawRoomBanner(room) {
+  if (game.roomIntroTimer <= 0) return;
+  const alpha = clamp(game.roomIntroTimer / ROOM_INTRO_SECONDS, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, alpha + 0.12);
+  ctx.fillStyle = "rgba(3, 14, 17, 0.86)";
+  ctx.strokeStyle = "rgba(93, 255, 235, 0.72)";
+  ctx.lineWidth = 2;
+  ctx.fillRect(246, 136, 468, 104);
+  ctx.strokeRect(246, 136, 468, 104);
+  ctx.fillStyle = "#20f7ee";
+  ctx.font = "14px Courier New";
+  ctx.fillText(`ROOM ${game.run.roomIndex + 1} / ${rooms.length}`, 274, 168);
+  ctx.fillStyle = "#dfffee";
+  ctx.font = "28px Courier New";
+  ctx.fillText(room.name.toUpperCase(), 274, 200);
+  ctx.fillStyle = "#7ccfc4";
+  ctx.font = "14px Courier New";
+  ctx.fillText(room.subtitle, 274, 224);
+  ctx.restore();
 }
 
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {

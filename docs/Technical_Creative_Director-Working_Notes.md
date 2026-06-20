@@ -17,6 +17,15 @@ The current first slice is a zero-build browser prototype. That keeps the earlie
 
 Graph-scale interaction begins as pause/between-room inspection and package choice context. Combat uses the graph as a live minimap and consequence surface, not as an active tactical board yet.
 
+## UAT Notes
+
+- `docs/UAT/ss1-play.png` showed the dependency graph panel hiding the player/enemies. The prototype now reserves the lower screen band for instrumentation by raising the combat floor and reducing the minimap height.
+- Restart copy changed from "Run it back" to "New run". The button was intended to reset the run, not replay it.
+- Enemy contact damage now uses update-loop windups instead of delayed timers, so resetting from a report cannot leak old hits into a new run.
+- Room transitions now show a short pause banner. Combat room subtitles should describe the immediate threat; package-choice language belongs on the paused upgrade overlay.
+- Victory reports should use release language, not postmortem language. "Cause" and "contributing factors" are reserved for failures unless a success is explicitly framed as a barely-contained incident.
+- Package claims must match reusable effect operations. Test Suite now reveals suspected graph edges broadly, so the yellow CI relation becomes known instead of staying visually unchanged.
+
 ## Next Useful Tasks
 
 1. Improve combat feel: enemy telegraphs, hit feedback, jump/dash tuning.

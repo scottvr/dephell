@@ -19,21 +19,21 @@
 
         <section class="hud" aria-label="Run state">
           <div class="meter">
-            <span>STABILITY</span>
+            <span title="Stability">STB</span>
             <div class="track"><i id="stabilityBar"></i></div>
             <b id="stabilityValue">100%</b>
           </div>
           <div class="meter info">
-            <span>OBSERVABILITY</span>
+            <span title="Observability">OBS</span>
             <div class="track"><i id="observabilityBar"></i></div>
             <b id="observabilityValue">2</b>
           </div>
           <div class="meter debt">
-            <span>TECH DEBT</span>
+            <span title="Technical Debt Ratio">TDR</span>
             <div class="track"><i id="debtBar"></i></div>
             <b id="debtValue">0</b>
           </div>
-          <button id="restartButton" type="button" title="Restart run">RESTART</button>
+          <button id="restartButton" type="button" title="Start a new run">NEW RUN</button>
         </section>
 
         <aside class="graph-card" aria-label="Dependency graph">
@@ -47,7 +47,7 @@
             <div>
               <p class="kicker">UPGRADE PATH</p>
               <h1>Select one package to patch libglitch-v3.</h1>
-              <p id="choicePrompt">Current graph risk is visible enough to make a bad decision responsibly.</p>
+              <p id="choicePrompt">Choose one upgrade; the graph keeps the receipt.</p>
             </div>
             <div id="packageChoices" class="choices"></div>
           </div>
@@ -58,7 +58,7 @@
             <p class="kicker" id="reportKicker">MINI POSTMORTEM</p>
             <h1 id="reportTitle">Build failed.</h1>
             <div id="reportBody" class="report-body"></div>
-            <button id="reportRestartButton" type="button">RUN IT BACK</button>
+            <button id="reportRestartButton" type="button">NEW RUN</button>
           </div>
         </section>
       </section>
