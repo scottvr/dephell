@@ -6,13 +6,14 @@ Use these after a short run. The goal is not to win; it is to test whether the p
 
 1. Which package did you choose, and what did you think it would do?
 2. What changed on the dependency graph after the package installed?
-3. Did room 3 feel connected to the package choice? Why or why not?
+3. Did the Verification Fork room feel connected to the package choice? Why or why not?
 4. What did the final report say was important about your run?
 5. Was any combat damage surprising or hard to read?
 
 ## Observer Checklist
 
 - Player noticed the package preview before choosing.
+- Player noticed graph ghost highlights while hovering/focusing package choices.
 - Player understood at least one graph node or edge added by the package.
 - Player used or noticed the enlarged graph view.
 - Player could explain one later consequence in their own words.
@@ -21,5 +22,5 @@ Use these after a short run. The goal is not to win; it is to test whether the p
 ## Branches To Exercise
 
 - LegacyAuth: watch for conflict and security-exception story.
-- Test Suite: watch for revealed edges and softened staging incident.
-- Compatibility Shim: watch for stronger blade damage and TDR/audit pressure.
+- Test Suite: watch for revealed edges, a cleaner Verification Fork, and softened staging incident.
+- Compatibility Shim: watch for stronger blade damage, fast verification, and TDR/audit pressure.

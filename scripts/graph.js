@@ -10,6 +10,50 @@
     return { visibleNodes, edges };
   }
 
+  function getPreviewGraph(run, pkg) {
+    const { visibleNodes, edges } = getVisibleGraph(run);
+    if (!pkg) return { visibleNodes, edges, preview: { nodeIds: new Set(), edgeIds: new Set() } };
+
+    const nodesById = new Map(visibleNodes.map((node) => [node.id, node]));
+    const edgeList = [...edges];
+    const previewNodeIds = new Set();
+    const previewEdgeIds = new Set();
+
+    for (const effect of pkg.effects) {
+      if (effect.op === "addNode" && !nodesById.has(effect.id)) {
+        const node = { id: effect.id, name: effect.name, tags: effect.tags, preview: true };
+        nodesById.set(effect.id, node);
+        previewNodeIds.add(effect.id);
+      }
+      if (effect.op === "addEdge") {
+        ensurePreviewNode(run, nodesById, previewNodeIds, effect.source);
+        ensurePreviewNode(run, nodesById, previewNodeIds, effect.target);
+        const id = `preview_${effect.source}_${effect.target}_${effect.relation}`;
+        edgeList.push({ id, source: effect.source, target: effect.target, relation: effect.relation, strength: effect.strength, visibility: effect.visibility, active: true, preview: true });
+        previewEdgeIds.add(id);
+      }
+    }
+
+    return {
+      visibleNodes: [...nodesById.values()],
+      edges: edgeList,
+      preview: { nodeIds: previewNodeIds, edgeIds: previewEdgeIds },
+    };
+  }
+
+  function ensurePreviewNode(run, nodesById, previewNodeIds, nodeId) {
+    if (nodesById.has(nodeId)) return;
+    const sourceNode = run.graph.nodes.find((node) => node.id === nodeId);
+    if (!sourceNode) return;
+    const hidden = sourceNode.hidden && run.observability < 4;
+    nodesById.set(nodeId, {
+      ...sourceNode,
+      name: hidden ? "hidden risk" : sourceNode.name,
+      preview: true,
+    });
+    previewNodeIds.add(nodeId);
+  }
+
   function graphCaption(run, edges) {
     const conflict = edges.find((edge) => edge.relation === "conflicts");
     if (run.incident?.id === "build_failure") return "conflict edge activated; staging attacks are stronger.";
@@ -22,13 +66,15 @@
   function graphMarkup(run, visibleNodes, edges, selectedGraphEntity, options = {}) {
     const selectedType = selectedGraphEntity?.type;
     const selectedId = selectedGraphEntity?.id;
+    const preview = options.preview || { nodeIds: new Set(), edgeIds: new Set() };
     const svgEdges = edges.map((edge) => {
       const a = GRAPH_POSITIONS[edge.source];
       const b = GRAPH_POSITIONS[edge.target];
       const selected = selectedType === "edge" && selectedId === edge.id;
-      const classes = ["edge", edge.relation, edge.visibility, selected ? "selected" : ""].join(" ");
+      const isPreview = preview.edgeIds.has(edge.id);
+      const classes = ["edge", edge.relation, edge.visibility, selected ? "selected" : "", isPreview ? "preview" : ""].join(" ");
       const visual = `<line class="${classes}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>${edge.source} ${edge.relation} ${edge.target}</title></line>`;
-      if (!options.interactive) return visual;
+      if (!options.interactive || isPreview) return visual;
       return `${visual}<line class="edge-hit" data-entity-type="edge" data-entity-id="${edge.id}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"></line>`;
     });
     const svgNodes = visibleNodes.map((node) => {
@@ -36,8 +82,10 @@
       const hazard = run.incident?.cause && (run.incident.cause.source === node.id || run.incident.cause.target === node.id);
       const risk = node.tags?.some((tag) => ["legacy", "debt", "security_risk", "unstable"].includes(tag));
       const selected = selectedType === "node" && selectedId === node.id;
+      const isPreview = preview.nodeIds.has(node.id);
+      const dataAttrs = isPreview ? "" : `data-entity-type="node" data-entity-id="${node.id}"`;
       return `
-        <rect class="node ${risk ? "risk" : ""} ${hazard ? "hazard" : ""} ${selected ? "selected" : ""}" data-entity-type="node" data-entity-id="${node.id}" x="${p[0] - 9}" y="${p[1] - 9}" width="18" height="18"></rect>
+        <rect class="node ${risk ? "risk" : ""} ${hazard ? "hazard" : ""} ${selected ? "selected" : ""} ${isPreview ? "preview" : ""}" ${dataAttrs} x="${p[0] - 9}" y="${p[1] - 9}" width="18" height="18"></rect>
         <text class="node-label" x="${p[0]}" y="${p[1] + 24}">${shortName(node.name)}</text>
       `;
     });
@@ -123,5 +171,5 @@
     return events.slice(-8).map((event) => `<li>${escapeHtml(event.text)}</li>`).join("");
   }
 
-  namespace.graph = { getVisibleGraph, graphCaption, graphMarkup, graphDetails };
+  namespace.graph = { getVisibleGraph, getPreviewGraph, graphCaption, graphMarkup, graphDetails };
 })(window.DepHell = window.DepHell || {});

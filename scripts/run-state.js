@@ -10,6 +10,7 @@
       approvals: [],
       debtTags: [],
       mitigations: [],
+      branchEvents: [],
       incident: null,
       ended: false,
       eventLog: [],

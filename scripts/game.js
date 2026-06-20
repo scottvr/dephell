@@ -11,7 +11,7 @@
   } = namespace.reports;
   const { applyPackageEffects, packagePreviewText } = namespace.effects;
   const {
-    getVisibleGraph,
+    getPreviewGraph,
     graphCaption,
     graphMarkup,
     graphDetails,
@@ -51,6 +51,7 @@
   let roomClearTimer = 0;
   let choiceShown = false;
   let selectedGraphEntity = null;
+  let activePreviewPackage = null;
   let hitFreezeTimer = 0;
   let game;
 
@@ -71,6 +72,7 @@
     ui.reportOverlay.classList.add("hidden");
     ui.graphOverlay.classList.add("hidden");
     selectedGraphEntity = null;
+    activePreviewPackage = null;
     roomClearTimer = 0;
     choiceShown = false;
     logEvent("run_started", "Run started: Release Candidate Pipeline.");
@@ -83,7 +85,8 @@
   }
 
   function loadRoom(index) {
-    const room = rooms[index];
+    const room = resolveRoom(rooms[index]);
+    game.currentRoom = room;
     game.run.roomIndex = index;
     game.player.x = 150;
     game.player.y = FLOOR_Y;
@@ -95,6 +98,54 @@
     if (room.incident) startIncident();
     logEvent("room_entered", `Entered ${room.name}.`, { room: room.id });
     renderAllUi();
+  }
+
+  function resolveRoom(room) {
+    if (!room.branchEncounter) return room;
+    const installed = game.run.installedPackages[0];
+    if (!game.run.branchEvents.includes(room.id)) {
+      applyBranchEvent(room.id, installed);
+      game.run.branchEvents.push(room.id);
+    }
+    if (installed === "test_suite") {
+      return {
+        ...room,
+        subtitle: "Test coverage narrows the checkpoint to one clean repro.",
+        enemies: [{ type: "regression", x: 745, y: FLOOR_Y }],
+      };
+    }
+    if (installed === "legacy_auth") {
+      return {
+        ...room,
+        subtitle: "Legacy cache opens, but old assumptions leak out with it.",
+        enemies: [{ type: "memory_leak", x: 760, y: FLOOR_Y }],
+      };
+    }
+    if (installed === "compatibility_shim") {
+      return {
+        ...room,
+        subtitle: "The shim fast-passes verification and leaves a jagged edge.",
+        enemies: [{ type: "breaking_change", x: 750, y: FLOOR_Y }],
+      };
+    }
+    return room;
+  }
+
+  function applyBranchEvent(roomId, installed) {
+    const run = game.run;
+    if (installed === "test_suite") {
+      run.stability = Math.min(100, run.stability + 6);
+      logEvent("branch_resolved", "Test Suite produced a clean repro. Stability +6.", { room: roomId, package: installed });
+    } else if (installed === "legacy_auth") {
+      run.stability = Math.min(100, run.stability + 8);
+      run.techDebt += 4;
+      run.debtTags.push("legacy_cache");
+      logEvent("branch_resolved", "LegacyAuth unlocked a recovery cache and added old-system debt. Stability +8, TDR +4.", { room: roomId, package: installed });
+    } else if (installed === "compatibility_shim") {
+      run.techDebt += 6;
+      run.debtTags.push("shim_smoke_test");
+      logEvent("branch_resolved", "Compatibility Shim passed verification quickly, then filed a debt-shaped receipt. TDR +6.", { room: roomId, package: installed });
+    }
   }
 
   function makeEnemy(spawn, idx) {
@@ -165,6 +216,7 @@
     run.installedPackages.push(pkg.id);
     logEvent("package_installed", `Installed ${pkg.name}.`, { package: pkg.id });
     applyPackageEffects(run, pkg, logEvent);
+    activePreviewPackage = null;
     renderAllUi();
     ui.choiceOverlay.classList.add("hidden");
     choiceShown = true;
@@ -184,9 +236,25 @@
         <div class="tag-row">${pkg.tags.map((tag) => `<span class="tag">${tag}</span>`).join("")}</div>
       `;
       button.addEventListener("click", () => applyPackage(pkg));
+      button.addEventListener("mouseenter", () => previewPackage(pkg));
+      button.addEventListener("focus", () => previewPackage(pkg));
+      button.addEventListener("mouseleave", clearPackagePreview);
+      button.addEventListener("blur", clearPackagePreview);
       ui.packageChoices.appendChild(button);
     }
     ui.choiceOverlay.classList.remove("hidden");
+  }
+
+  function previewPackage(pkg) {
+    activePreviewPackage = pkg;
+    renderGraph();
+    if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
+  }
+
+  function clearPackagePreview() {
+    activePreviewPackage = null;
+    renderGraph();
+    if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
   }
 
   function visibleRiskText(pkg) {
@@ -406,14 +474,14 @@
   }
 
   function renderGraph() {
-    const { visibleNodes, edges } = getVisibleGraph(game.run);
-    ui.graphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: false });
-    ui.graphCaption.textContent = graphCaption(game.run, edges);
+    const { visibleNodes, edges, preview } = getPreviewGraph(game.run, activePreviewPackage);
+    ui.graphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: false, preview });
+    ui.graphCaption.textContent = activePreviewPackage ? `previewing ${activePreviewPackage.name}; install to commit graph changes.` : graphCaption(game.run, edges);
   }
 
   function renderPauseGraph() {
-    const { visibleNodes, edges } = getVisibleGraph(game.run);
-    ui.pauseGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: true });
+    const { visibleNodes, edges, preview } = getPreviewGraph(game.run, activePreviewPackage);
+    ui.pauseGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: true, preview });
     ui.graphDetails.innerHTML = graphDetails(game.run, selectedGraphEntity, ui.graphCaption.textContent);
   }
 
@@ -432,7 +500,7 @@
   }
 
   function draw() {
-    const room = rooms[game.run.roomIndex];
+    const room = game.currentRoom || rooms[game.run.roomIndex];
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackdrop(room);
     drawPlatforms();

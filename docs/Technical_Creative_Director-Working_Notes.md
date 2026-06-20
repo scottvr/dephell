@@ -6,7 +6,7 @@ The current first slice is a zero-build browser prototype. That keeps the earlie
 
 ## Implemented Prototype Target
 
-- Three side-view rooms.
+- Four side-view rooms: two combat rooms, one package-reactive verification room, and one staging incident.
 - One package choice with three tradeoffs.
 - Runtime dependency graph with nodes, edges, visibility, relation types, and event log entries.
 - Data-driven package effects using reusable operations.
@@ -42,6 +42,8 @@ New package/content tuning should start in `content.js`. New reusable graph oper
 - Package claims must match reusable effect operations. Test Suite now reveals suspected graph edges broadly, so the yellow CI relation becomes known instead of staying visually unchanged.
 - The minimap can stay compact if the player has a paused graph view. `G`, the minimap, or `INSPECT` opens a larger clickable graph with node/edge cause tracing from run-state and event-log facts.
 - The Resolver starts with a close-range glowing patch blade, matching the mockups. Ranged weapons can arrive later as package/tool upgrades rather than the default verb.
+- Hovering or focusing package choices previews graph mutations as ghost nodes/edges before install.
+- Verification Fork is a post-package branch room. It changes enemy pressure and event-log consequences based on the installed package before Staging Incident.
 
 ## Next Useful Tasks
 
@@ -55,6 +57,6 @@ Completed in this pass:
 
 Next candidates:
 
-1. Add package-preview graph highlights before install.
-2. Add a visible dash cooldown indicator.
-3. Add one more room/event branch after the package choice.
+1. Add a visible dash cooldown indicator.
+2. Add package-preview graph diff text to the Graph Trace panel.
+3. Add one more package or tool that introduces a genuinely new combat verb.

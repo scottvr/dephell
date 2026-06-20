@@ -68,6 +68,13 @@
       ],
     },
     {
+      id: "verification_fork",
+      name: "Verification Fork",
+      subtitle: "The chosen package changes this checkpoint.",
+      branchEncounter: true,
+      enemies: [],
+    },
+    {
       id: "staging_incident",
       name: "Staging Incident",
       subtitle: "A consequence arrives wearing a process badge.",
