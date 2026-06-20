@@ -76,8 +76,11 @@
       const current = currentLocation?.type === "edge" && currentLocation.id === edge.id;
       const flagged = run.activeFlag?.type === "edge" && run.activeFlag.target === edge.id;
       const classes = ["edge", edge.relation, edge.visibility, selected ? "selected" : "", isPreview ? "preview" : "", flagged ? "flagged" : ""].join(" ");
+      const label = options.showLabels
+        ? `<text class="edge-label ${edge.relation} ${edge.visibility} ${isPreview ? "preview" : ""}" x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - 5}">${escapeHtml(edge.relation)}</text>`
+        : "";
       const currentMarker = current ? `<line class="edge-current" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>Current graph locus</title></line>` : "";
-      const visual = `${currentMarker}<line class="${classes}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>${edge.source} ${edge.relation} ${edge.target}</title></line>`;
+      const visual = `${currentMarker}<line class="${classes}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>${edge.source} ${edge.relation} ${edge.target}</title></line>${label}`;
       if (!options.interactive || isPreview) return visual;
       return `${visual}<line class="edge-hit" data-entity-type="edge" data-entity-id="${edge.id}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"></line>`;
     });

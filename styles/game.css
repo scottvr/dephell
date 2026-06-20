@@ -11,6 +11,8 @@
   --blue: #7aa8ff;
   --select: #ffffff;
   --line: rgba(93, 255, 235, 0.62);
+  --tube: rgba(2, 5, 7, 0.72);
+  --glass: rgba(220, 255, 245, 0.08);
   --font: "Courier New", Courier, monospace;
 }
 
@@ -55,28 +57,67 @@ button:focus-visible {
   position: relative;
   aspect-ratio: 16 / 9;
   overflow: hidden;
+  isolation: isolate;
   border: 2px solid rgba(91, 255, 235, 0.84);
   border-radius: 8px;
-  background: #020405;
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(13, 31, 32, 0.7), rgba(2, 4, 5, 0.98) 70%),
+    #020405;
   box-shadow:
-    inset 0 0 38px rgba(32, 247, 238, 0.2),
+    inset 0 0 42px rgba(0, 0, 0, 0.72),
+    inset 0 0 0 1px rgba(223, 255, 238, 0.24),
     0 0 48px rgba(32, 247, 238, 0.18);
+}
+
+.stage::before,
+.stage::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
+.stage::before {
+  z-index: 28;
+  background:
+    radial-gradient(ellipse at 50% 6%, rgba(223, 255, 238, 0.08), transparent 32%),
+    radial-gradient(ellipse at center, transparent 46%, rgba(0, 0, 0, 0.6) 100%);
+  mix-blend-mode: screen;
+}
+
+.stage::after {
+  z-index: 29;
+  background:
+    linear-gradient(90deg, rgba(255, 47, 85, 0.025), transparent 18%, transparent 82%, rgba(32, 247, 238, 0.025)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.022) 0,
+      rgba(255, 0, 0, 0.022) 1px,
+      rgba(0, 255, 255, 0.018) 2px,
+      rgba(0, 255, 255, 0.018) 3px,
+      transparent 4px,
+      transparent 6px
+    );
+  mix-blend-mode: screen;
+  opacity: 0.68;
 }
 
 #game {
   display: block;
   width: 100%;
   height: 100%;
+  filter: contrast(1.04) saturate(1.06);
 }
 
 .scanlines {
   pointer-events: none;
   position: absolute;
   inset: 0;
+  z-index: 27;
   background: repeating-linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.045) 0,
-    rgba(255, 255, 255, 0.045) 1px,
+    rgba(223, 255, 238, 0.045) 0,
+    rgba(223, 255, 238, 0.045) 1px,
     transparent 2px,
     transparent 5px
   );
@@ -88,6 +129,7 @@ button:focus-visible {
 .log-panel,
 .graph-card {
   position: absolute;
+  z-index: 4;
   border: 1px solid var(--line);
   background: var(--panel);
   box-shadow: 0 0 18px rgba(32, 247, 238, 0.16);
@@ -203,17 +245,23 @@ button:focus-visible {
 .graph-card {
   right: 18px;
   bottom: 18px;
-  width: 248px;
+  width: 268px;
   padding: 10px;
 }
 
-#graphSvg {
+#graphSvg,
+#choiceGraphSvg {
   display: block;
   width: 100%;
   height: 118px;
   background: rgba(0, 10, 13, 0.74);
   border: 1px solid rgba(93, 255, 235, 0.42);
   cursor: zoom-in;
+}
+
+#choiceGraphSvg {
+  height: 240px;
+  cursor: default;
 }
 
 #graphCaption {
@@ -229,9 +277,21 @@ button:focus-visible {
   stroke-width: 2;
 }
 
+.edge.requires {
+  stroke: rgba(223, 255, 238, 0.7);
+}
+
+.edge.observes {
+  stroke: var(--cyan);
+  stroke-dasharray: 2 4;
+}
+
 .edge.conflicts {
   stroke: var(--red);
   stroke-dasharray: 6 5;
+  filter:
+    drop-shadow(0 0 3px rgba(255, 66, 101, 0.9))
+    drop-shadow(0 0 12px rgba(255, 66, 101, 0.34));
 }
 
 .edge.suspected {
@@ -257,6 +317,22 @@ button:focus-visible {
   stroke: var(--green);
 }
 
+.edge.pins {
+  stroke: var(--blue);
+  stroke-dasharray: 1 5;
+}
+
+.edge.isolates {
+  stroke: var(--cyan);
+  stroke-width: 4;
+  stroke-dasharray: 10 5 2 5;
+}
+
+.edge.infects {
+  stroke: var(--red);
+  stroke-dasharray: 2 3;
+}
+
 .edge.flags,
 .edge.flagged {
   stroke: var(--green);
@@ -279,12 +355,12 @@ button:focus-visible {
 }
 
 .edge.preview {
-  stroke: var(--select);
+  stroke: var(--amber);
   stroke-dasharray: 2 5;
   stroke-width: 3;
   filter:
-    drop-shadow(0 0 5px rgba(255, 255, 255, 0.82))
-    drop-shadow(0 0 14px rgba(32, 247, 238, 0.42));
+    drop-shadow(0 0 5px rgba(255, 207, 102, 0.82))
+    drop-shadow(0 0 14px rgba(255, 207, 102, 0.42));
 }
 
 .edge-hit {
@@ -347,18 +423,44 @@ button:focus-visible {
 }
 
 .node.preview {
-  stroke: var(--select);
+  stroke: var(--amber);
   stroke-dasharray: 3 3;
   stroke-width: 3;
   filter:
-    drop-shadow(0 0 5px rgba(255, 255, 255, 0.9))
-    drop-shadow(0 0 14px rgba(32, 247, 238, 0.48));
+    drop-shadow(0 0 5px rgba(255, 207, 102, 0.9))
+    drop-shadow(0 0 14px rgba(255, 207, 102, 0.48));
 }
 
 .node-label {
   fill: var(--ink);
   font: 9px var(--font);
   text-anchor: middle;
+}
+
+.edge-label {
+  fill: var(--muted);
+  paint-order: stroke;
+  stroke: rgba(0, 8, 10, 0.9);
+  stroke-width: 3px;
+  font: 8px var(--font);
+  text-anchor: middle;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.edge-label.conflicts,
+.edge-label.infects {
+  fill: var(--red);
+}
+
+.edge-label.suspected,
+.edge-label.preview {
+  fill: var(--amber);
+}
+
+.edge-label.patches,
+.edge-label.flags {
+  fill: var(--green);
 }
 
 .overlay {
@@ -368,7 +470,9 @@ button:focus-visible {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(0, 8, 10, 0.72);
+  background:
+    linear-gradient(90deg, rgba(0, 8, 10, 0.92), rgba(0, 8, 10, 0.72)),
+    repeating-linear-gradient(0deg, rgba(32, 247, 238, 0.04), rgba(32, 247, 238, 0.04) 1px, transparent 1px, transparent 18px);
 }
 
 #graphOverlay {
@@ -384,10 +488,18 @@ button:focus-visible {
 .graph-frame,
 .route-frame {
   width: min(850px, 94vw);
+  max-height: calc(100% - 32px);
+  overflow: auto;
   border: 2px solid rgba(223, 255, 238, 0.86);
-  background: rgba(5, 18, 19, 0.95);
+  background:
+    linear-gradient(180deg, rgba(10, 28, 29, 0.96), rgba(2, 8, 10, 0.96)),
+    rgba(5, 18, 19, 0.95);
   padding: 24px;
   box-shadow: 0 0 34px rgba(255, 207, 102, 0.22);
+}
+
+.choice-frame {
+  width: min(1080px, 94vw);
 }
 
 .choice-frame h1,
@@ -429,6 +541,106 @@ button:focus-visible {
   min-height: 430px;
   background: rgba(0, 10, 13, 0.74);
   border: 1px solid rgba(93, 255, 235, 0.42);
+}
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.graph-legend.compact {
+  gap: 6px 10px;
+  margin-top: 9px;
+  font-size: 10px;
+}
+
+.graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-edge,
+.legend-node {
+  display: inline-block;
+  width: 24px;
+  height: 12px;
+  position: relative;
+}
+
+.legend-edge::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  border-top: 2px solid rgba(223, 255, 238, 0.7);
+}
+
+.legend-node {
+  width: 12px;
+  border: 2px solid var(--cyan);
+  background: rgba(3, 14, 17, 0.9);
+}
+
+.legend-node.current {
+  border-style: dashed;
+  box-shadow: 0 0 8px rgba(32, 247, 238, 0.7);
+}
+
+.legend-node.risk,
+.legend-node.preview {
+  border-color: var(--amber);
+}
+
+.legend-node.hazard {
+  border-color: var(--red);
+}
+
+.legend-edge.observes::before,
+.legend-edge.suspected::before,
+.legend-edge.preview::before,
+.legend-edge.pins::before,
+.legend-edge.infects::before {
+  border-top-style: dashed;
+}
+
+.legend-edge.requires::before {
+  border-color: rgba(223, 255, 238, 0.7);
+}
+
+.legend-edge.observes::before,
+.legend-edge.isolates::before {
+  border-color: var(--cyan);
+}
+
+.legend-edge.patches::before,
+.legend-edge.flags::before {
+  border-color: var(--green);
+}
+
+.legend-edge.suspected::before,
+.legend-edge.preview::before {
+  border-color: var(--amber);
+}
+
+.legend-edge.conflicts::before,
+.legend-edge.infects::before {
+  border-color: var(--red);
+}
+
+.legend-edge.hidden::before {
+  border-color: rgba(223, 255, 238, 0.32);
+  border-top-style: dotted;
+}
+
+.legend-edge.isolates::before {
+  border-top-width: 4px;
 }
 
 #pauseGraphSvg .node-label {
@@ -531,33 +743,141 @@ button:focus-visible {
   margin-top: 20px;
 }
 
+.choice-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.45fr);
+  gap: 18px;
+  margin-top: 18px;
+  align-items: start;
+}
+
+.choice-layout .choices {
+  grid-template-columns: repeat(2, minmax(210px, 1fr));
+  margin-top: 0;
+}
+
+.choice-graph {
+  min-height: 100%;
+  padding: 14px;
+  border: 1px solid rgba(93, 255, 235, 0.48);
+  background: rgba(0, 10, 13, 0.78);
+}
+
+#choiceGraphCaption {
+  min-height: 46px;
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .package-card {
-  min-height: 228px;
+  min-height: 238px;
   padding: 14px;
   border: 1px solid rgba(223, 255, 238, 0.62);
-  background: rgba(12, 34, 35, 0.92);
+  background:
+    linear-gradient(180deg, rgba(12, 34, 35, 0.96), rgba(3, 14, 17, 0.96));
   text-align: left;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px 12px;
+  align-content: start;
 }
 
 .package-card:hover,
-.package-card:focus-visible {
+.package-card:focus-visible,
+.package-card.previewing {
   border-color: var(--amber);
   box-shadow: 0 0 22px rgba(255, 207, 102, 0.22);
 }
 
-.package-card h2 {
-  margin: 0 0 10px;
+.package-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--amber);
+  color: var(--amber);
+  background: rgba(255, 207, 102, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: inset 0 0 14px rgba(255, 207, 102, 0.14);
+}
+
+.package-copy {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+}
+
+.package-name {
+  color: var(--ink);
   font-size: 17px;
+  font-weight: 700;
+}
+
+.package-kind {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
 }
 
 .package-card p {
+  grid-column: 1 / -1;
   margin: 7px 0;
   color: var(--ink);
   font-size: 12px;
   line-height: 1.35;
 }
 
+.preview-copy {
+  color: var(--muted);
+}
+
+.effect-row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.effect-badge {
+  padding: 3px 6px;
+  border: 1px solid rgba(124, 207, 196, 0.52);
+  color: var(--muted);
+  background: rgba(0, 10, 13, 0.65);
+  font-size: 11px;
+}
+
+.effect-badge.conflicts,
+.effect-badge.debt {
+  border-color: rgba(255, 66, 101, 0.62);
+  color: var(--red);
+}
+
+.effect-badge.patches,
+.effect-badge.flags,
+.effect-badge.tool {
+  border-color: rgba(70, 255, 131, 0.62);
+  color: var(--green);
+}
+
+.effect-badge.observes,
+.effect-badge.observability,
+.effect-badge.reveal {
+  border-color: rgba(32, 247, 238, 0.62);
+  color: var(--cyan);
+}
+
+.effect-badge.node,
+.effect-badge.requires {
+  border-color: rgba(255, 207, 102, 0.62);
+  color: var(--amber);
+}
+
 .tag-row {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -631,11 +951,17 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .choice-layout,
   .route-layout {
     grid-template-columns: 1fr;
   }
 
+  .choice-layout .choices {
+    grid-template-columns: 1fr;
+  }
+
   #pauseGraphSvg,
+  #choiceGraphSvg,
   #routeGraphSvg,
   .graph-details {
     min-height: 290px;

@@ -43,6 +43,12 @@
           </div>
           <svg id="graphSvg" viewBox="0 0 280 190" role="img" aria-label="Current dependency graph"></svg>
           <p id="graphCaption">app requires runtime. unknown edge suspected.</p>
+          <div class="graph-legend compact" aria-label="Graph visual key">
+            <span><i class="legend-node current"></i>locus</span>
+            <span><i class="legend-edge requires"></i>requires</span>
+            <span><i class="legend-edge suspected"></i>suspected</span>
+            <span><i class="legend-edge conflicts"></i>conflict</span>
+          </div>
         </aside>
 
         <section id="graphOverlay" class="overlay hidden" aria-label="Graph inspection">
@@ -54,6 +60,21 @@
               </div>
               <button id="graphCloseButton" type="button">CLOSE</button>
             </header>
+            <div class="graph-legend" aria-label="Graph relation visual key">
+              <span><i class="legend-node current"></i>current locus</span>
+              <span><i class="legend-node risk"></i>risky node</span>
+              <span><i class="legend-node hazard"></i>incident node</span>
+              <span><i class="legend-edge requires"></i>requires</span>
+              <span><i class="legend-edge observes"></i>observes</span>
+              <span><i class="legend-edge patches"></i>patches</span>
+              <span><i class="legend-edge flags"></i>flags</span>
+              <span><i class="legend-edge pins"></i>pins</span>
+              <span><i class="legend-edge isolates"></i>isolates</span>
+              <span><i class="legend-edge infects"></i>infects</span>
+              <span><i class="legend-edge suspected"></i>suspected</span>
+              <span><i class="legend-edge hidden"></i>hidden</span>
+              <span><i class="legend-edge conflicts"></i>conflict</span>
+            </div>
             <div class="graph-inspector">
               <svg id="pauseGraphSvg" viewBox="0 0 280 190" role="img" aria-label="Inspectable dependency graph"></svg>
               <aside id="graphDetails" class="graph-details" aria-live="polite">
@@ -80,12 +101,25 @@
 
         <section id="choiceOverlay" class="overlay hidden" aria-label="Package selection">
           <div class="choice-frame">
-            <div>
+            <div class="choice-header">
               <p class="kicker">UPGRADE PATH</p>
               <h1>Select one package to patch libglitch-v3.</h1>
               <p id="choicePrompt">Choose one upgrade; the graph keeps the receipt. Press G to inspect.</p>
             </div>
-            <div id="packageChoices" class="choices"></div>
+            <div class="choice-layout">
+              <aside class="choice-graph" aria-label="Package graph preview">
+                <div class="panel-title">MUTATION PREVIEW</div>
+                <svg id="choiceGraphSvg" viewBox="0 0 280 190" role="img" aria-label="Previewed package mutation"></svg>
+                <p id="choiceGraphCaption">Hover or focus a package to preview its graph mutation.</p>
+                <div class="graph-legend compact" aria-label="Preview visual key">
+                  <span><i class="legend-edge preview"></i>new relation</span>
+                  <span><i class="legend-node preview"></i>new node</span>
+                  <span><i class="legend-edge suspected"></i>suspected</span>
+                  <span><i class="legend-edge conflicts"></i>conflict</span>
+                </div>
+              </aside>
+              <div id="packageChoices" class="choices"></div>
+            </div>
           </div>
         </section>
 

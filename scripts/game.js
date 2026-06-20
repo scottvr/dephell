@@ -36,6 +36,8 @@
     graphCloseButton: document.querySelector("#graphCloseButton"),
     pauseGraphSvg: document.querySelector("#pauseGraphSvg"),
     graphDetails: document.querySelector("#graphDetails"),
+    choiceGraphSvg: document.querySelector("#choiceGraphSvg"),
+    choiceGraphCaption: document.querySelector("#choiceGraphCaption"),
     routeOverlay: document.querySelector("#routeOverlay"),
     routeGraphSvg: document.querySelector("#routeGraphSvg"),
     routeChoices: document.querySelector("#routeChoices"),
@@ -252,37 +254,97 @@
 
   function showPackageChoice() {
     ui.packageChoices.innerHTML = "";
+    activePreviewPackage = packages[0] || null;
     for (const pkg of packages) {
       const button = document.createElement("button");
       button.className = "package-card";
       button.type = "button";
+      button.dataset.packageId = pkg.id;
       button.innerHTML = `
-        <h2>${pkg.name}</h2>
+        <span class="package-icon" aria-hidden="true">${packageIcon(pkg)}</span>
+        <span class="package-copy">
+          <span class="package-name">${pkg.name}</span>
+          <span class="package-kind">${packageKind(pkg)}</span>
+        </span>
         <p><b>Benefit:</b> ${pkg.benefit}</p>
         <p><b>Risk:</b> ${visibleRiskText(pkg)}</p>
-        <p><b>Preview:</b> ${packagePreviewText(pkg)}</p>
+        <div class="effect-row" aria-label="Graph mutation preview">${packageEffectBadges(pkg)}</div>
+        <p class="preview-copy"><b>Preview:</b> ${packagePreviewText(pkg)}</p>
         <div class="tag-row">${pkg.tags.map((tag) => `<span class="tag">${tag}</span>`).join("")}</div>
       `;
       button.addEventListener("click", () => applyPackage(pkg));
       button.addEventListener("mouseenter", () => previewPackage(pkg));
       button.addEventListener("focus", () => previewPackage(pkg));
-      button.addEventListener("mouseleave", clearPackagePreview);
-      button.addEventListener("blur", clearPackagePreview);
       ui.packageChoices.appendChild(button);
     }
+    syncPackagePreviewState();
+    renderChoiceGraph();
     ui.choiceOverlay.classList.remove("hidden");
   }
 
   function previewPackage(pkg) {
     activePreviewPackage = pkg;
+    syncPackagePreviewState();
     renderGraph();
+    renderChoiceGraph();
     if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
   }
 
-  function clearPackagePreview() {
-    activePreviewPackage = null;
-    renderGraph();
-    if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
+  function syncPackagePreviewState() {
+    for (const card of ui.packageChoices.querySelectorAll(".package-card")) {
+      card.classList.toggle("previewing", card.dataset.packageId === activePreviewPackage?.id);
+    }
+  }
+
+  function renderChoiceGraph() {
+    if (!ui.choiceGraphSvg) return;
+    const { visibleNodes, edges, preview } = getPreviewGraph(game.run, activePreviewPackage);
+    ui.choiceGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, {
+      interactive: false,
+      preview,
+      currentLocation: currentGraphLocation(),
+      showLabels: true,
+    });
+    ui.choiceGraphCaption.textContent = activePreviewPackage
+      ? `${activePreviewPackage.name} would commit ${packagePreviewText(activePreviewPackage)}.`
+      : "Hover or focus a package to preview its graph mutation.";
+  }
+
+  function packageIcon(pkg) {
+    if (pkg.id === "legacy_auth") return "AUTH";
+    if (pkg.id === "test_suite") return "TEST";
+    if (pkg.id === "compatibility_shim") return "SHIM";
+    if (pkg.id === "feature_flag") return "FLAG";
+    return "PKG";
+  }
+
+  function packageKind(pkg) {
+    if (pkg.tags.includes("tool")) return "active tool";
+    if (pkg.tags.includes("observability")) return "observability";
+    if (pkg.tags.includes("debt")) return "quick fix";
+    if (pkg.tags.includes("legacy")) return "legacy bridge";
+    return "package";
+  }
+
+  function packageEffectBadges(pkg) {
+    const badges = [];
+    for (const effect of pkg.effects) {
+      if (effect.op === "addNode") badges.push(effectBadge("node", `node ${effect.name}`));
+      if (effect.op === "addEdge") badges.push(effectBadge(effect.relation, effect.relation));
+      if (effect.op === "modifyResource") badges.push(effectBadge(effect.resource, `${effect.resource} ${signed(effect.amount)}`));
+      if (effect.op === "increaseDebt") badges.push(effectBadge("debt", `TDR +${effect.amount}`));
+      if (effect.op === "revealEdges") badges.push(effectBadge("reveal", "reveal"));
+      if (effect.op === "addTool") badges.push(effectBadge("tool", "tool"));
+    }
+    return badges.slice(0, 6).join("");
+  }
+
+  function effectBadge(kind, label) {
+    return `<span class="effect-badge ${kind}">${label}</span>`;
+  }
+
+  function signed(value) {
+    return value > 0 ? `+${value}` : String(value);
   }
 
   function showRouteChoice(routes) {
@@ -323,7 +385,7 @@
   function renderRouteGraph() {
     const { visibleNodes, edges, preview } = getPreviewGraph(game.run, activePreviewPackage);
     const selectedRoute = activeRouteChoice ? { type: "edge", id: activeRouteChoice.edge } : selectedGraphEntity;
-    ui.routeGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedRoute, { interactive: false, preview, currentLocation: currentGraphLocation() });
+    ui.routeGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedRoute, { interactive: false, preview, currentLocation: currentGraphLocation(), showLabels: true });
   }
 
   function selectRoute(route) {
@@ -638,6 +700,7 @@
     renderGraph();
     if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
     if (!ui.routeOverlay.classList.contains("hidden")) renderRouteGraph();
+    if (!ui.choiceOverlay.classList.contains("hidden")) renderChoiceGraph();
   }
 
   function renderGraph() {
@@ -648,7 +711,7 @@
 
   function renderPauseGraph() {
     const { visibleNodes, edges, preview } = getPreviewGraph(game.run, activePreviewPackage);
-    ui.pauseGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: true, preview, currentLocation: currentGraphLocation() });
+    ui.pauseGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedGraphEntity, { interactive: true, preview, currentLocation: currentGraphLocation(), showLabels: true });
     ui.graphDetails.innerHTML = graphDetails(game.run, selectedGraphEntity, ui.graphCaption.textContent);
   }
 
