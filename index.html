@@ -64,6 +64,20 @@
           </div>
         </section>
 
+        <section id="routeOverlay" class="overlay hidden" aria-label="Route selection">
+          <div class="route-frame">
+            <header>
+              <p class="kicker">GRAPH ROUTE</p>
+              <h1>Select next locus.</h1>
+              <p id="routePrompt">Choose an exit through the dependency topology.</p>
+            </header>
+            <div class="route-layout">
+              <svg id="routeGraphSvg" viewBox="0 0 280 190" role="img" aria-label="Route map"></svg>
+              <div id="routeChoices" class="route-choices"></div>
+            </div>
+          </div>
+        </section>
+
         <section id="choiceOverlay" class="overlay hidden" aria-label="Package selection">
           <div class="choice-frame">
             <div>

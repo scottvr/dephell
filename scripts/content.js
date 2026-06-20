@@ -53,9 +53,48 @@
       name: "Local Development",
       subtitle: "Two regressions in a quiet service chamber.",
       mapNode: "app",
+      routes: [
+        {
+          id: "route_app_libglitch",
+          label: "Package Gate",
+          to: "package_gate",
+          edge: "edge_app_libglitch",
+          description: "Fast path to the unstable dependency and its package offer.",
+          tradeoff: "Earlier upgrade, less validation.",
+        },
+        {
+          id: "route_app_runtime",
+          label: "Runtime Detour",
+          to: "runtime_detour",
+          edge: "edge_app_runtime",
+          description: "Clear one extra chamber before touching libglitch-v3.",
+          tradeoff: "More combat, small recovery cache.",
+        },
+      ],
       enemies: [
         { type: "regression", x: 640, y: FLOOR_Y },
         { type: "regression", x: 765, y: FLOOR_Y },
+      ],
+    },
+    {
+      id: "runtime_detour",
+      name: "Runtime Detour",
+      subtitle: "A short validation loop through the runtime stack.",
+      mapNode: "runtime",
+      clearReward: { stability: 5, text: "Runtime Detour recovered a small validation cache. Stability +5." },
+      routes: [
+        {
+          id: "route_runtime_libglitch",
+          label: "Package Gate",
+          to: "package_gate",
+          edge: "edge_app_libglitch",
+          description: "Return through app and enter the unstable package chamber.",
+          tradeoff: "Delayed upgrade with a little more confidence.",
+        },
+      ],
+      enemies: [
+        { type: "regression", x: 660, y: FLOOR_Y },
+        { type: "memory_leak", x: 790, y: FLOOR_Y },
       ],
     },
     {
@@ -64,6 +103,16 @@
       subtitle: "Break the yellow change, then inspect the package offer.",
       mapNode: "libglitch",
       packageChoice: true,
+      routes: [
+        {
+          id: "route_libglitch_ci",
+          label: "Verification Fork",
+          to: "verification_fork",
+          edge: "edge_libglitch_ci",
+          description: "Follow the suspected CI relation into package verification.",
+          tradeoff: "The chosen package shapes this checkpoint.",
+        },
+      ],
       enemies: [
         { type: "breaking_change", x: 700, y: FLOOR_Y },
         { type: "regression", x: 820, y: FLOOR_Y },
@@ -75,6 +124,16 @@
       subtitle: "The chosen package changes this checkpoint.",
       mapEdge: "edge_libglitch_ci",
       branchEncounter: true,
+      routes: [
+        {
+          id: "route_ci_staging",
+          label: "Staging Incident",
+          to: "staging_incident",
+          edge: "edge_libglitch_ci",
+          description: "Carry the verified build into staging.",
+          tradeoff: "Consequences become visible.",
+        },
+      ],
       enemies: [],
     },
     {

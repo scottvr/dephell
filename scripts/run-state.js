@@ -2,6 +2,9 @@
   function makeInitialRunState() {
     return {
       roomIndex: 0,
+      currentRoomId: "local_dev",
+      roomsVisited: [],
+      location: { type: "node", id: "app", arrivedFrom: null },
       stability: 100,
       observability: 2,
       techDebt: 0,

@@ -19,6 +19,8 @@ Graph-scale interaction begins as pause/between-room inspection and package choi
 
 The dependency graph is also the run's location topology. Side-view combat rooms are body-scale chamber views of graph loci; the minimap and paused graph show the system-scale map. This should be expressed through consistent current-location highlights, route pressure, and consequence spread rather than a lore explanation.
 
+Traversal should use the dependency graph as the map. Clearing a body-scale room exposes graph exits. If there is one valid exit, the run can auto-advance through it; if there are multiple exits, the player chooses the next locus from a graph-route view. Do not add literal body-scale hallway walking unless it creates meaningful combat, risk, reward, or pacing.
+
 ## Prototype Architecture
 
 The prototype stays zero-build and directly openable from `index.html`. Browser scripts load in order and share a small `window.DepHell` namespace.
@@ -47,6 +49,7 @@ New package/content tuning should start in `content.js`. New reusable graph oper
 - Hovering or focusing package choices previews graph mutations as ghost nodes/edges before install.
 - Verification Fork is a post-package branch room. It changes enemy pressure and event-log consequences based on the installed package before Staging Incident.
 - Current rooms now have graph anchors, so the minimap and paused graph can show where the player is in the dependency topology without introducing a separate dungeon map.
+- Room progression is now route-based instead of array-index teleportation. Local Development offers a graph route choice: fast path to Package Gate or Runtime Detour for an extra fight and small Stability reward. One-exit rooms still auto-follow their graph exit.
 
 ## Next Useful Tasks
 

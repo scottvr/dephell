@@ -352,7 +352,8 @@ button:focus-visible {
 
 .choice-frame,
 .report-frame,
-.graph-frame {
+.graph-frame,
+.route-frame {
   width: min(850px, 94vw);
   border: 2px solid rgba(223, 255, 238, 0.86);
   background: rgba(5, 18, 19, 0.95);
@@ -362,7 +363,8 @@ button:focus-visible {
 
 .choice-frame h1,
 .report-frame h1,
-.graph-frame h1 {
+.graph-frame h1,
+.route-frame h1 {
   margin: 0 0 10px;
   font-size: clamp(22px, 3vw, 34px);
   letter-spacing: 0;
@@ -370,7 +372,8 @@ button:focus-visible {
 
 .choice-frame p,
 .report-frame p,
-.graph-frame p {
+.graph-frame p,
+.route-frame p {
   line-height: 1.45;
 }
 
@@ -401,6 +404,61 @@ button:focus-visible {
 
 #pauseGraphSvg .node-label {
   font-size: 11px;
+}
+
+.route-frame {
+  width: min(920px, 94vw);
+}
+
+.route-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+#routeGraphSvg {
+  width: 100%;
+  min-height: 330px;
+  background: rgba(0, 10, 13, 0.74);
+  border: 1px solid rgba(93, 255, 235, 0.42);
+}
+
+#routeGraphSvg .node-label {
+  font-size: 10px;
+}
+
+.route-choices {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.route-card {
+  min-height: 122px;
+  padding: 14px;
+  border: 1px solid rgba(223, 255, 238, 0.62);
+  background: rgba(12, 34, 35, 0.92);
+  text-align: left;
+}
+
+.route-card:hover,
+.route-card:focus-visible {
+  border-color: var(--amber);
+  box-shadow: 0 0 22px rgba(255, 207, 102, 0.22);
+}
+
+.route-card h2 {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.route-card p {
+  margin: 7px 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .graph-details {
@@ -544,7 +602,12 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .route-layout {
+    grid-template-columns: 1fr;
+  }
+
   #pauseGraphSvg,
+  #routeGraphSvg,
   .graph-details {
     min-height: 290px;
   }

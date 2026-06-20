@@ -19,6 +19,7 @@
 
   const canvas = document.querySelector("#game");
   const ctx = canvas.getContext("2d");
+  const roomById = new Map(rooms.map((room) => [room.id, room]));
 
   const ui = {
     stabilityBar: document.querySelector("#stabilityBar"),
@@ -35,6 +36,10 @@
     graphCloseButton: document.querySelector("#graphCloseButton"),
     pauseGraphSvg: document.querySelector("#pauseGraphSvg"),
     graphDetails: document.querySelector("#graphDetails"),
+    routeOverlay: document.querySelector("#routeOverlay"),
+    routeGraphSvg: document.querySelector("#routeGraphSvg"),
+    routeChoices: document.querySelector("#routeChoices"),
+    routePrompt: document.querySelector("#routePrompt"),
     choiceOverlay: document.querySelector("#choiceOverlay"),
     packageChoices: document.querySelector("#packageChoices"),
     reportOverlay: document.querySelector("#reportOverlay"),
@@ -50,6 +55,9 @@
   let lastTime = performance.now();
   let roomClearTimer = 0;
   let choiceShown = false;
+  let roomClearedLogged = false;
+  let pendingRoutes = [];
+  let activeRouteChoice = null;
   let selectedGraphEntity = null;
   let activePreviewPackage = null;
   let hitFreezeTimer = 0;
@@ -71,12 +79,16 @@
     ui.choiceOverlay.classList.add("hidden");
     ui.reportOverlay.classList.add("hidden");
     ui.graphOverlay.classList.add("hidden");
+    ui.routeOverlay.classList.add("hidden");
     selectedGraphEntity = null;
     activePreviewPackage = null;
+    activeRouteChoice = null;
+    pendingRoutes = [];
     roomClearTimer = 0;
     choiceShown = false;
+    roomClearedLogged = false;
     logEvent("run_started", "Run started: Release Candidate Pipeline.");
-    loadRoom(0);
+    loadRoom("local_dev");
     renderAllUi();
   }
 
@@ -84,10 +96,17 @@
     game.run.eventLog.push({ order: game.run.eventLog.length + 1, type, text, ...data });
   }
 
-  function loadRoom(index) {
-    const room = resolveRoom(rooms[index]);
+  function loadRoom(roomId, route = null) {
+    const baseRoom = roomById.get(roomId);
+    if (!baseRoom) throw new Error(`Unknown room id: ${roomId}`);
+    const room = resolveRoom(baseRoom);
     game.currentRoom = room;
-    game.run.roomIndex = index;
+    game.run.currentRoomId = room.id;
+    game.run.roomIndex = game.run.roomsVisited.length;
+    game.run.roomsVisited.push(room.id);
+    game.run.location = room.mapEdge
+      ? { type: "edge", id: room.mapEdge, arrivedFrom: route?.edge ?? game.run.location?.id ?? null }
+      : { type: "node", id: room.mapNode || "app", arrivedFrom: route?.edge ?? game.run.location?.id ?? null };
     game.player.x = 150;
     game.player.y = FLOOR_Y;
     game.slashes.length = 0;
@@ -95,8 +114,13 @@
     game.enemies = room.enemies.map((spawn, idx) => makeEnemy(spawn, idx));
     game.roomIntroTimer = ROOM_INTRO_SECONDS;
     roomClearTimer = 0;
+    roomClearedLogged = false;
+    choiceShown = false;
+    pendingRoutes = [];
+    activeRouteChoice = null;
+    ui.routeOverlay.classList.add("hidden");
     if (room.incident) startIncident();
-    logEvent("room_entered", `Entered ${room.name}.`, { room: room.id });
+    logEvent("room_entered", `Entered ${room.name}.`, { room: room.id, route: route?.id });
     renderAllUi();
   }
 
@@ -257,6 +281,57 @@
     if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
   }
 
+  function showRouteChoice(routes) {
+    if (!ui.routeOverlay.classList.contains("hidden")) return;
+    pendingRoutes = routes;
+    activeRouteChoice = routes[0];
+    ui.routePrompt.textContent = `${game.currentRoom.name} cleared. Choose the next graph exit.`;
+    ui.routeChoices.innerHTML = "";
+    for (const route of routes) {
+      const button = document.createElement("button");
+      button.className = "route-card";
+      button.type = "button";
+
+      const title = document.createElement("h2");
+      title.textContent = route.label;
+      const description = document.createElement("p");
+      description.textContent = route.description;
+      const tradeoff = document.createElement("p");
+      const strong = document.createElement("b");
+      strong.textContent = "Tradeoff: ";
+      tradeoff.append(strong, route.tradeoff);
+
+      button.append(title, description, tradeoff);
+      button.addEventListener("click", () => selectRoute(route));
+      button.addEventListener("mouseenter", () => previewRoute(route));
+      button.addEventListener("focus", () => previewRoute(route));
+      ui.routeChoices.appendChild(button);
+    }
+    ui.routeOverlay.classList.remove("hidden");
+    renderRouteGraph();
+  }
+
+  function previewRoute(route) {
+    activeRouteChoice = route;
+    renderRouteGraph();
+  }
+
+  function renderRouteGraph() {
+    const { visibleNodes, edges, preview } = getPreviewGraph(game.run, activePreviewPackage);
+    const selectedRoute = activeRouteChoice ? { type: "edge", id: activeRouteChoice.edge } : selectedGraphEntity;
+    ui.routeGraphSvg.innerHTML = graphMarkup(game.run, visibleNodes, edges, selectedRoute, { interactive: false, preview, currentLocation: currentGraphLocation() });
+  }
+
+  function selectRoute(route) {
+    const from = game.currentRoom?.id;
+    ui.routeOverlay.classList.add("hidden");
+    pendingRoutes = [];
+    activeRouteChoice = null;
+    selectedGraphEntity = { type: "edge", id: route.edge };
+    logEvent("route_selected", `Route selected: ${route.label}.`, { route: route.id, from, to: route.to, edge: route.edge });
+    loadRoom(route.to, { ...route, from });
+  }
+
   function visibleRiskText(pkg) {
     if (game.run.observability >= 4) return pkg.risk;
     if (pkg.id === "test_suite") return pkg.risk;
@@ -399,20 +474,50 @@
     const alive = game.enemies.some((enemy) => enemy.alive);
     if (alive) return;
     roomClearTimer += dt;
-    if (roomClearTimer > 0.7) {
-      const room = rooms[game.run.roomIndex];
-      if (room.packageChoice && !choiceShown) {
-        logEvent("room_cleared", `${room.name} cleared. Package offer opened.`, { room: room.id });
-        showPackageChoice();
-        return;
-      }
-      if (game.run.roomIndex < rooms.length - 1 && roomClearTimer > 1.2) {
-        logEvent("room_cleared", `${room.name} cleared.`, { room: room.id });
-        loadRoom(game.run.roomIndex + 1);
-        return;
-      }
-      if (game.run.roomIndex === rooms.length - 1 && roomClearTimer > 1.2) endRun(true, "Release candidate shipped with documented concerns.");
+    if (roomClearTimer <= 0.7) return;
+
+    const room = game.currentRoom;
+    if (room.packageChoice && !choiceShown) {
+      roomClearedLogged = true;
+      logEvent("room_cleared", `${room.name} cleared. Package offer opened.`, { room: room.id });
+      showPackageChoice();
+      return;
     }
+
+    if (!roomClearedLogged) completeRoom(room);
+    if (roomClearTimer <= 1.2) return;
+    advanceFromRoom(room);
+  }
+
+  function completeRoom(room) {
+    roomClearedLogged = true;
+    logEvent("room_cleared", `${room.name} cleared.`, { room: room.id });
+    if (room.clearReward) applyRoomReward(room.clearReward, room.id);
+    renderAllUi();
+  }
+
+  function applyRoomReward(reward, roomId) {
+    if (reward.stability) game.run.stability = Math.min(100, game.run.stability + reward.stability);
+    if (reward.observability) game.run.observability = Math.min(5, game.run.observability + reward.observability);
+    if (reward.techDebt) game.run.techDebt = Math.max(0, game.run.techDebt + reward.techDebt);
+    if (reward.text) logEvent("room_reward", reward.text, { room: roomId });
+  }
+
+  function advanceFromRoom(room) {
+    const routes = availableRoutes(room);
+    if (!routes.length) {
+      endRun(true, "Release candidate shipped with documented concerns.");
+      return;
+    }
+    if (routes.length === 1) {
+      selectRoute(routes[0]);
+      return;
+    }
+    showRouteChoice(routes);
+  }
+
+  function availableRoutes(room) {
+    return (room.routes || []).filter((route) => !route.requiresPackage || game.run.installedPackages.includes(route.requiresPackage));
   }
 
   function damagePlayer(amount, reason) {
@@ -471,6 +576,7 @@
     ui.eventLog.innerHTML = run.eventLog.slice(-9).map((event) => `<li>${event.text}</li>`).join("");
     renderGraph();
     if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
+    if (!ui.routeOverlay.classList.contains("hidden")) renderRouteGraph();
   }
 
   function renderGraph() {
@@ -486,7 +592,7 @@
   }
 
   function currentGraphLocation() {
-    const room = game.currentRoom || rooms[game.run.roomIndex];
+    const room = game.currentRoom || roomById.get(game.run.currentRoomId);
     if (room?.incident && game.run.incident?.cause?.id) return { type: "edge", id: game.run.incident.cause.id };
     if (room?.mapEdge) return { type: "edge", id: room.mapEdge };
     if (room?.mapNode) return { type: "node", id: room.mapNode };
@@ -504,11 +610,11 @@
   }
 
   function isOverlayOpen() {
-    return !ui.choiceOverlay.classList.contains("hidden") || !ui.reportOverlay.classList.contains("hidden") || !ui.graphOverlay.classList.contains("hidden");
+    return !ui.choiceOverlay.classList.contains("hidden") || !ui.routeOverlay.classList.contains("hidden") || !ui.reportOverlay.classList.contains("hidden") || !ui.graphOverlay.classList.contains("hidden");
   }
 
   function draw() {
-    const room = game.currentRoom || rooms[game.run.roomIndex];
+    const room = game.currentRoom || roomById.get(game.run.currentRoomId);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackdrop(room);
     drawPlatforms();
@@ -699,7 +805,7 @@
     ctx.strokeRect(246, 136, 468, 104);
     ctx.fillStyle = "#20f7ee";
     ctx.font = "14px Courier New";
-    ctx.fillText(`ROOM ${game.run.roomIndex + 1} / ${rooms.length}`, 274, 168);
+    ctx.fillText(`LOCUS ${game.run.roomsVisited.length}`, 274, 168);
     ctx.fillStyle = "#dfffee";
     ctx.font = "28px Courier New";
     ctx.fillText(room.name.toUpperCase(), 274, 200);
@@ -738,7 +844,7 @@
       closeGraphOverlay();
       return;
     }
-    if (key === "g" && ui.reportOverlay.classList.contains("hidden")) {
+    if (key === "g" && ui.reportOverlay.classList.contains("hidden") && ui.routeOverlay.classList.contains("hidden")) {
       event.preventDefault();
       if (ui.graphOverlay.classList.contains("hidden")) {
         openGraphOverlay();
