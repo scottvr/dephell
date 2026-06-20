@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dependency Hell: First Slice</title>
+    <link rel="stylesheet" href="./styles/game.css">
+  </head>
+  <body>
+    <main class="shell" aria-label="Dependency Hell first playable slice">
+      <section class="stage">
+        <canvas id="game" width="960" height="540" aria-label="Side-view combat room"></canvas>
+        <div class="scanlines" aria-hidden="true"></div>
+
+        <aside class="log-panel" aria-label="Run event log">
+          <div class="panel-title">BUILD LOG</div>
+          <ol id="eventLog"></ol>
+        </aside>
+
+        <section class="hud" aria-label="Run state">
+          <div class="meter">
+            <span>STABILITY</span>
+            <div class="track"><i id="stabilityBar"></i></div>
+            <b id="stabilityValue">100%</b>
+          </div>
+          <div class="meter info">
+            <span>OBSERVABILITY</span>
+            <div class="track"><i id="observabilityBar"></i></div>
+            <b id="observabilityValue">2</b>
+          </div>
+          <div class="meter debt">
+            <span>TECH DEBT</span>
+            <div class="track"><i id="debtBar"></i></div>
+            <b id="debtValue">0</b>
+          </div>
+          <button id="restartButton" type="button" title="Restart run">RESTART</button>
+        </section>
+
+        <aside class="graph-card" aria-label="Dependency graph">
+          <div class="panel-title">DEPENDENCY GRAPH</div>
+          <svg id="graphSvg" viewBox="0 0 280 190" role="img" aria-label="Current dependency graph"></svg>
+          <p id="graphCaption">app requires runtime. unknown edge suspected.</p>
+        </aside>
+
+        <section id="choiceOverlay" class="overlay hidden" aria-label="Package selection">
+          <div class="choice-frame">
+            <div>
+              <p class="kicker">UPGRADE PATH</p>
+              <h1>Select one package to patch libglitch-v3.</h1>
+              <p id="choicePrompt">Current graph risk is visible enough to make a bad decision responsibly.</p>
+            </div>
+            <div id="packageChoices" class="choices"></div>
+          </div>
+        </section>
+
+        <section id="reportOverlay" class="overlay hidden" aria-label="Mini postmortem">
+          <div class="report-frame">
+            <p class="kicker" id="reportKicker">MINI POSTMORTEM</p>
+            <h1 id="reportTitle">Build failed.</h1>
+            <div id="reportBody" class="report-body"></div>
+            <button id="reportRestartButton" type="button">RUN IT BACK</button>
+          </div>
+        </section>
+      </section>
+
+      <footer class="controls">
+        <span>Move <b>WASD</b> or <b>Arrows</b></span>
+        <span>Aim with mouse</span>
+        <span>Fire <b>Mouse</b> or <b>Space</b></span>
+        <span>Dash <b>Shift</b></span>
+      </footer>
+    </main>
+    <script src="./scripts/game.js"></script>
+  </body>
+</html>
