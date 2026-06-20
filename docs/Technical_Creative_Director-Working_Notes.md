@@ -17,6 +17,20 @@ The current first slice is a zero-build browser prototype. That keeps the earlie
 
 Graph-scale interaction begins as pause/between-room inspection and package choice context. Combat uses the graph as a live minimap and consequence surface, not as an active tactical board yet.
 
+## Prototype Architecture
+
+The prototype stays zero-build and directly openable from `index.html`. Browser scripts load in order and share a small `window.DepHell` namespace.
+
+- `scripts/constants.js`: shared layout/timing/graph-position constants.
+- `scripts/content.js`: tunable packages, room definitions, and enemy definitions.
+- `scripts/run-state.js`: initial serializable run-state shape.
+- `scripts/utils.js`: generic helpers with no game-state ownership.
+- `scripts/reports.js`: release report, postmortem, package-name, and build-identity text helpers.
+- `scripts/graph.js`: visible graph filtering, graph SVG markup, captions, and cause-trace details.
+- `scripts/game.js`: runtime orchestration, combat update, canvas drawing, input, UI wiring, package effects, incidents, and room flow.
+
+New package/content tuning should start in `content.js`. New reusable graph operations should be added to package effects in `game.js` only until the operation vocabulary stabilizes, then moved into a dedicated effect-system module.
+
 ## UAT Notes
 
 - `docs/UAT/ss1-play.png` showed the dependency graph panel hiding the player/enemies. The prototype now reserves the lower screen band for instrumentation by raising the combat floor and reducing the minimap height.
