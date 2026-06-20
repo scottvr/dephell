@@ -282,6 +282,7 @@ Acceptance criteria:
 - Content that can kill the player, block routes, alter major resources, trigger incidents, affect boss selection, or materially affect reports must register a causal trace.
 - Linter can flag packages that are only stat changes or have no dependency-graph consequence.
 - Linter can detect interactions that have no specific rule and no fallback tag/domain/risk rule.
+- Linter can report or require content-axis metadata and rubric scores once content is mostly data-driven.
 - A seeded simulation benchmark can report package pick rates, average TDR, common deaths, unmitigated conflicts, no-counterplay incidents, and dominant choices.
 
 ### Story: Playtest Data Answers MVP Questions

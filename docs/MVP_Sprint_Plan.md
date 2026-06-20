@@ -38,6 +38,7 @@ The prototype already proved the core bet: the dependency graph can be both map 
 - [ ] Process/bureaucracy choices can return later as incident pressure, blocked rollback, boss modifier, or report detail.
 - [ ] Absurdity is allowed only when its cause is traceable.
 - [ ] Content follows the coherence model in `docs/Content_Coherence_Model.md`.
+- [ ] New content scores at least 7/10 on the coherence rubric unless explicitly marked as a prototype exception.
 
 ## Sprint 0: MVP Kickoff And Prototype Lock
 
@@ -107,6 +108,7 @@ Goal: turn package selection into the MVP's main build-shaping system.
 - [ ] Expand packages/items/tools to 12.
 - [ ] Draft full 24-package MVP list with design-gate notes.
 - [ ] Draft initial tag ontology and compatibility rules from `docs/Content_Coherence_Model.md`.
+- [ ] Add primary-axis and secondary-axis fields to package/tool/room/enemy drafts where useful.
 - [ ] Add at least 3 active tools or packages that create new verbs.
 - [ ] Add at least 6 package interactions that produce recognizable stories.
 - [ ] Define fallback interaction hierarchy: specific pair rule, specific tag rule, generic domain rule, generic risk rule, no interaction.
@@ -163,6 +165,7 @@ Exit criteria:
 
 Goal: lift the MVP from readable graybox to mockup-aligned presentation while protecting combat clarity.
 
+- [ ] Prototype current-slice graph readability pass: edge/state legend, package-choice graph previews, graph-scale inspection hierarchy, and restrained CRT/arcade treatment.
 - [ ] Define visual style guide for CRT glow, node/edge states, package categories, hazard states, and report screens.
 - [ ] Add first-pass player sprite/animation.
 - [ ] Add first-pass enemy sprites for 10 enemy types.

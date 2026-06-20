@@ -1,0 +1,5 @@
+2. Upgrades and Mutating the Graph
+The pitch emphasizes that every decision creates power and risk. This mockup focuses on the build screen, where the player must select a new "package" (an upgrade) after clearing a room. We maintain the CRT aesthetic, the green phosphor glow, and the top-down perspective, but now the view is taken over by the decision interface.
+The visual style shifts to accommodate the technical flavor:
+Package Icons as Talismans: Note the four pixel-art icons—a shield, an eye, a sword, and a gear. These are the collectible talismans that alter your build.
+The Dependency Graph: The complex, interconnected web in the background isn't just decoration. This screen shows the visual feedback when making a choice: the selected [CRITICAL_PATCH_v2.1] is glowing, and yellow highlight lines map its path into the existing graph. The other, non-selected nodes are darker (image_1.png). This perfectly captures the idea of visually mutating the graph.

@@ -5,10 +5,12 @@ This folder turns the original treatment and gameplay mockups into an MVP-ready 
 Source references:
 
 - [Game treatment](../Dependency_Hell-Game_Treatment.md)
-- [Gameplay mockup 1](../DependencyHell-gameplay-mockss1.jpg): baseline combat HUD, log column, dependency minimap
-- [Gameplay mockup 2](../DependencyHell-gameplay-mockss2.jpg): package/upgrade selection overlaid on the action view
-- [Gameplay mockup 3](../DependencyHell-gameplay-mockss3.jpg): postmortem summary and failure timeline
-- [Gameplay mockup 4](../DependencyHell-gameplay-mockss4.jpg): graph collapse, build failure, critical failure state
+- [Gameplay mockup 1](../docs/concept-art/DependencyHell-gameplay-mockss1.jpg): baseline combat HUD, log column, dependency minimap
+- [Gameplay mockup 2](../docs/concept-art/DependencyHell-gameplay-mockss2.jpg): package/upgrade selection overlaid on the action view
+- [Gameplay mockup 3](../docs/concept-art/DependencyHell-gameplay-mockss3.jpg): postmortem summary and failure timeline
+- [Gameplay mockup 4](../docs/concept-art/DependencyHell-gameplay-mockss4.jpg): graph collapse, build failure, critical failure state
+
+There is descriptive text of what each mock screenshot (above) is intended to convey, in that same directory along side the images, with the same name as the image file, but as '.txt' instead of '.jpg'. (e.g., "DependencyHell-gameplay-mockss[1-4].jpg => DependencyHell-gameplay-mockss[1-4].txt)  We like the design language of these mocks. We only implemented a rough approximation in the prototype (now in the in-development mvp of this branch.)
 
 Recommended reading order:
 

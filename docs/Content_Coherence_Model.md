@@ -72,6 +72,51 @@ The player should be able to learn these principles:
 - Isolators reduce blast radius.
 - Adapters buy time but increase debt.
 
+## Orthogonal Design Axes
+
+Use these axes to reduce combinatorial explosion. Content should usually act strongly on one axis and expose hooks on at least one other axis. Orthogonal axes combine more naturally than piles of bespoke pair rules.
+
+- Graph topology: hubs, leaves, bridges, cycles, isolated subgraphs.
+- Information: visible, hidden, suspected, misreported.
+- Risk: security, stability, debt, morale, velocity.
+- Combat: enemy type, room hazard, player weapon behavior.
+- Time: immediate, delayed, escalating, triggered.
+
+Examples:
+
+- A package that changes graph topology combines naturally with a package that changes visibility.
+- A package that increases velocity combines naturally with one that increases risk.
+- A tool that isolates graph edges combines naturally with incidents that propagate through topology.
+- A room hazard that escalates over time combines naturally with packages that trade burst power for debt.
+
+When adding content, define its primary axis and secondary interaction axis. Avoid content that only adds a number without touching at least one axis in a way the player can perceive.
+
+## Content Scoring Rubric
+
+Score each proposed package, tool, enemy, room, incident, route, or boss mechanic before implementation. Use 0, 1, or 2 points per category, for a maximum of 10.
+
+- Agency: can the player use it, avoid it, route around it, time it, inspect it, or otherwise act intentionally around it?
+- Traceability: can consequences be explained later through run state, event log, graph state, or report text?
+- Graph relevance: does it alter, expose, depend on, or travel through the dependency dungeon?
+- Interaction surface: does it combine with multiple systems, tags, resources, enemies, rooms, or tools?
+- Counterplay: can the player respond intelligently before or after the consequence appears?
+
+Suggested threshold:
+
+- 0-4: reject or redesign.
+- 5-6: prototype only if it solves a specific missing need.
+- 7-8: acceptable MVP content.
+- 9-10: strong content candidate.
+
+Example: Memory Leak enemy
+
+- Agency: 2. Player can choose burst damage, containment, or avoidance.
+- Traceability: 2. It grows over time or under pressure; reports can cite prolonged encounter or failed cleanup.
+- Graph relevance: 1. It may appear only in rooms with certain package/resource states.
+- Interaction surface: 2. It combines with low damage, long rooms, Observability, cleanup tools, and time pressure.
+- Counterplay: 2. Burst, isolate, reset, or avoid prolonged combat.
+- Score: 9/10.
+
 ## Causal Trace Requirement
 
 If a content object can kill the player, block a route, alter a major resource, trigger an incident, modify boss selection, or materially affect the report, it must leave a causal trace.
