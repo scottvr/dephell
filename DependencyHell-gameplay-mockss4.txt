@@ -1,5 +1,0 @@
-4. The End of the Run: "Postmortem"
-The fourth mockup illustrates the roguelite conclusion: failure, and the analysis that follows. A good roguelite makes failure part of the story, and the "Dependency Hell" pitch specifically requests "postmortems."
-This screen moves past combat and into pure data visualization.
-The Postmortem Report: The screen is overtaken by a flickering technical overlay, replacing the combat zone. The text (e.g., POSTMORTEM_SUMMARY // RUN #148) analyzes why the run ended.
-The Final Graph View: This image visualizes the concept of "hidden coupling" and "delayed consequences." In image_2.png, a central dependency failed. Here, we see why: A simple update (the green line connecting to libglitch-v3) eventually triggered a deep, transitive conflict (image_3.png) many nodes away, leading to total system collapse. This diagram tells the final story of the run.

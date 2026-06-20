@@ -1,5 +1,0 @@
-3. Visualizing Failure: The Transitive Error
-This is a critical "pitch" shot. We asked for transitive failures to "spread visibly through the graph." Mockup 3 delivers this during active combat. We see the same hero from image_0.png in the "Compiler Core" level, which is much brighter, rendered in hot vector pinks and purples.
-The defining feature of this image is the massive failure visualization:
-Arcing Conflicts: Look closely at the background architecture—the abstract vector blocks are cracking, and bright yellow energy (conflicts) is arcing horizontally between systems.
-The Dependency Map: The minimap is now expanded into a full overlay on the left. The player’s choices (represented by green lines) have led to a conflict. A bright yellow node (the failure) has now caused two downstream nodes to turn a dark, dead red (the transitive failure). This screen successfully maps the visual feedback of systemic collapse during live action.

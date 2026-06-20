@@ -1,5 +1,0 @@
-1. The Core Combat Loop: "Memory Leaks & Race Conditions"
-This mockup establishes the visual baseline. We are looking at a classic top-down action roguelite perspective, viewed through a curved CRT monitor with noticeable scanlines and a green phosphor bloom. The player character is a small, cyan vector sprite (perhaps a NULL_POINTER exception personified) battling swarms of red pixelated bugs in the "HEAP DEFRAG ZONE."
-This screen demonstrates how to keep the action view clean while integrating the technical flavor:
-UI/UX: The health bar is rendered as a standard terminal loading bar.
-The dependency graph minimap: A vital feature mentioned in the pitch, shown here in the bottom-right. It’s small, functional, and uses glowing edges to map the player’s progress through the "dungeon" architecture.

@@ -25,6 +25,8 @@ A new object must define:
 
 Reject content whose effects cannot be explained through the dependency graph, player resources, enemy behavior, or room topology.
 
+Before implementation, score the object using the rubric in `docs/Content_Coherence_Model.md`. Content below 7/10 should be rejected, redesigned, or explicitly marked as a narrow prototype exception.
+
 ## Absurdity Rule
 
 Absurdity is allowed when the cause is traceable. The theme may be ludicrous; the mechanics must be accountable.
