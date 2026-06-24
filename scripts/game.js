@@ -112,7 +112,7 @@
     game.run.location = room.mapEdge
       ? { type: "edge", id: room.mapEdge, arrivedFrom: route?.edge ?? game.run.location?.id ?? null }
       : { type: "node", id: room.mapNode || "app", arrivedFrom: route?.edge ?? game.run.location?.id ?? null };
-    game.player.x = 150;
+    game.player.x = 240;
     game.player.y = FLOOR_Y;
     game.slashes.length = 0;
     game.enemyShots.length = 0;
@@ -726,7 +726,11 @@
 
   function applyVisualSmokeMode() {
     const mode = new URLSearchParams(window.location.search).get("visualSmoke");
-    if (!mode || mode === "main") return;
+    if (!mode) return;
+    if (mode === "main") {
+      game.roomIntroTimer = 0;
+      return;
+    }
     window.setTimeout(() => {
       if (mode === "choice") {
         showPackageChoice();
@@ -799,25 +803,42 @@
   }
 
   function drawBackdrop(room) {
-    ctx.fillStyle = "#03080b";
+    const pulse = 0.5 + Math.sin(performance.now() / 700) * 0.5;
+    ctx.fillStyle = "#03070a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const glow = ctx.createRadialGradient(520, 230, 80, 520, 230, 520);
+    glow.addColorStop(0, "rgba(32, 247, 238, 0.08)");
+    glow.addColorStop(0.55, "rgba(8, 28, 32, 0.08)");
+    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
     ctx.strokeStyle = "rgba(32, 247, 238, 0.11)";
     ctx.lineWidth = 1;
-    for (let x = 95; x < canvas.width; x += 62) {
+    for (let x = 92; x < canvas.width; x += 86) {
       ctx.beginPath();
-      ctx.moveTo(x, 130);
-      ctx.lineTo(x, 430);
+      ctx.moveTo(x, 96);
+      ctx.lineTo(x, 438);
       ctx.stroke();
     }
-    ctx.fillStyle = "rgba(32, 247, 238, 0.08)";
-    for (let i = 0; i < 18; i++) {
-      const x = 270 + i * 18;
-      const h = 60 + ((i * 37) % 170);
-      ctx.fillRect(x, 405 - h, 12, h);
+
+    drawArchitectureBlocks();
+    drawBinaryColumns();
+    drawRightServiceFrame();
+
+    ctx.strokeStyle = "rgba(32, 247, 238, 0.08)";
+    for (let y = 132; y < 418; y += 14) {
+      ctx.beginPath();
+      ctx.moveTo(128, y);
+      ctx.lineTo(906, y);
+      ctx.stroke();
     }
+
     if (game.run.incident) {
-      ctx.fillStyle = "rgba(255, 66, 101, 0.08)";
+      ctx.fillStyle = `rgba(255, 66, 101, ${0.08 + pulse * 0.05})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawIncidentArcs(pulse);
     }
     if (featureFlagActive()) {
       ctx.fillStyle = "rgba(70, 255, 131, 0.08)";
@@ -833,15 +854,116 @@
     ctx.fillText(room.subtitle, 236, 94);
   }
 
+  function drawArchitectureBlocks() {
+    const blocks = [
+      [120, 224, 54, 104], [168, 186, 76, 142], [235, 164, 104, 164],
+      [326, 118, 74, 210], [392, 154, 64, 174], [455, 210, 62, 118],
+      [710, 154, 66, 174], [770, 108, 44, 220], [810, 236, 78, 92],
+    ];
+    ctx.save();
+    ctx.fillStyle = "rgba(58, 103, 121, 0.18)";
+    ctx.strokeStyle = "rgba(101, 181, 205, 0.2)";
+    ctx.lineWidth = 2;
+    for (const [x, y, w, h] of blocks) {
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+      ctx.fillStyle = "rgba(6, 18, 24, 0.58)";
+      ctx.fillRect(x + 8, y + 20, Math.max(12, w - 22), Math.max(14, h - 44));
+      ctx.fillStyle = "rgba(58, 103, 121, 0.18)";
+    }
+    ctx.fillStyle = "rgba(32, 247, 238, 0.07)";
+    for (let i = 0; i < 18; i += 1) {
+      const x = 170 + i * 34;
+      const y = 340 + (i % 3) * 10;
+      ctx.fillRect(x, y, 24, 18 + (i % 4) * 7);
+    }
+    ctx.restore();
+  }
+
+  function drawBinaryColumns() {
+    const columns = [
+      { x: 548, y: 18, rows: 15, text: "110100111001011" },
+      { x: 604, y: 18, rows: 14, text: "00111001011100" },
+      { x: 658, y: 18, rows: 16, text: "1110001011011010" },
+    ];
+    ctx.save();
+    ctx.font = "14px Courier New";
+    ctx.textAlign = "left";
+    for (const column of columns) {
+      for (let i = 0; i < column.rows; i += 1) {
+        const digit = column.text[i % column.text.length];
+        const alpha = digit === "1" ? 0.28 : 0.18;
+        ctx.fillStyle = `rgba(32, 247, 238, ${alpha})`;
+        ctx.fillText(column.text.slice(i % 5, i % 5 + 4), column.x, column.y + i * 18);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawRightServiceFrame() {
+    ctx.save();
+    ctx.strokeStyle = "rgba(105, 230, 255, 0.54)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(788, 36);
+    ctx.lineTo(788, 218);
+    ctx.lineTo(910, 218);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(105, 230, 255, 0.2)";
+    for (let y = 60; y < 210; y += 18) {
+      ctx.strokeRect(804, y, 24, 10);
+      ctx.strokeRect(838, y + 6, 52, 8);
+    }
+    ctx.strokeStyle = "rgba(32, 247, 238, 0.36)";
+    ctx.strokeRect(878, 242, 34, 86);
+    ctx.beginPath();
+    ctx.moveTo(886, 296);
+    ctx.quadraticCurveTo(898, 272, 904, 298);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawIncidentArcs(pulse) {
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 207, 102, ${0.52 + pulse * 0.24})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 6]);
+    for (let i = 0; i < 5; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(430 + i * 45, 170 + i * 12);
+      ctx.bezierCurveTo(530, 120 + i * 20, 620, 290 - i * 14, 770, 206 + i * 17);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   function drawPlatforms() {
-    ctx.fillStyle = "#061315";
+    ctx.save();
+    ctx.fillStyle = "rgba(4, 15, 18, 0.96)";
     ctx.strokeStyle = "#20f7ee";
     ctx.lineWidth = 3;
     ctx.fillRect(86, GROUND_TOP, 830, 24);
     ctx.strokeRect(86, GROUND_TOP, 830, 24);
+    ctx.shadowColor = "#20f7ee";
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(86, GROUND_TOP + 1);
+    ctx.lineTo(916, GROUND_TOP + 1);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = "rgba(58, 103, 121, 0.18)";
+    for (let x = 118; x < 900; x += 28) {
+      const h = 10 + ((x / 28) % 5) * 4;
+      ctx.fillRect(x, GROUND_TOP + 28, 18, h);
+    }
     ctx.strokeStyle = "rgba(32, 247, 238, 0.34)";
+    ctx.lineWidth = 2;
     ctx.strokeRect(250, 322, 140, 16);
     ctx.strokeRect(540, 270, 150, 16);
+    ctx.restore();
   }
 
   function drawPlayer() {
@@ -849,20 +971,51 @@
     ctx.save();
     ctx.translate(p.x, p.y);
     const invulnFlash = p.invulnTimer > 0 && Math.floor(p.invulnTimer * 18) % 2 === 0;
-    ctx.fillStyle = invulnFlash ? "#dfffee" : "#20f7ee";
-    ctx.shadowColor = invulnFlash ? "#dfffee" : "#20f7ee";
-    ctx.shadowBlur = invulnFlash ? 24 : 16;
-    ctx.fillRect(-10, -42, 20, 18);
-    ctx.fillRect(-8, -24, 16, 26);
-    ctx.fillRect(-16, -18, 9, 24);
-    ctx.fillRect(7, -18, 9, 24);
-    ctx.strokeStyle = "#dfffee";
-    ctx.lineWidth = 6;
-    ctx.lineCap = "round";
+    ctx.scale(p.facing, 1);
+    drawResolverSprite(invulnFlash ? "#dfffee" : "#20f7ee", 1);
+    ctx.restore();
+  }
+
+  function drawResolverSprite(color, alpha) {
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
+
+    // Head and visor.
+    ctx.fillRect(-9, -49, 18, 14);
+    ctx.fillRect(-5, -53, 14, 4);
+    ctx.fillStyle = "#dfffee";
+    ctx.fillRect(2, -45, 5, 3);
+
+    // Compact humanoid body with separated limbs.
+    ctx.fillStyle = color;
+    ctx.fillRect(-7, -34, 15, 22);
+    ctx.fillRect(-13, -30, 6, 16);
+    ctx.fillRect(8, -30, 7, 16);
+    ctx.fillRect(-10, -12, 7, 16);
+    ctx.fillRect(3, -12, 7, 16);
+    ctx.fillRect(-12, 2, 10, 5);
+    ctx.fillRect(2, 2, 11, 5);
+
+    // Bright patch blade, closer to the mock sword than a plain stick.
+    const blade = ctx.createLinearGradient(16, -33, 66, -45);
+    blade.addColorStop(0, "#20f7ee");
+    blade.addColorStop(0.3, "#dfffee");
+    blade.addColorStop(1, "#7aa8ff");
+    ctx.shadowColor = "#20f7ee";
+    ctx.shadowBlur = 22;
+    ctx.fillStyle = blade;
     ctx.beginPath();
-    ctx.moveTo(p.facing > 0 ? 8 : -8, -24);
-    ctx.lineTo(p.facing > 0 ? 48 : -48, -36);
-    ctx.stroke();
+    ctx.moveTo(12, -32);
+    ctx.lineTo(58, -47);
+    ctx.lineTo(66, -43);
+    ctx.lineTo(22, -25);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#dfffee";
+    ctx.fillRect(8, -31, 14, 5);
     ctx.restore();
   }
 
@@ -872,20 +1025,8 @@
       ctx.save();
       ctx.globalAlpha = t * 0.38;
       ctx.translate(ghost.x, ghost.y);
-      ctx.fillStyle = "#20f7ee";
-      ctx.shadowColor = "#20f7ee";
-      ctx.shadowBlur = 18;
-      ctx.fillRect(-10, -42, 20, 18);
-      ctx.fillRect(-8, -24, 16, 26);
-      ctx.fillRect(-16, -18, 9, 24);
-      ctx.fillRect(7, -18, 9, 24);
-      ctx.strokeStyle = "#dfffee";
-      ctx.lineWidth = 4;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(ghost.facing > 0 ? 8 : -8, -24);
-      ctx.lineTo(ghost.facing > 0 ? 42 : -42, -34);
-      ctx.stroke();
+      ctx.scale(ghost.facing, 1);
+      drawResolverSprite("#20f7ee", 0.72);
       ctx.restore();
     }
   }
@@ -903,21 +1044,116 @@
         ctx.arc(0, -enemy.h / 2, enemy.w + 12, 0, Math.PI * 2);
         ctx.stroke();
       }
-      ctx.fillStyle = def.color;
-      ctx.shadowColor = def.color;
-      ctx.shadowBlur = enemy.telegraph > 0 ? 24 : 10;
       const scale = enemy.type === "memory_leak" ? 1 + (enemy.maxHp - enemy.hp) / 120 : 1;
       ctx.scale(scale, scale);
-      ctx.fillRect(-enemy.w / 2, -enemy.h, enemy.w, enemy.h);
-      ctx.fillStyle = "#03080b";
-      ctx.fillRect(-8, -enemy.h + 8, 4, 4);
-      ctx.fillRect(5, -enemy.h + 8, 4, 4);
+      drawEnemySprite(enemy, def);
       ctx.restore();
       ctx.fillStyle = "rgba(223,255,238,0.18)";
       ctx.fillRect(enemy.x - 22, enemy.y - enemy.h - 14, 44, 4);
       ctx.fillStyle = def.color;
       ctx.fillRect(enemy.x - 22, enemy.y - enemy.h - 14, 44 * Math.max(0, enemy.hp / enemy.maxHp), 4);
     }
+  }
+
+  function drawEnemySprite(enemy, def) {
+    if (enemy.type === "breaking_change") {
+      drawBreakingChangeSprite(def.color, enemy.telegraph > 0);
+      return;
+    }
+    if (enemy.type === "memory_leak") {
+      drawMemoryLeakSprite(def.color, enemy.telegraph > 0);
+      return;
+    }
+    drawRegressionSprite(def.color, enemy.telegraph > 0);
+  }
+
+  function drawRegressionSprite(color, angry) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = angry ? 24 : 12;
+    ctx.fillRect(-16, -24, 32, 18);
+    ctx.fillRect(-10, -30, 20, 8);
+    ctx.fillRect(-22, -20, 6, 8);
+    ctx.fillRect(16, -20, 6, 8);
+
+    drawBugLegs(color, 18, -8);
+    drawAntennae(color, 14, -28);
+
+    ctx.fillStyle = "#03070a";
+    ctx.fillRect(-7, -19, 4, 5);
+    ctx.fillRect(4, -19, 4, 5);
+    ctx.fillStyle = "rgba(70, 255, 131, 0.75)";
+    ctx.fillRect(20, -18, 7, 2);
+    ctx.fillRect(23, -13, 5, 2);
+    ctx.restore();
+  }
+
+  function drawBreakingChangeSprite(color, angry) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = angry ? 28 : 15;
+    ctx.fillRect(-17, -30, 34, 22);
+    ctx.fillRect(-11, -36, 22, 8);
+    ctx.fillRect(-24, -24, 8, 10);
+    ctx.fillRect(16, -24, 8, 10);
+    ctx.fillStyle = "#ff4265";
+    ctx.fillRect(-20, -34, 7, 7);
+    ctx.fillRect(13, -34, 7, 7);
+    drawBugLegs(color, 22, -8);
+    drawAntennae(color, 16, -36);
+    ctx.fillStyle = "#03070a";
+    ctx.fillRect(-8, -24, 5, 6);
+    ctx.fillRect(4, -24, 5, 6);
+    ctx.restore();
+  }
+
+  function drawMemoryLeakSprite(color, angry) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = angry ? 25 : 13;
+    ctx.fillRect(-22, -38, 44, 28);
+    ctx.fillRect(-15, -46, 30, 10);
+    ctx.fillRect(-28, -30, 8, 13);
+    ctx.fillRect(20, -30, 8, 13);
+    ctx.fillStyle = "rgba(32, 247, 238, 0.45)";
+    ctx.fillRect(-14, -36, 10, 24);
+    ctx.fillRect(3, -42, 12, 30);
+    drawBugLegs(color, 28, -10);
+    drawAntennae(color, 18, -45);
+    ctx.fillStyle = "#03070a";
+    ctx.fillRect(-9, -31, 5, 6);
+    ctx.fillRect(5, -31, 5, 6);
+    ctx.restore();
+  }
+
+  function drawBugLegs(color, width, footY) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "square";
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i += 1) {
+        const y = -23 + i * 7;
+        ctx.beginPath();
+        ctx.moveTo(side * 8, y);
+        ctx.lineTo(side * width, y + 5);
+        ctx.lineTo(side * (width + 7), footY + i * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawAntennae(color, width, y) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-7, y + 4);
+    ctx.lineTo(-width, y - 8);
+    ctx.moveTo(7, y + 4);
+    ctx.lineTo(width, y - 8);
+    ctx.stroke();
   }
 
   function drawAttacks() {
@@ -1020,6 +1256,141 @@
     requestAnimationFrame(frame);
   }
 
+  function dontstartSideErrorRail() {
+    const rail = document.querySelector(".side-error-rail");
+    if (!rail) return;
+    const rows = [...rail.querySelectorAll(".side-error-lines span")];
+    const prompt = rail.querySelector(".side-error-prompt");
+    const feed = [
+      "0xDEADBEEF 000 0100 SEGFAULT (SIGSEGV) at PTR exception *0A000000 BITBLT_23ff",
+      "NULL_POINTER Exception *0A000000 UID0 H4X0R:'kill -9' stacktrace=5m45h3d1",
+      "0xC4F3B4B3 0x0031337 core dump heap walk unstable module=libglitch_v3",
+      "CRITICAL_ERROR![STACK_5m45h3d1] unsafe branch ",
+      "0xBADC0DE compiler phase drifted UID=7f3a9c11 edge=edge_app_runtime",
+      "WARN 0xFEEDFACE rollback shard refused PATCH_v2 scope=runtime/std",
+      "PANIC 0000:0101 dependency ghost wrote through hidden_ptr=0xA113CE",
+      "AUDIT_FLAG SIGBUS vendor portal timeout waiver_id=SEC-EXC-4419",
+    ];
+    const glitchChars = "01ABCDEF#*_/:!?[]{}<>-";
+    let cursor = 0;
+
+    function lineAt(index) {
+      return feed[(cursor + index) % feed.length];
+    }
+
+    function corrupt(text) {
+      const chars = [...text];
+      const count = 2 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < count; i += 1) {
+        const idx = Math.floor(Math.random() * chars.length);
+        chars[idx] = glitchChars[Math.floor(Math.random() * glitchChars.length)];
+      }
+      return chars.join("");
+    }
+
+    function render(glitch) {
+      rows.forEach((row, index) => {
+        const text = lineAt(index);
+        if(index !== 3) {
+          row.textContent = glitch && Math.random() > 0.36 ? corrupt(text) : text;
+        } else {
+          row.textContent = glitch && Math.random() > 0.36 ? corrupt(text).slice(0, 30) : text;
+        }
+      });
+      if (prompt) prompt.textContent = Math.random() > 0.88 ? "#_" : ">";
+    }
+
+    render(false);
+    window.setInterval(() => {
+      cursor = (cursor + 1) % feed.length;
+      render(false);
+    }, 980);
+    window.setInterval(() => render(true), 145);
+  }
+
+function startSideErrorRail() {
+  const rail = document.querySelector(".side-error-rail");
+  if (!rail) return;
+  const rows = [...rail.querySelectorAll(".side-error-lines span")];
+  const prompt = rail.querySelector(".side-error-prompt");
+
+  const feed = [
+    "0xDEADBEEF 000 0100 SEGFAULT (SIGSEGV) at PTR exception *0A000000 BITBLT_23ff",
+    "NULL_POINTER Exception *0A000000 UID0 H4X0R:'kill -9' stacktrace=5m45h3d1",
+    "0xC4F3B4B3 0x0031337 core dump heap walk unstable module=libglitch_v3",
+    "CRITICAL_ERROR![STACK_5m45h3d1] unsafe branch ",
+    "0xBADC0DE compiler phase drifted UID=7f3a9c11 edge=edge_app_runtime",
+    "WARN 0xFEEDFACE rollback shard refused PATCH_v2 scope=runtime/std",
+    "PANIC 0000:0101 dependency ghost wrote through hidden_ptr=0xA113CE",
+    "AUDIT_FLAG SIGBUS vendor portal timeout waiver_id=SEC-EXC-4419",
+  ];
+
+  const glitchChars = "01ABCDEF#*_/:!?[]{}<>-";
+  let cursor = 0;
+
+  // Track physical screen glitch state
+  const rowGlitchStates = new Array(rows.length).fill(false);
+
+  function lineAt(index) {
+    return feed[(cursor + index) % feed.length];
+  }
+
+  function corrupt(text) {
+    const chars = [...text];
+    const count = 2 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < count; i += 1) {
+      const idx = Math.floor(Math.random() * chars.length);
+      chars[idx] = glitchChars[Math.floor(Math.random() * glitchChars.length)];
+    }
+    return chars.join("");
+  }
+
+  // Unified render loop
+  function drawScreen() {
+    rows.forEach((row, index) => {
+      const rawText = lineAt(index);
+      
+      const text = index === 3 ? rawText.slice(0, 40) : rawText;
+
+      // Hardware fault simulation
+      if (rowGlitchStates[index]) {
+        row.textContent = corrupt(text);
+      } else {
+        row.textContent = text;
+      }
+    });
+
+    if (prompt) prompt.textContent = Math.random() > 0.88 ? "#_" : ">";
+  }
+
+  const logPacing = [1000, 150, 200, 1500, 2000, 120, 300];
+  let paceIdx = 0;
+
+  function feedNextLog() {
+    cursor = (cursor + 1) % feed.length;
+    drawScreen();
+
+    const nextDelay = logPacing[paceIdx];
+    paceIdx = (paceIdx + 1) % logPacing.length;
+
+    window.setTimeout(feedNextLog, nextDelay);
+  }
+
+  // --- LOOP 2: Screen Hardware Glitcher (Fixed setInterval) ---
+  window.setInterval(() => {
+    rowGlitchStates.forEach((_, index) => {
+      rowGlitchStates[index] = Math.random() > 0.64;
+    });
+    
+    drawScreen();
+  }, 145);
+
+  // Initial Boot
+  feedNextLog();
+}
+
+
+
   window.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
@@ -1071,6 +1442,7 @@
     renderPauseGraph();
   });
 
+  startSideErrorRail();
   resetGame();
   requestAnimationFrame(frame);
 })(window.DepHell = window.DepHell || {});
