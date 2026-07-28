@@ -119,7 +119,7 @@
     mouse.down = false;
     game = {
       run: makeInitialRunState(),
-      player: { x: 170, y: FLOOR_Y, w: 24, h: 42, vx: 0, vy: 0, facing: 1, attackTimer: 0, dashTimer: 0, invulnTimer: 0 },
+      player: { x: 170, y: FLOOR_Y, w: 24, h: 42, vx: 0, vy: 0, facing: 1, attackTimer: 0, dashTimer: 0, invulnTimer: 0, swingTimer: 0, swingDir: 1 },
       slashes: [],
       enemyShots: [],
       hitSparks: [],
@@ -129,7 +129,6 @@
       pendingSpawns: [],
       boss: null,
       bossIntroTimer: 0,
-      bossLitEdge: null,
       vcReconciled: false,
       roomIntroTimer: ROOM_INTRO_SECONDS,
       toolCooldowns: { feature_flag: 0, rollback: 0, circuit_breaker: 0 },
@@ -179,7 +178,6 @@
     game.pendingSpawns.length = 0;
     game.boss = null;
     game.bossIntroTimer = 0;
-    game.bossLitEdge = null;
     game.vcReconciled = false;
     game.enemies = room.enemies.map((spawn, idx) => makeEnemy(spawn, idx));
     if (room.bossRoom) prepareBossRoom(room);
@@ -251,6 +249,9 @@
   function makeEnemy(spawn, idx) {
     const def = enemyDefs[spawn.type];
     const baseHp = def.hp + incidentEnemyBonus(spawn.type) + enemyModifier(spawn.type, "hp");
+    // idx is used to stagger initial attack timing; coerce so non-numeric ids
+    // (e.g. the boss, or swapped adds keyed by string id) don't produce NaN timers.
+    const stagger = Number(idx) || 0;
     return {
       id: `${spawn.type}_${idx}`,
       type: spawn.type,
@@ -264,7 +265,7 @@
       speed: Math.max(12, def.speed + enemyModifier(spawn.type, "speed")),
       damage: Math.max(1, def.damage + enemyModifier(spawn.type, "damage")),
       telegraph: 0,
-      attackTimer: 0.8 + idx * 0.4,
+      attackTimer: 0.8 + stagger * 0.4,
       contactTimer: 0,
       windupTimer: 0,
       alive: true,
@@ -696,8 +697,9 @@
     if (down && p.y < FLOOR_Y) p.vy += 780 * dt;
     if ((keys.has("shift") || keys.has("shiftleft")) && p.dashTimer <= 0) {
       game.dashGhosts.push({ x: p.x, y: p.y, facing: p.facing, life: 0.18, maxLife: 0.18 });
-      p.x += p.facing * 96;
+      p.x += p.facing * 112;
       p.dashTimer = game.run.stats.dashCooldown;
+      p.invulnTimer = Math.max(p.invulnTimer, 0.32); // dash i-frames: dodge through attacks
       sfx("dash");
     }
     p.vy += 920 * dt;
@@ -707,6 +709,7 @@
     p.attackTimer -= dt;
     p.dashTimer -= dt;
     p.invulnTimer -= dt;
+    p.swingTimer -= dt;
     if ((mouse.down || keys.has(" ")) && p.attackTimer <= 0) swing();
   }
 
@@ -762,14 +765,17 @@
       x: p.x + p.w / 2,
       y: p.y - 18,
       angle,
-      arc: 1.55,
-      range: 78,
-      life: 0.16,
-      maxLife: 0.16,
+      arc: 1.75,
+      range: 92,
+      life: 0.14,
+      maxLife: 0.14,
       damage: game.run.stats.damage,
       hitIds: [],
     });
     p.attackTimer = game.run.stats.fireRate;
+    p.swingTimer = 0.14;
+    p.swingDur = 0.14;
+    p.swingDir *= -1; // alternate up/down sweeps for a readable rhythm
     sfx("swing");
   }
 
@@ -908,9 +914,12 @@
     if (enemy.infectTimer <= 0.3 && enemy.telegraph <= 0) enemy.telegraph = 0.3;
     if (enemy.infectTimer <= 0) {
       if (mate && Math.abs(mate.x - enemy.x) < 70) {
+        // Spreading to kin is repeatable (an escalating swarm).
         mate.maxHp += 8; mate.hp += 8; mate.speed += 14; mate.infected = true;
         logEvent("enemy_infected", `${enemy.name} spread to ${mate.name} (+8 HP / +14 spd).`);
-      } else {
+      } else if (!enemy.infectedNode) {
+        // Infecting the graph is one-shot per bug, so debt/risk can't inflate unbounded.
+        enemy.infectedNode = true;
         const node = resolveLocationNode();
         const nb = graphNeighbor(node) || node;
         applyGraphEffects([
@@ -1091,7 +1100,7 @@
     boss.windowTimer = def.phases[0].windowEvery;
     boss.windowOpen = 0;
     boss.arcTimer = 2.4;
-    boss.summonTimer = 8;
+    boss.summonTimer = 11;
     boss.phaseIndex = 0;
     boss.pendingArc = null;
     game.enemies.push(boss);
@@ -1147,7 +1156,6 @@
         const edgeId = def.edges.find((id) => game.run.graph.edges.some((e) => e.id === id)) || def.edges[0];
         boss.pendingArc = { delay: 0.5, edgeId };
         boss.telegraph = 0.5;
-        game.bossLitEdge = { id: edgeId, life: 1.0 };
         sfx("bossEdgeAttack");
         logEvent("boss_arc", `${def.name} charged a break along ${edgeId}.`);
       }
@@ -1157,15 +1165,10 @@
     if (phase.summon) {
       boss.summonTimer -= dt;
       if (boss.summonTimer <= 0) {
-        boss.summonTimer = 8;
+        boss.summonTimer = 11;
         spawnEnemy(phase.summon, { x: p.x > 480 ? 210 : 760 });
         logEvent("boss_summon", `${def.name} summoned ${enemyDefs[phase.summon].name}.`);
       }
-    }
-
-    if (game.bossLitEdge) {
-      game.bossLitEdge.life -= dt;
-      if (game.bossLitEdge.life <= 0) game.bossLitEdge = null;
     }
 
     tickTimers(boss, dt);
@@ -1281,7 +1284,14 @@
 
   function completeRoom(room) {
     roomClearedLogged = true;
-    logEvent("room_cleared", `${room.name} cleared.`, { room: room.id });
+    // Clearing a combat room patches a little Stability back — sustain for the run.
+    if (room.enemies && room.enemies.length && !room.bossRoom && game.run.stability > 0) {
+      const before = Math.round(game.run.stability);
+      game.run.stability = Math.min(100, game.run.stability + 8);
+      logEvent("room_cleared", `${room.name} cleared. Stability ${before} -> ${Math.round(game.run.stability)}.`, { room: room.id });
+    } else {
+      logEvent("room_cleared", `${room.name} cleared.`, { room: room.id });
+    }
     if (room.clearReward) applyRoomReward(room.clearReward, room.id);
     renderAllUi();
   }
@@ -1705,13 +1715,14 @@
     const p = game.player;
     ctx.save();
     ctx.translate(p.x, p.y);
-    const invulnFlash = p.invulnTimer > 0 && Math.floor(p.invulnTimer * 18) % 2 === 0;
+    const invulnFlash = p.invulnTimer > 0 && Math.floor(p.invulnTimer * 22) % 2 === 0;
     ctx.scale(p.facing, 1);
-    drawResolverSprite(invulnFlash ? "#dfffee" : "#20f7ee", 1);
+    const swingT = p.swingTimer > 0 ? 1 - p.swingTimer / (p.swingDur || 0.14) : -1;
+    drawResolverSprite(invulnFlash ? "#dfffee" : "#20f7ee", 1, swingT, p.swingDir || 1);
     ctx.restore();
   }
 
-  function drawResolverSprite(color, alpha) {
+  function drawResolverSprite(color, alpha, swingT = -1, swingDir = 1) {
     ctx.save();
     ctx.globalAlpha *= alpha;
     ctx.fillStyle = color;
@@ -1734,23 +1745,49 @@
     ctx.fillRect(-12, 2, 10, 5);
     ctx.fillRect(2, 2, 11, 5);
 
-    // Bright patch blade, closer to the mock sword than a plain stick.
-    const blade = ctx.createLinearGradient(16, -33, 66, -45);
+    drawPatchBlade(swingT, swingDir);
+    ctx.restore();
+  }
+
+  // The patch blade sweeps through an arc while attacking (alternating up/down
+  // per swing), with a fading motion smear. At rest it sits raised and ready.
+  function drawPatchBlade(swingT, swingDir) {
+    const dir = swingDir || 1;
+    ctx.save();
+    ctx.translate(9, -28); // hand pivot
+    const bladeAngle = swingT >= 0 ? dir * (-1.05 + swingT * 1.9) : -0.28;
+
+    if (swingT >= 0) {
+      // Motion smear trailing the blade.
+      const a0 = bladeAngle - dir * 0.7;
+      ctx.strokeStyle = `rgba(223,255,238,${0.5 * (1 - swingT)})`;
+      ctx.lineWidth = 7;
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#20f7ee";
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(0, 0, 54, Math.min(a0, bladeAngle), Math.max(a0, bladeAngle));
+      ctx.stroke();
+    }
+
+    ctx.rotate(bladeAngle);
+    const blade = ctx.createLinearGradient(0, 0, 54, 0);
     blade.addColorStop(0, "#20f7ee");
     blade.addColorStop(0.3, "#dfffee");
     blade.addColorStop(1, "#7aa8ff");
     ctx.shadowColor = "#20f7ee";
-    ctx.shadowBlur = 22;
+    ctx.shadowBlur = swingT >= 0 ? 26 : 18;
     ctx.fillStyle = blade;
     ctx.beginPath();
-    ctx.moveTo(12, -32);
-    ctx.lineTo(58, -47);
-    ctx.lineTo(66, -43);
-    ctx.lineTo(22, -25);
+    ctx.moveTo(2, -4);
+    ctx.lineTo(50, -9);
+    ctx.lineTo(58, -5);
+    ctx.lineTo(6, 3);
     ctx.closePath();
     ctx.fill();
+    // Hilt.
     ctx.fillStyle = "#dfffee";
-    ctx.fillRect(8, -31, 14, 5);
+    ctx.fillRect(-2, -3, 12, 5);
     ctx.restore();
   }
 
@@ -2441,6 +2478,20 @@ function startSideErrorRail() {
     };
     renderPauseGraph();
   });
+
+  // Read-only debug snapshot for automated playtesting (harmless in normal play).
+  namespace.debug = {
+    state() {
+      return {
+        room: game.currentRoom?.id,
+        stability: Math.round(game.run.stability),
+        ended: game.run.ended,
+        player: { x: game.player.x, y: game.player.y },
+        enemies: game.enemies.filter((e) => e.alive).map((e) => ({ type: e.type, x: e.x, hp: e.hp, telegraph: e.telegraph, boss: !!e.boss, armored: !!e.armored })),
+        canvasWidth: canvas.width,
+      };
+    },
+  };
 
   startSideErrorRail();
   resetGame();

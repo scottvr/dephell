@@ -35,23 +35,23 @@ The MVP is **one playable character (The Resolver)** on **one floor (the Release
 
 **"First Slice"** below refers to what is already implemented in the current zero-build canvas prototype (see [Ground Truth](#current-ground-truth--what-is-implemented)).
 
-| Target | MVP goal | Current First Slice status |
+| Target | MVP goal | Current status |
 |---|---|---|
-| Rooms per run | 10 to 14 | Not met — single fixed 5-room pipeline, no procedural gen |
-| Room types | 8 | Not met — no distinct room-type breadth yet |
-| Packages/items/tools | 24 | Partially met — 4 packages implemented; Feature Flag active tool present |
-| Enemy types | 10 | Partially met — 3 enemies implemented |
-| Run events/incidents | 4 | Partially met — 3 incidents (Build Failure, Audit Pressure, Minor Regression) |
-| Adaptive bosses | 2 | Not met — no bosses yet |
+| Rooms per run | 10 to 14 | **Met (hand-authored)** — 11-room branching pool, ~9 rooms/run, two branch points + a package-gated shortcut. Not yet procedurally generated. |
+| Room types | 8 | **Met** — combat, observability audit, test gate, package gate, verification fork, integration, refactor, dependency injection, incident, boss (~10 types) |
+| Packages/items/tools | 24 | Partially met — **12 implemented** (4 active tools); remaining 12 drafted in `package-roster.md` |
+| Enemy types | 10 | **Met** — 8 enemy behaviors + 2 adaptive bosses |
+| Run events/incidents | 4 | **Met** — 5 incidents with two-path resolution (Build Failure, Audit Pressure, Minor Regression, Critical CVE, Dependency Unpublish) |
+| Adaptive bosses | 2 | **Met** — The Major Version Upgrade + The Distributed Monolith, selected by accumulated run pressure |
 | Core resources | Stability, Observability, Technical Debt | **Met** — all 3 implemented |
-| Graph edge types | 7 (requires, conflicts, patches, isolates, observes, pins, infects) | Partially met — graph-as-map traversal exists; full 7-relation set not implemented |
-| Dependency graph as map/consequence engine | Graph traversal + mutation + preview | **Met** — graph-as-map traversal, package choice overlay with live mutation preview, graph inspector, Verification Fork branch |
-| Package choice overlay | With live graph preview | **Met** |
-| Graph minimap and pause graph view | Required | Partially met — graph inspector / graph-as-map present |
-| Generated failure postmortem | Required | **Met** — Mini Postmortem on loss |
-| Generated victory release report | Required | **Met** — Release Report on win |
+| Graph edge types | 7 (requires, conflicts, patches, isolates, observes, pins, infects) | **Met** — all 7 relations in use (+ `flags` and tool-attachment flavor relations) |
+| Dependency graph as map/consequence engine | Graph traversal + mutation + preview | **Met** — graph-as-map traversal, package choice overlay with live mutation preview, graph inspector, boss attacks along edges |
+| Package choice overlay | With live graph preview | **Met** — pooled 3–4 card offer with graph preview |
+| Graph minimap and pause graph view | Required | **Met** — combat minimap + paused clickable inspector with cause tracing |
+| Generated failure postmortem | Required | **Met** — Mini Postmortem on loss, sourced from run state |
+| Generated victory release report | Required | **Met** — Release Report on win, incl. boss/risks/pins/resolved-incident lines |
 | CRT/terminal visual identity | Represented in playable form | **Met** — CRT visuals in place |
-| Basic adaptive audio and state-driven sound cues | Required | Not met — no audio yet |
+| Basic adaptive audio and state-driven sound cues | Required | **Met** — procedural Web Audio SFX + adaptive ambience (stability/debt/incident/boss), HUD mute |
 
 ### Current Ground Truth — What Is Implemented
 

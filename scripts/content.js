@@ -314,23 +314,23 @@
     deprecated_api: { name: "Deprecated API", hp: 44, speed: 30, damage: 6, color: "#ffa62b", w: 40, h: 34 },
     dependency_cycle: { name: "Dependency Cycle", hp: 40, speed: 70, damage: 10, color: "#ff9a3c", w: 34, h: 30, ranged: true },
     major_version_upgrade: {
-      name: "The Major Version Upgrade", hp: 210, speed: 58, damage: 16, color: "#c58bff", w: 56, h: 60,
+      name: "The Major Version Upgrade", hp: 180, speed: 58, damage: 14, color: "#c58bff", w: 56, h: 60,
       boss: true, ranged: true,
       edges: ["edge_release_app", "edge_release_ci", "edge_app_libglitch"],
       phases: [
-        { name: "Deprecation Notice", at: 1.0, windowEvery: 3.6, windowFor: 1.6, arcEvery: 2.6 },
-        { name: "Forced Migration", at: 0.66, windowEvery: 3.2, windowFor: 1.4, arcEvery: 2.0, summon: "breaking_change" },
-        { name: "Semver Reckoning", at: 0.33, windowEvery: 2.8, windowFor: 1.05, arcEvery: 1.6, summon: "regression" },
+        { name: "Deprecation Notice", at: 1.0, windowEvery: 3.0, windowFor: 2.1, arcEvery: 2.8 },
+        { name: "Forced Migration", at: 0.66, windowEvery: 2.8, windowFor: 1.9, arcEvery: 2.3, summon: "breaking_change" },
+        { name: "Semver Reckoning", at: 0.33, windowEvery: 2.6, windowFor: 1.6, arcEvery: 1.9, summon: "regression" },
       ],
     },
     distributed_monolith: {
-      name: "The Distributed Monolith", hp: 240, speed: 44, damage: 12, color: "#7aa8ff", w: 64, h: 64,
+      name: "The Distributed Monolith", hp: 205, speed: 44, damage: 11, color: "#7aa8ff", w: 64, h: 64,
       boss: true,
       edges: ["edge_release_ci", "edge_release_staging", "edge_staging_libglitch"],
       phases: [
-        { name: "Single Deploy", at: 1.0, windowEvery: 3.4, windowFor: 1.5, arcEvery: 2.4 },
-        { name: "Backpressure", at: 0.66, windowEvery: 3.0, windowFor: 1.3, arcEvery: 2.0, summon: "memory_leak" },
-        { name: "Cascading Failure", at: 0.33, windowEvery: 2.6, windowFor: 1.05, arcEvery: 1.5, summon: "transitive_bug" },
+        { name: "Single Deploy", at: 1.0, windowEvery: 2.9, windowFor: 2.0, arcEvery: 2.6 },
+        { name: "Backpressure", at: 0.66, windowEvery: 2.7, windowFor: 1.8, arcEvery: 2.2, summon: "memory_leak" },
+        { name: "Cascading Failure", at: 0.33, windowEvery: 2.5, windowFor: 1.5, arcEvery: 1.8, summon: "transitive_bug" },
       ],
     },
   };
