@@ -1065,7 +1065,7 @@
     const cascadeRisks = run.risks.filter((r) => r.kind === "cascade").length;
     const addedEdges = run.graph.edges.filter((e) => e.createdBy).length;
     // Discrete addBossScore accumulation + structural signals not covered by it.
-    const major = 3 + run.bossScores.major_version_upgrade + run.pins.length + upgradeRisks; // +3 baseline old-runtime edges
+    const major = 1 + run.bossScores.major_version_upgrade + run.pins.length + upgradeRisks; // +1 baseline old-runtime edges
     const monolith = run.bossScores.distributed_monolith + addedEdges + cascadeRisks;
     let boss = "major_version_upgrade";
     if (monolith > major && monolith >= 5) boss = "distributed_monolith";

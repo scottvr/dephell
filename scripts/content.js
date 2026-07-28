@@ -442,7 +442,6 @@
         effects: [
           { op: "revealEdges", visibility: "suspected" },
           { op: "addTag", list: "mitigations", tag: "test_coverage" },
-          { op: "registerRisk", id: "libglitch_relation_confirmed", kind: "upgrade", target: "libglitch", reason: "CI confirmed the suspected libglitch/ci relation is real" },
           { op: "addBossScore", boss: "major_version_upgrade", amount: 1, reason: "tests pin down libglitch instability as a version problem" },
         ],
       },
@@ -514,7 +513,7 @@
         effects: [
           { op: "addBossScore", boss: "distributed_monolith", amount: -3, reason: "refactor removed entangling wiring and paid down debt" },
           { op: "addTag", list: "mitigations", tag: "refactor_pass" },
-          { op: "registerRisk", id: "refactor_regression_risk", kind: "upgrade", target: "libglitch", reason: "aggressive refactor may reintroduce old behavior under load" },
+          { op: "registerRisk", id: "refactor_regression_risk", kind: "regression", target: "libglitch", reason: "aggressive refactor may reintroduce old behavior under load" },
         ],
       },
       routes: [
@@ -539,7 +538,7 @@
         text: "The DI container became a runtime hub with hidden wiring: enemies hardened run-wide and Distributed Monolith is now the likely boss.",
         effects: [
           { op: "addEdge", source: "di_container", target: "app", relation: "requires", strength: 2, visibility: "known" },
-          { op: "addBossScore", boss: "distributed_monolith", amount: 4, reason: "DI container added a central hub and opaque cross-wiring" },
+          { op: "addBossScore", boss: "distributed_monolith", amount: 5, reason: "DI container added a central hub and opaque cross-wiring" },
           { op: "addEnemyModifier", scope: "all", stat: "hp", amount: 6, reason: "added indirection makes every failure harder to kill cleanly" },
           { op: "pinNode", id: "di_container", reason: "framework version pinned to keep the wiring stable" },
           { op: "registerRisk", id: "di_upgrade_lock", kind: "upgrade", target: "di_container", reason: "pinned DI framework blocks clean upgrades and concentrates blast radius" },

@@ -26,6 +26,10 @@ The prototype is **zero-build**. There is no `package.json`, bundler, or install
 There is no unit-test framework. The visual smoke harness is the automated check; changes should be
 verified by running it and by opening `index.html` in a browser.
 
+- **Content gate**: `node tools/lint-content.js` validates `scripts/content.js` (effect verbs, tag ontology,
+  graph references, coherence-trace rule). `node tools/simulate.js` reports balance (package pick rates,
+  boss spread, incident mix, debt). See [`tools/README.md`](tools/README.md). Run the linter after editing content.
+
 ## Prototype architecture
 
 Browser scripts load in order (see `index.html`) and share a small `window.DepHell` namespace. Keep
