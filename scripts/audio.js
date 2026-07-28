@@ -151,9 +151,17 @@
 
   const cues = {
     // Combat
-    swing: () => noise({ duration: 0.09, peak: 0.12, type: "bandpass", freq: 2600, q: 0.8 }),
-    hit: () => { tone({ type: "square", from: 320, to: 150, attack: 0.002, hold: 0.02, release: 0.06, peak: 0.16 }); noise({ duration: 0.06, peak: 0.1, freq: 3200 }); },
-    enemyDeath: () => { tone({ type: "sawtooth", from: 260, to: 60, attack: 0.004, hold: 0.05, release: 0.18, peak: 0.16 }); noise({ duration: 0.16, peak: 0.09, type: "lowpass", freq: 900 }); },
+    // Combat cues are the most-repeated sounds in the game (~6 swings/sec), so they
+    // jitter frequency per-hit to avoid machine-gun monotony, and `hit` carries a
+    // short low sine for body/weight instead of a thin tick.
+    swing: () => noise({ duration: 0.09, peak: 0.12, type: "bandpass", freq: 2400 + Math.random() * 500, q: 0.8 }),
+    hit: () => {
+      const j = Math.random();
+      tone({ type: "square", from: 300 + j * 70, to: 140 + j * 30, attack: 0.002, hold: 0.02, release: 0.06, peak: 0.17 });
+      tone({ type: "sine", from: 86 + j * 12, to: 64 + j * 8, attack: 0.002, hold: 0.03, release: 0.05, peak: 0.14 });
+      noise({ duration: 0.06, peak: 0.1, freq: 3000 + j * 600 });
+    },
+    enemyDeath: () => { const j = Math.random(); tone({ type: "sawtooth", from: 240 + j * 60, to: 58, attack: 0.004, hold: 0.05, release: 0.2, peak: 0.17 }); noise({ duration: 0.18, peak: 0.1, type: "lowpass", freq: 800 + j * 300 }); },
     playerHit: () => { tone({ type: "square", from: 180, to: 90, attack: 0.002, hold: 0.03, release: 0.14, peak: 0.24 }); noise({ duration: 0.14, peak: 0.14, type: "lowpass", freq: 600 }); duck(0.5, 140); },
     dash: () => noise({ duration: 0.14, peak: 0.08, type: "bandpass", freq: 1800, q: 1.4 }),
 

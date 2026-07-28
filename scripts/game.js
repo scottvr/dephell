@@ -105,6 +105,8 @@
   const padPrev = { buttons: [] };
   const padStickHold = { l: 0, r: 0 };
   let hitFreezeTimer = 0;
+  let shakeMag = 0;
+  let bossVictoryPending = false;
   let lastDebtBand = 0;
   let game;
 
@@ -138,6 +140,8 @@
       slashes: [],
       enemyShots: [],
       hitSparks: [],
+      particles: [],
+      floaters: [],
       dashGhosts: [],
       enemies: [],
       hazards: [],
@@ -159,6 +163,9 @@
     activePreviewPackage = null;
     activeRouteChoice = null;
     pendingRoutes = [];
+    shakeMag = 0;
+    hitFreezeTimer = 0;
+    bossVictoryPending = false;
     roomClearTimer = 0;
     choiceShown = false;
     roomClearedLogged = false;
@@ -757,8 +764,12 @@
     updateAttacks(dt);
     updateEnemies(dt);
     updateHitSparks(dt);
+    updateParticles(dt);
+    updateFloaters(dt);
     updateDashGhosts(dt);
-    updateRoomFlow(dt);
+    // During the boss-death pause, keep particles/shake alive but freeze room
+    // progression so the pending victory report isn't pre-empted.
+    if (!bossVictoryPending) updateRoomFlow(dt);
   }
 
   function updateToolTimers(dt) {
@@ -902,29 +913,46 @@
         const withinArc = Math.abs(angleDiff(Math.atan2(dy, dx), slash.angle)) <= slash.arc / 2;
         if (distance > slash.range || !withinArc) continue;
         slash.hitIds.push(enemy.id);
-        // Shielded Version Conflict halves and armored bosses shrug off mistimed hits.
+        // Shielded Version Conflict halves and armored bosses shrug off mistimed hits —
+        // now with a legible readout so a no-sell reads as "blocked," not a whiff.
         if (enemy.type === "version_conflict_half" && !enemy.exposed) {
           addHitSpark(enemyCenterX, enemyCenterY, "#6b7280");
+          spawnFloater(enemyCenterX, enemyCenterY - 8, "BLOCKED", "#9aa4ad");
           continue;
         }
         if (enemy.boss && enemy.armored) {
           addHitSpark(enemyCenterX, enemyCenterY, "#6b7280");
+          spawnFloater(enemyCenterX, enemyCenterY - 8, "ARMORED", "#9aa4ad");
           sfx("bossHit");
+          addShake(1.2);
           continue;
         }
         enemy.hp -= slash.damage;
-        addHitSpark(enemyCenterX, enemyCenterY, enemyDefs[enemy.type].color);
+        enemy.hitFlash = 0.09;
+        addHitSpark(enemyCenterX, enemyCenterY, "#ffffff");
+        spawnFloater(enemyCenterX, enemyCenterY - 8, String(slash.damage));
         sfx(enemy.boss ? "bossHit" : "hit");
         if (enemy.hp <= 0) {
           if (enemy.boss) {
+            setHitStop(0.1);
             defeatBoss(enemy);
             break;
           }
+          setHitStop(0.06);
+          addShake(5);
+          spawnBurst(enemyCenterX, enemyCenterY, enemyDefs[enemy.type].color, 12);
           const spawnedReplacement = onEnemyDeath(enemy);
           enemy.alive = false;
           logEvent("enemy_defeated", `${enemy.name} patched out.`);
           sfx("enemyDeath");
           void spawnedReplacement;
+        } else {
+          setHitStop(0.03);
+          addShake(2.5);
+          if (!enemy.boss) {
+            const dir = Math.sign(enemy.x - game.player.x) || 1;
+            enemy.knockbackVx = dir * 160;
+          }
         }
       }
     }
@@ -936,6 +964,12 @@
   function updateEnemies(dt) {
     for (const enemy of game.enemies) {
       if (!enemy.alive) continue;
+      if (enemy.hitFlash > 0) enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
+      if (enemy.knockbackVx) {
+        enemy.x = clamp(enemy.x + enemy.knockbackVx * dt, 40, 920);
+        enemy.knockbackVx *= Math.pow(0.82, dt * 60);
+        if (Math.abs(enemy.knockbackVx) < 4) enemy.knockbackVx = 0;
+      }
       if (enemy.boss) { updateBoss(enemy, dt); continue; }
       const handler = ENEMY_UPDATERS[enemy.type];
       if (handler) handler(enemy, dt);
@@ -1279,7 +1313,19 @@
     enemy.alive = false;
     game.run.bossStats.defeated = enemy.type;
     logEvent("boss_defeated", `${enemy.name} defeated. Release candidate shipped.`, { boss: enemy.type });
-    endRun(true, `Defeated ${enemy.name}; the release shipped.`);
+    // Let the climax land: a big burst + shake before the report, instead of an
+    // instant hard-cut to the postmortem screen on the same frame.
+    bossVictoryPending = true;
+    const pendingRun = game.run;
+    spawnBurst(enemy.x, enemy.y - enemy.h / 2, enemyDefs[enemy.type].color, 34);
+    addShake(12);
+    sfx("enemyDeath");
+    window.setTimeout(() => {
+      // Ignore if the player already started a new run (resetGame) in the pause window.
+      if (game.run !== pendingRun || game.run.ended) return;
+      bossVictoryPending = false;
+      endRun(true, `Defeated ${enemy.name}; the release shipped.`);
+    }, 700);
   }
 
   // --- Active tools: Rollback (R), Circuit Breaker (C) ----------------------
@@ -1418,12 +1464,13 @@
   }
 
   function damagePlayer(amount, reason) {
-    if (game.player.invulnTimer > 0) return;
+    if (game.player.invulnTimer > 0 || bossVictoryPending) return;
     const drain = featureFlagActive() ? 0 : game.run.incident?.stabilityDrain ?? 0;
     const adjusted = amount + (drain > 0 ? Math.ceil(drain / 4) : 0);
     game.run.stability = Math.max(0, game.run.stability - adjusted);
     game.player.invulnTimer = 0.75;
     hitFreezeTimer = 0.06;
+    addShake(6);
     addHitSpark(game.player.x, game.player.y - 24, "#dfffee");
     sfx("playerHit");
     logEvent("stability_damage", `${reason} Stability -${adjusted}.`);
@@ -1438,6 +1485,86 @@
   function updateHitSparks(dt) {
     for (const spark of game.hitSparks) spark.life -= dt;
     game.hitSparks = game.hitSparks.filter((spark) => spark.life > 0);
+  }
+
+  // --- Juice: screen shake, particle bursts, floating combat text ----------
+  // The camera/particle/text scaffolding the game was missing — impact and
+  // consequence now land ON the arena where the eye is, not only in the log.
+  function addShake(mag) {
+    shakeMag = Math.min(12, Math.max(shakeMag, mag));
+  }
+
+  function setHitStop(seconds) {
+    hitFreezeTimer = Math.max(hitFreezeTimer, seconds);
+  }
+
+  function spawnBurst(x, y, color, count) {
+    for (let i = 0; i < count; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 60 + Math.random() * 190;
+      game.particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 40,
+        life: 0.3 + Math.random() * 0.25,
+        maxLife: 0.55,
+        size: 1.5 + Math.random() * 2.5,
+        color: Math.random() < 0.5 ? "#ffffff" : color,
+      });
+    }
+  }
+
+  function updateParticles(dt) {
+    for (const p of game.particles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 520 * dt;
+      p.vx *= Math.pow(0.92, dt * 60);
+      p.life -= dt;
+    }
+    game.particles = game.particles.filter((p) => p.life > 0);
+  }
+
+  function drawParticles() {
+    for (const p of game.particles) {
+      const t = Math.max(0, p.life / p.maxLife);
+      ctx.save();
+      ctx.globalAlpha = t;
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8;
+      const s = p.size * (0.5 + t);
+      ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+      ctx.restore();
+    }
+  }
+
+  function spawnFloater(x, y, text, color) {
+    game.floaters.push({ x: x + (Math.random() * 12 - 6), y, text, color: color || "#dfffee", life: 0.6, maxLife: 0.6, vy: -46 });
+  }
+
+  function updateFloaters(dt) {
+    for (const f of game.floaters) {
+      f.y += f.vy * dt;
+      f.vy *= Math.pow(0.9, dt * 60);
+      f.life -= dt;
+    }
+    game.floaters = game.floaters.filter((f) => f.life > 0);
+  }
+
+  function drawFloaters() {
+    for (const f of game.floaters) {
+      const t = Math.max(0, f.life / f.maxLife);
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, t * 1.4);
+      ctx.fillStyle = f.color;
+      ctx.font = "bold 15px 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(0,0,0,0.85)";
+      ctx.shadowBlur = 3;
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.restore();
+    }
   }
 
   function updateDashGhosts(dt) {
@@ -1607,9 +1734,16 @@
     return !ui.choiceOverlay.classList.contains("hidden") || !ui.routeOverlay.classList.contains("hidden") || !ui.reportOverlay.classList.contains("hidden") || !ui.graphOverlay.classList.contains("hidden") || (ui.incidentOverlay && !ui.incidentOverlay.classList.contains("hidden"));
   }
 
-  function draw() {
+  function draw(dt = 1 / 60) {
     const room = game.currentRoom || roomById.get(game.run.currentRoomId);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Camera shake: the whole arena kicks on impact. The .stage CSS vignette/border
+    // masks the few edge pixels the translate exposes. HUD text is drawn after restore
+    // so it stays rock-steady.
+    ctx.save();
+    if (shakeMag > 0.3) {
+      ctx.translate((Math.random() * 2 - 1) * shakeMag, (Math.random() * 2 - 1) * shakeMag);
+    }
     drawBackdrop(room);
     drawPlatforms();
     drawHazards();
@@ -1618,10 +1752,16 @@
     drawDashGhosts();
     drawPlayer();
     drawHitSparks();
+    drawParticles();
+    drawFloaters();
+    ctx.restore();
     drawRoomTitle(room);
     drawBossHud();
     drawRoomBanner(room);
     drawBossIntro();
+    // Time-based decay so the shake rings out over the same wall-clock duration on
+    // 60Hz and 144Hz displays (the exponent normalizes to a 60fps step).
+    shakeMag = shakeMag > 0.3 ? shakeMag * Math.pow(0.86, dt * 60) : 0;
   }
 
   function drawHazards() {
@@ -1924,6 +2064,14 @@
       const scale = enemy.type === "memory_leak" ? 1 + (enemy.maxHp - enemy.hp) / 120 : 1;
       ctx.scale(scale, scale);
       drawEnemySprite(enemy, def);
+      if (enemy.hitFlash > 0) {
+        // Redraw the sprite's own shapes in white (normal compositing) so only the
+        // silhouette lights up. source-atop can't mask here — drawBackdrop already
+        // filled the shared canvas opaque, so it would paint a white box instead.
+        ctx.globalAlpha = Math.min(1, enemy.hitFlash / 0.09);
+        drawEnemySprite(enemy, def, "#ffffff");
+        ctx.globalAlpha = 1;
+      }
       ctx.restore();
       ctx.fillStyle = "rgba(223,255,238,0.18)";
       ctx.fillRect(enemy.x - 22, enemy.y - enemy.h - 14, 44, 4);
@@ -1932,8 +2080,8 @@
     }
   }
 
-  function drawEnemySprite(enemy, def) {
-    const color = enemy.color || def.color;
+  function drawEnemySprite(enemy, def, colorOverride) {
+    const color = colorOverride || enemy.color || def.color;
     const angry = enemy.telegraph > 0;
     if (enemy.type === "breaking_change") return drawBreakingChangeSprite(color, angry);
     if (enemy.type === "memory_leak") return drawMemoryLeakSprite(color, angry);
@@ -2373,7 +2521,7 @@
     lastTime = now;
     pollGamepad();
     update(dt);
-    draw();
+    draw(dt);
     requestAnimationFrame(frame);
   }
 
