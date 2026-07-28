@@ -1,6 +1,6 @@
 (function bootstrapGame(namespace) {
   const { FLOOR_Y, GROUND_TOP, ROOM_INTRO_SECONDS } = namespace.constants;
-  const { packages, rooms, enemyDefs } = namespace.content;
+  const { packages, incidents, rooms, enemyDefs } = namespace.content;
   const { makeInitialRunState } = namespace.runState;
   const { rectsOverlap, clamp } = namespace.utils;
   const {
@@ -42,6 +42,10 @@
     routeGraphSvg: document.querySelector("#routeGraphSvg"),
     routeChoices: document.querySelector("#routeChoices"),
     routePrompt: document.querySelector("#routePrompt"),
+    incidentOverlay: document.querySelector("#incidentOverlay"),
+    incidentTitle: document.querySelector("#incidentTitle"),
+    incidentBlurb: document.querySelector("#incidentBlurb"),
+    incidentChoices: document.querySelector("#incidentChoices"),
     choiceOverlay: document.querySelector("#choiceOverlay"),
     packageChoices: document.querySelector("#packageChoices"),
     reportOverlay: document.querySelector("#reportOverlay"),
@@ -50,6 +54,29 @@
     reportBody: document.querySelector("#reportBody"),
     restartButton: document.querySelector("#restartButton"),
     reportRestartButton: document.querySelector("#reportRestartButton"),
+    muteButton: document.querySelector("#muteButton"),
+  };
+
+  const audio = namespace.audio || { start() {}, play() {}, setState() {}, toggleMute() { return false; }, isMuted() { return false; } };
+
+  function sfx(cue) {
+    audio.play(cue);
+  }
+
+  // Systemic events map to one-shot cues here so effect-driven log entries
+  // (reveals, pins, incidents, route choices) stay audible without wiring each site.
+  const EVENT_CUES = {
+    package_installed: "install",
+    graph_revealed: "reveal",
+    node_pinned: "pin",
+    incident_started: "incidentStart",
+    route_selected: "routeSelect",
+    room_entered: "roomEnter",
+    feature_flag_used: "flag",
+    feature_flag_expired: "flagExpire",
+    boss_started: "bossIntro",
+    run_won: "victory",
+    run_failed: "failure",
   };
 
   const keys = new Set();
@@ -63,7 +90,29 @@
   let selectedGraphEntity = null;
   let activePreviewPackage = null;
   let hitFreezeTimer = 0;
+  let lastDebtBand = 0;
   let game;
+
+  function debtBand(debt) {
+    if (debt >= 75) return 3;
+    if (debt >= 50) return 2;
+    if (debt >= 25) return 1;
+    return 0;
+  }
+
+  function syncAudioState() {
+    const run = game.run;
+    const band = debtBand(run.techDebt);
+    if (band > lastDebtBand) sfx("debtThreshold");
+    lastDebtBand = band;
+    audio.setState({
+      stability: run.stability,
+      debt: run.techDebt,
+      incident: run.incident ? run.incident.id : null,
+      boss: run.selectedBoss || (game.boss ? game.boss.id : null),
+      combat: game.enemies ? game.enemies.some((enemy) => enemy.alive) : false,
+    });
+  }
 
   function resetGame() {
     keys.clear();
@@ -76,9 +125,17 @@
       hitSparks: [],
       dashGhosts: [],
       enemies: [],
+      hazards: [],
+      pendingSpawns: [],
+      boss: null,
+      bossIntroTimer: 0,
+      bossLitEdge: null,
+      vcReconciled: false,
       roomIntroTimer: ROOM_INTRO_SECONDS,
-      toolCooldowns: { feature_flag: 0 },
+      toolCooldowns: { feature_flag: 0, rollback: 0, circuit_breaker: 0 },
       featureFlagTimer: 0,
+      circuitBreakerTimer: 0,
+      duckHoldTimer: 0,
     };
     ui.choiceOverlay.classList.add("hidden");
     ui.reportOverlay.classList.add("hidden");
@@ -91,6 +148,7 @@
     roomClearTimer = 0;
     choiceShown = false;
     roomClearedLogged = false;
+    lastDebtBand = 0;
     logEvent("run_started", "Run started: Release Candidate Pipeline.");
     loadRoom("local_dev");
     renderAllUi();
@@ -99,6 +157,7 @@
 
   function logEvent(type, text, data = {}) {
     game.run.eventLog.push({ order: game.run.eventLog.length + 1, type, text, ...data });
+    if (EVENT_CUES[type]) sfx(EVENT_CUES[type]);
   }
 
   function loadRoom(roomId, route = null) {
@@ -116,7 +175,14 @@
     game.player.y = FLOOR_Y;
     game.slashes.length = 0;
     game.enemyShots.length = 0;
+    game.hazards.length = 0;
+    game.pendingSpawns.length = 0;
+    game.boss = null;
+    game.bossIntroTimer = 0;
+    game.bossLitEdge = null;
+    game.vcReconciled = false;
     game.enemies = room.enemies.map((spawn, idx) => makeEnemy(spawn, idx));
+    if (room.bossRoom) prepareBossRoom(room);
     game.roomIntroTimer = ROOM_INTRO_SECONDS;
     roomClearTimer = 0;
     roomClearedLogged = false;
@@ -124,11 +190,14 @@
     pendingRoutes = [];
     activeRouteChoice = null;
     game.featureFlagTimer = 0;
+    game.circuitBreakerTimer = 0;
+    game.duckHoldTimer = 0;
     game.run.activeFlag = null;
     ui.routeOverlay.classList.add("hidden");
     if (room.incident) startIncident();
     logEvent("room_entered", `Entered ${room.name}.`, { room: room.id, route: route?.id });
     renderAllUi();
+    if (room.incident) showIncidentChoice();
   }
 
   function resolveRoom(room) {
@@ -181,6 +250,7 @@
 
   function makeEnemy(spawn, idx) {
     const def = enemyDefs[spawn.type];
+    const baseHp = def.hp + incidentEnemyBonus(spawn.type) + enemyModifier(spawn.type, "hp");
     return {
       id: `${spawn.type}_${idx}`,
       type: spawn.type,
@@ -189,16 +259,115 @@
       y: spawn.y,
       w: def.w,
       h: def.h,
-      hp: def.hp + incidentEnemyBonus(spawn.type),
-      maxHp: def.hp + incidentEnemyBonus(spawn.type),
-      speed: def.speed,
-      damage: def.damage,
+      hp: baseHp,
+      maxHp: baseHp,
+      speed: Math.max(12, def.speed + enemyModifier(spawn.type, "speed")),
+      damage: Math.max(1, def.damage + enemyModifier(spawn.type, "damage")),
       telegraph: 0,
       attackTimer: 0.8 + idx * 0.4,
       contactTimer: 0,
       windupTimer: 0,
       alive: true,
+      // Per-type behaviour state (unused fields are harmless on other types).
+      infectTimer: 2.6,
+      forked: false,
+      seam: 0,
+      zoneTimer: 2,
+      lifeClock: 0,
+      shieldClock: idx * 0.6,
+      exposed: true,
+      phase: 0,
+      variant: null,
+      dir: 1,
     };
+  }
+
+  // Sums run-wide enemy modifiers granted by packages/tools (scope "all" or a type).
+  function enemyModifier(type, stat) {
+    const mods = game?.run?.enemyModifiers || [];
+    let total = 0;
+    for (const mod of mods) {
+      if (mod.stat !== stat) continue;
+      if (mod.scope === "all" || mod.scope === type) total += mod.amount;
+    }
+    return total;
+  }
+
+  // --- Graph query + mutation helpers used by enemies, incidents, and the boss ---
+
+  // Resolve the current combat locus to a NODE id (edge loci map to their source).
+  function resolveLocationNode() {
+    const loc = currentGraphLocation();
+    if (loc.type === "node") return loc.id;
+    const edge = game.run.graph.edges.find((e) => e.id === loc.id);
+    return edge ? edge.source : "app";
+  }
+
+  // Return a real neighbour node id of the given node (prefers visible edges).
+  function graphNeighbor(nodeId) {
+    const edges = game.run.graph.edges.filter((e) => (e.source === nodeId || e.target === nodeId) && e.visibility !== "hidden");
+    for (const e of edges) {
+      const other = e.source === nodeId ? e.target : e.source;
+      if (other !== nodeId) return other;
+    }
+    return null;
+  }
+
+  // Create (or reuse) a conflicts edge between two nodes; returns the edge.
+  function ensureConflictEdge(sourceId, targetId) {
+    let edge = game.run.graph.edges.find((e) => e.relation === "conflicts" && ((e.source === sourceId && e.target === targetId) || (e.source === targetId && e.target === sourceId)));
+    if (!edge) {
+      edge = { id: `edge_${sourceId}_${targetId}_conflicts`, source: sourceId, target: targetId, relation: "conflicts", strength: 2, visibility: "suspected", active: false, createdBy: "enemy" };
+      game.run.graph.edges.push(edge);
+    }
+    return edge;
+  }
+
+  // Enemies are spawned into a pending queue and flushed after the update loop so
+  // we never mutate game.enemies while iterating it.
+  function spawnEnemy(type, overrides = {}) {
+    game.pendingSpawns.push({ type, overrides });
+  }
+
+  function flushPendingSpawns() {
+    if (!game.pendingSpawns.length) return;
+    for (const spawn of game.pendingSpawns) {
+      const idx = game.enemies.length;
+      const enemy = makeEnemy({ type: spawn.type, x: spawn.overrides.x ?? game.player.x, y: FLOOR_Y }, idx);
+      Object.assign(enemy, spawn.overrides);
+      game.enemies.push(enemy);
+    }
+    game.pendingSpawns.length = 0;
+  }
+
+  // Route an ad-hoc effect list (enemy/graph consequences) through the shared verb
+  // dispatcher, so every mutation is logged and traceable exactly like a package.
+  function applyGraphEffects(effects, sourceLabel) {
+    namespace.effects.applyEffectList(game.run, effects, sourceLabel, logEvent);
+  }
+
+  // --- Floor hazards (deprecation zones, boss audit zones) ---
+  function addHazard(x, opts = {}) {
+    game.hazards.push({ x, y: FLOOR_Y, w: opts.w ?? 70, h: opts.h ?? 16, life: opts.life ?? 6, maxLife: opts.life ?? 6, dps: opts.dps ?? 4, source: opts.source || "hazard", tickTimer: 0 });
+  }
+
+  function updateHazards(dt) {
+    const tested = game.run.mitigations.includes("test_coverage");
+    for (const hz of game.hazards) {
+      hz.life -= dt;
+      const p = game.player;
+      if (rectsOverlap(p.x - p.w / 2, p.y - p.h, p.w, p.h, hz.x - hz.w / 2, hz.y - 6, hz.w, hz.h)) {
+        if (!featureFlagActive()) {
+          game.run.techDebt += hz.dps * dt * (tested ? 0.5 : 1);
+          hz.tickTimer -= dt;
+          if (hz.tickTimer <= 0) {
+            hz.tickTimer = 0.7;
+            damagePlayer(2, `${hz.source} zone corroded active code.`);
+          }
+        }
+      }
+    }
+    game.hazards = game.hazards.filter((hz) => hz.life > 0);
   }
 
   function incidentEnemyBonus(type) {
@@ -208,34 +377,85 @@
     return 0;
   }
 
+  // Weighted incident selection reading real run state. Build Failure (an active
+  // conflict edge) has top priority; otherwise the highest-weighted incident that
+  // clears the threshold fires, softened by relevant mitigations.
   function startIncident() {
     const run = game.run;
-    const conflict = findActiveConflict();
     const tested = run.mitigations.includes("test_coverage");
+    const conflict = findActiveConflict();
     if (conflict) {
       conflict.visibility = "known";
-      run.incident = {
-        id: "build_failure",
-        name: "Build Failure",
-        cause: conflict,
-        stabilityDrain: tested ? 4 : 9,
-      };
+      setIncident("build_failure", conflict, tested ? 4 : 9);
       logEvent("incident_started", tested ? "Build Failure started, but Test Suite reduced blast radius." : "Build Failure started: conflict edge activated.", { incident: "build_failure" });
-    } else if (run.techDebt >= 16) {
-      run.incident = {
-        id: "audit_pressure",
-        name: "Audit Pressure",
-        stabilityDrain: tested ? 3 : 7,
-      };
-      logEvent("incident_started", tested ? "Audit Pressure started with test evidence attached." : "Audit Pressure started: previous shortcut selected for review.", { incident: "audit_pressure" });
-    } else {
-      run.incident = {
-        id: "minor_regression",
-        name: "Minor Regression",
-        stabilityDrain: tested ? 2 : 4,
-      };
-      logEvent("incident_started", tested ? "Minor Regression started; tests isolated the noisy path." : "Minor Regression started: CI noticed something unsettling.", { incident: "minor_regression" });
+      sfx("conflict");
+      return;
     }
+    const weights = incidentWeights(run);
+    let best = "minor_regression";
+    for (const [id, weight] of Object.entries(weights)) {
+      if (weight > weights[best]) best = id;
+    }
+    const drainBase = { critical_cve: 7, dependency_unpublish: 6, audit_pressure: 7, minor_regression: 4 }[best] || 4;
+    const drain = tested ? Math.max(2, drainBase - 3) : drainBase;
+    setIncident(best, null, drain);
+    logEvent("incident_started", `${incidents[best].name} started: ${incidents[best].blurb}`, { incident: best });
+  }
+
+  function incidentWeights(run) {
+    const cvePatched = run.mitigations.includes("cve_patched");
+    const riskRegistered = run.mitigations.includes("risk_registered") || run.mitigations.includes("audit_clean");
+    const securityRisks = run.risks.filter((r) => r.kind === "security").length;
+    const unpublishRisks = run.risks.filter((r) => r.kind === "unpublish").length;
+    const legacy = run.installedPackages.includes("legacy_auth") ? 1 : 0;
+    return {
+      critical_cve: securityRisks * 4 + legacy * 3 - (cvePatched ? 8 : 0),
+      dependency_unpublish: unpublishRisks * 5,
+      audit_pressure: (run.techDebt >= 16 ? 6 + Math.floor((run.techDebt - 16) / 8) : 0) - (riskRegistered ? 4 : 0),
+      minor_regression: 3,
+    };
+  }
+
+  function setIncident(id, cause, drain) {
+    game.run.incident = { id, name: incidents[id]?.name || id, cause: cause || null, stabilityDrain: drain };
+  }
+
+  function showIncidentChoice() {
+    const inc = incidents[game.run.incident?.id];
+    if (!inc || !inc.resolutions || !ui.incidentOverlay) return;
+    ui.incidentTitle.textContent = inc.name;
+    ui.incidentBlurb.textContent = inc.blurb;
+    ui.incidentChoices.innerHTML = "";
+    for (const res of inc.resolutions) {
+      const button = document.createElement("button");
+      button.className = "incident-card";
+      button.type = "button";
+      const h = document.createElement("h2");
+      h.textContent = res.label;
+      const immediate = document.createElement("p");
+      immediate.textContent = res.immediate;
+      const consequence = document.createElement("p");
+      consequence.className = "consequence";
+      const strong = document.createElement("b");
+      strong.textContent = "Consequence: ";
+      consequence.append(strong, res.consequence);
+      button.append(h, immediate, consequence);
+      button.addEventListener("click", () => resolveIncident(res));
+      ui.incidentChoices.appendChild(button);
+    }
+    ui.incidentOverlay.classList.remove("hidden");
+  }
+
+  function resolveIncident(res) {
+    const run = game.run;
+    run.incident.stabilityDrain = res.drain;
+    run.resolvedIncidents.push({ incident: run.incident.id, resolution: res.id });
+    logEvent("incident_resolved", `${run.incident.name}: chose "${res.label}".`, { incident: run.incident.id, resolution: res.id });
+    if (res.effects && res.effects.length) {
+      namespace.effects.applyEffectList(run, res.effects, { id: `incident:${run.incident.id}`, name: run.incident.name }, logEvent);
+    }
+    ui.incidentOverlay.classList.add("hidden");
+    renderAllUi();
   }
 
   function findActiveConflict() {
@@ -253,10 +473,32 @@
     choiceShown = true;
   }
 
+  // Offer a shuffled subset of the room's package pool (skipping already-installed
+  // packages) so each package room is a readable 3-4 card decision, not all 12.
+  function offeredPackages() {
+    const room = game.currentRoom;
+    const poolIds = (room && room.packagePool) || packages.map((p) => p.id);
+    const available = poolIds
+      .map((id) => packages.find((p) => p.id === id))
+      .filter(Boolean)
+      .filter((p) => !game.run.installedPackages.includes(p.id));
+    for (let i = available.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [available[i], available[j]] = [available[j], available[i]];
+    }
+    return available.slice(0, 4);
+  }
+
   function showPackageChoice() {
+    const offered = offeredPackages();
+    if (!offered.length) {
+      choiceShown = true;
+      logEvent("package_skipped", "No new package on offer here.");
+      return;
+    }
     ui.packageChoices.innerHTML = "";
-    activePreviewPackage = packages[0] || null;
-    for (const pkg of packages) {
+    activePreviewPackage = offered[0] || null;
+    for (const pkg of offered) {
       const button = document.createElement("button");
       button.className = "package-card";
       button.type = "button";
@@ -417,6 +659,7 @@
       return;
     }
     updatePlayer(dt);
+    updateDuck(dt);
     updateAttacks(dt);
     updateEnemies(dt);
     updateHitSparks(dt);
@@ -426,6 +669,10 @@
 
   function updateToolTimers(dt) {
     game.toolCooldowns.feature_flag = Math.max(0, game.toolCooldowns.feature_flag - dt);
+    game.toolCooldowns.rollback = Math.max(0, game.toolCooldowns.rollback - dt);
+    game.toolCooldowns.circuit_breaker = Math.max(0, game.toolCooldowns.circuit_breaker - dt);
+    if (game.circuitBreakerTimer > 0) game.circuitBreakerTimer = Math.max(0, game.circuitBreakerTimer - dt);
+    if (game.bossIntroTimer > 0) game.bossIntroTimer = Math.max(0, game.bossIntroTimer - dt);
     if (game.featureFlagTimer > 0) {
       game.featureFlagTimer = Math.max(0, game.featureFlagTimer - dt);
       if (game.featureFlagTimer === 0 && game.run.activeFlag) {
@@ -451,6 +698,7 @@
       game.dashGhosts.push({ x: p.x, y: p.y, facing: p.facing, life: 0.18, maxLife: 0.18 });
       p.x += p.facing * 96;
       p.dashTimer = game.run.stats.dashCooldown;
+      sfx("dash");
     }
     p.vy += 920 * dt;
     p.x = clamp(p.x + p.vx * dt, 92, 900);
@@ -522,6 +770,7 @@
       hitIds: [],
     });
     p.attackTimer = game.run.stats.fireRate;
+    sfx("swing");
   }
 
   function updateAttacks(dt) {
@@ -532,6 +781,11 @@
       shot.x += shot.vx * dt;
       shot.y += shot.vy * dt;
       shot.life -= dt;
+      // Circuit Breaker absorbs ordinary projectiles (not boss edge-arcs).
+      if (circuitBreakerActive() && !shot.arc) {
+        shot.life = 0;
+        continue;
+      }
       if (rectsOverlap(shot.x - 5, shot.y - 5, 10, 10, game.player.x, game.player.y - game.player.h, game.player.w, game.player.h)) {
         damagePlayer(shot.damage, `${shot.source} hit the Resolver.`);
         shot.life = 0;
@@ -547,17 +801,35 @@
         const dy = enemyCenterY - slash.y;
         const distance = Math.hypot(dx, dy);
         const withinArc = Math.abs(angleDiff(Math.atan2(dy, dx), slash.angle)) <= slash.arc / 2;
-        if (distance <= slash.range && withinArc) {
-          enemy.hp -= slash.damage;
-          slash.hitIds.push(enemy.id);
-          addHitSpark(enemyCenterX, enemyCenterY, enemyDefs[enemy.type].color);
-          if (enemy.hp <= 0) {
-            enemy.alive = false;
-            logEvent("enemy_defeated", `${enemy.name} patched out.`);
+        if (distance > slash.range || !withinArc) continue;
+        slash.hitIds.push(enemy.id);
+        // Shielded Version Conflict halves and armored bosses shrug off mistimed hits.
+        if (enemy.type === "version_conflict_half" && !enemy.exposed) {
+          addHitSpark(enemyCenterX, enemyCenterY, "#6b7280");
+          continue;
+        }
+        if (enemy.boss && enemy.armored) {
+          addHitSpark(enemyCenterX, enemyCenterY, "#6b7280");
+          sfx("bossHit");
+          continue;
+        }
+        enemy.hp -= slash.damage;
+        addHitSpark(enemyCenterX, enemyCenterY, enemyDefs[enemy.type].color);
+        sfx(enemy.boss ? "bossHit" : "hit");
+        if (enemy.hp <= 0) {
+          if (enemy.boss) {
+            defeatBoss(enemy);
+            break;
           }
+          const spawnedReplacement = onEnemyDeath(enemy);
+          enemy.alive = false;
+          logEvent("enemy_defeated", `${enemy.name} patched out.`);
+          sfx("enemyDeath");
+          void spawnedReplacement;
         }
       }
     }
+    flushPendingSpawns();
     game.slashes = game.slashes.filter((slash) => slash.life > 0);
     game.enemyShots = game.enemyShots.filter((shot) => shot.life > 0 && shot.x > -20 && shot.x < 1000);
   }
@@ -565,32 +837,426 @@
   function updateEnemies(dt) {
     for (const enemy of game.enemies) {
       if (!enemy.alive) continue;
-      const p = game.player;
-      const dir = Math.sign(p.x - enemy.x) || 1;
-      const flagSlow = featureFlagActive() ? 0.58 : 1;
-      const behaviorSpeed = (enemy.type === "memory_leak" ? enemy.speed + (enemy.maxHp - enemy.hp) * 0.5 : enemy.speed) * flagSlow;
-      enemy.x += dir * behaviorSpeed * dt;
-      enemy.x = clamp(enemy.x, 88, 900);
-      enemy.attackTimer -= dt;
-      enemy.contactTimer -= dt;
-      enemy.windupTimer -= dt;
-      enemy.telegraph = Math.max(0, enemy.telegraph - dt);
-      if (enemy.windupTimer <= 0 && enemy.windupTimer > -dt) {
-        if (Math.abs(game.player.x - enemy.x) < 64) {
-          damagePlayer(enemy.damage, `${enemy.name} collided with active code.`);
-        }
+      if (enemy.boss) { updateBoss(enemy, dt); continue; }
+      const handler = ENEMY_UPDATERS[enemy.type];
+      if (handler) handler(enemy, dt);
+      else updateGenericEnemy(enemy, dt);
+    }
+    flushPendingSpawns();
+    updateHazards(dt);
+  }
+
+  // Shared melee cadence: telegraph decrement + windup contact hit.
+  function tickTimers(enemy, dt) {
+    enemy.wasWindup = enemy.windupTimer > 0;
+    enemy.attackTimer -= dt;
+    enemy.contactTimer -= dt;
+    enemy.windupTimer -= dt;
+    enemy.telegraph = Math.max(0, enemy.telegraph - dt);
+  }
+
+  function contactWindup(enemy, reason, range = 46) {
+    const p = game.player;
+    if (enemy.wasWindup && enemy.windupTimer <= 0 && Math.abs(p.x - enemy.x) < range + 18) {
+      damagePlayer(enemy.damage, reason);
+    }
+    if (Math.abs(p.x - enemy.x) < range && enemy.attackTimer <= 0 && enemy.contactTimer <= 0) {
+      enemy.telegraph = 0.28;
+      enemy.windupTimer = 0.26;
+      enemy.attackTimer = 1.5;
+      enemy.contactTimer = 1.1;
+    }
+  }
+
+  function rangedVolley(enemy, dt, count) {
+    const p = game.player;
+    if (Math.abs(p.x - enemy.x) >= 46 && enemy.attackTimer <= 0.05 && enemy.contactTimer <= 0) {
+      enemy.attackTimer = featureFlagActive() ? 2.4 : 1.7;
+      enemy.telegraph = 0.32;
+      if (featureFlagActive() || circuitBreakerActive()) return;
+      const base = Math.atan2(p.y - enemy.y, p.x - enemy.x);
+      for (let i = 0; i < count; i += 1) {
+        const a = base + (i - (count - 1) / 2) * 0.18;
+        game.enemyShots.push({ x: enemy.x, y: enemy.y - 22, vx: Math.cos(a) * 220, vy: Math.sin(a) * 220, life: 2.4, damage: enemy.damage, source: enemy.name });
       }
-      if (Math.abs(p.x - enemy.x) < 46 && enemy.attackTimer <= 0 && enemy.contactTimer <= 0) {
-        enemy.telegraph = 0.28;
-        enemy.windupTimer = 0.26;
-        enemy.attackTimer = enemy.type === "breaking_change" ? 1.2 : 1.8;
-        enemy.contactTimer = 1.1;
-      } else if (enemy.type === "breaking_change" && enemy.attackTimer <= 0.05) {
-        enemy.attackTimer = featureFlagActive() ? 2.4 : 1.7;
-        enemy.telegraph = 0.32;
-        const angle = Math.atan2(p.y - enemy.y, p.x - enemy.x);
-        if (!featureFlagActive()) game.enemyShots.push({ x: enemy.x, y: enemy.y - 22, vx: Math.cos(angle) * 220, vy: Math.sin(angle) * 220, life: 2.4, damage: enemy.damage, source: enemy.name });
+    }
+  }
+
+  function updateGenericEnemy(enemy, dt) {
+    const p = game.player;
+    const flagSlow = featureFlagActive() ? 0.58 : 1;
+    const dir = Math.sign(p.x - enemy.x) || 1;
+    const growth = enemy.type === "memory_leak" ? (enemy.maxHp - enemy.hp) * 0.5 : 0;
+    enemy.x = clamp(enemy.x + dir * (enemy.speed + growth) * flagSlow * dt, 88, 900);
+    tickTimers(enemy, dt);
+    contactWindup(enemy, `${enemy.name} collided with active code.`);
+    if (enemy.type === "breaking_change") rangedVolley(enemy, dt, 1);
+  }
+
+  // Transitive Bug — smallest thing on screen; spreads to a linked enemy, or when
+  // alone infects a graph neighbour (registered risk + pin + debt).
+  function updateTransitiveBug(enemy, dt) {
+    const p = game.player;
+    const flagSlow = featureFlagActive() ? 0.58 : 1;
+    const kin = game.enemies.filter((e) => e.alive && e !== enemy && !e.boss && e.type !== "transitive_bug");
+    const mate = kin.sort((a, b) => Math.abs(a.x - enemy.x) - Math.abs(b.x - enemy.x))[0] || null;
+    enemy.infectTimer -= dt * flagSlow;
+    tickTimers(enemy, dt);
+    const chaseX = mate && enemy.infectTimer < 0.8 ? mate.x : p.x;
+    const dir = Math.sign(chaseX - enemy.x) || 1;
+    enemy.x = clamp(enemy.x + dir * enemy.speed * flagSlow * dt, 88, 900);
+    if (enemy.infectTimer <= 0.3 && enemy.telegraph <= 0) enemy.telegraph = 0.3;
+    if (enemy.infectTimer <= 0) {
+      if (mate && Math.abs(mate.x - enemy.x) < 70) {
+        mate.maxHp += 8; mate.hp += 8; mate.speed += 14; mate.infected = true;
+        logEvent("enemy_infected", `${enemy.name} spread to ${mate.name} (+8 HP / +14 spd).`);
+      } else {
+        const node = resolveLocationNode();
+        const nb = graphNeighbor(node) || node;
+        applyGraphEffects([
+          { op: "registerRisk", id: `transitive_${nb}`, kind: "cascade", target: nb, reason: "unpatched transitive bug propagated" },
+          { op: "pinNode", id: nb },
+        ], "enemy:transitive_bug");
+        game.run.techDebt += 3; game.run.debtTags.push("transitive_debt");
+        logEvent("graph_infected", `Transitive Bug reached ${nb}: risk registered, node pinned.`);
       }
+      enemy.infectTimer = 2.6;
+    }
+    contactWindup(enemy, `${enemy.name} bit through a transitive path.`);
+  }
+
+  // Version Conflict — advances as one mass until half HP, then forks into two
+  // incompatible halves that alternate a damage shield.
+  function updateVersionConflict(enemy, dt) {
+    const p = game.player;
+    const flagSlow = featureFlagActive() ? 0.58 : 1;
+    const dir = Math.sign(p.x - enemy.x) || 1;
+    enemy.x = clamp(enemy.x + dir * enemy.speed * flagSlow * dt, 88, 900);
+    tickTimers(enemy, dt);
+    enemy.seam = 1 - enemy.hp / enemy.maxHp;
+    if (!enemy.forked && enemy.hp <= enemy.maxHp * 0.5) { forkVersionConflict(enemy); return; }
+    contactWindup(enemy, `${enemy.name} demanded a matching version.`);
+  }
+
+  function forkVersionConflict(enemy) {
+    if (enemy.forked) return;
+    enemy.forked = true;
+    enemy.alive = false;
+    spawnEnemy("version_conflict_half", { x: clamp(enemy.x - 20, 100, 880), variant: "v1", color: "#ff2d55", phase: 0, coexist: 0 });
+    spawnEnemy("version_conflict_half", { x: clamp(enemy.x + 20, 100, 880), variant: "v2", color: "#ff8a3d", phase: Math.PI, coexist: 0 });
+    const node = resolveLocationNode();
+    const edge = ensureConflictEdge(node, "modern_crypto");
+    applyGraphEffects([
+      { op: "registerRisk", id: "version_conflict", kind: "upgrade", target: edge.id, reason: "incompatible versions forked in-flight" },
+    ], "enemy:version_conflict");
+    logEvent("enemy_split", "Version Conflict forked into v1 (red) and v2 (orange); they refuse to coexist.");
+    sfx("conflict");
+  }
+
+  function updateVersionHalf(enemy, dt) {
+    const p = game.player;
+    const flagSlow = featureFlagActive() ? 0.58 : 1;
+    enemy.shieldClock += dt;
+    const shimHold = game.run.installedPackages.includes("compatibility_shim") && enemy.variant === "v1";
+    enemy.exposed = Math.sin(enemy.shieldClock * 2.2 + enemy.phase) > 0 || featureFlagActive() || shimHold;
+    enemy.telegraph = enemy.exposed ? 0.2 : 0;
+    const sib = game.enemies.find((e) => e.alive && e.type === "version_conflict_half" && e !== enemy);
+    let d = Math.sign(p.x - enemy.x) || 1;
+    const near = sib && Math.abs(sib.x - enemy.x) < 40;
+    if (near) d = Math.sign(enemy.x - sib.x) || d; // repel — semver incompatibility
+    enemy.x = clamp(enemy.x + d * enemy.speed * flagSlow * dt, 88, 900);
+    tickTimers(enemy, dt);
+    // If they can't be pushed apart (cornered), they reconcile into an active conflict.
+    if (near) {
+      enemy.coexist = (enemy.coexist || 0) + dt;
+      enemy.telegraph = Math.max(enemy.telegraph, 0.2);
+      if (enemy.coexist > 2.5 && !game.vcReconciled) {
+        game.vcReconciled = true;
+        const edge = game.run.graph.edges.find((e) => e.relation === "conflicts");
+        if (edge) { edge.active = true; edge.visibility = "known"; }
+        game.run.techDebt += 6; game.run.debtTags.push("unreconciled_conflict");
+        logEvent("conflict_activated", "v1 and v2 reconciled into an active conflict. Build-failure pressure up.");
+        sfx("conflict");
+      }
+    } else {
+      enemy.coexist = 0;
+    }
+    contactWindup(enemy, `${enemy.name} forced an incompatible upgrade.`);
+  }
+
+  // Deprecated API — slow; paves the arena with deprecation zones and, if left
+  // alive too long, deprecates the current node.
+  function updateDeprecatedApi(enemy, dt) {
+    const p = game.player;
+    const flagSlow = featureFlagActive() ? 0.58 : 1;
+    const dir = Math.sign(p.x - enemy.x) || 1;
+    enemy.x = clamp(enemy.x + dir * enemy.speed * flagSlow * dt, 88, 900);
+    enemy.zoneTimer -= dt;
+    enemy.lifeClock += dt;
+    tickTimers(enemy, dt);
+    if (enemy.zoneTimer <= 0.4 && !enemy.stamping) { enemy.stamping = true; enemy.stampX = enemy.x; enemy.telegraph = 0.4; }
+    if (enemy.zoneTimer <= 0) {
+      addHazard(enemy.stampX ?? enemy.x, { dps: 4, life: 6, source: enemy.name });
+      enemy.zoneTimer = featureFlagActive() ? 3.4 : 2.0;
+      enemy.stamping = false;
+      logEvent("zone_dropped", `${enemy.name} shed a deprecation zone.`);
+    }
+    contactWindup(enemy, `${enemy.name} enforced a deprecation.`);
+    if (enemy.lifeClock > 10 && !enemy.deprecatedNode) {
+      enemy.deprecatedNode = true;
+      const node = resolveLocationNode();
+      applyGraphEffects([
+        { op: "registerRisk", id: `deprecation_${node}`, kind: "upgrade", target: node, reason: "deprecated API left in build too long" },
+        { op: "pinNode", id: node },
+        { op: "increaseDebt", amount: 6, tag: "deprecation_debt" },
+      ], "enemy:deprecated_api");
+      logEvent("graph_deprecated", `${node} marked deprecated. TDR +6 -> audit pressure.`);
+    }
+  }
+
+  // Dependency Cycle — oscillates so it can't be face-tanked; on death under debt
+  // it re-resolves into a regression (the cycle never fully breaks under debt).
+  function updateDependencyCycle(enemy, dt) {
+    const p = game.player;
+    const flagSlow = featureFlagActive() ? 0.58 : 1;
+    const gap = enemy.x - p.x;
+    if (Math.abs(gap) < 70) enemy.dir = Math.sign(gap) || 1;
+    else if (Math.abs(gap) > 210) enemy.dir = -(Math.sign(gap) || 1);
+    enemy.x = clamp(enemy.x + enemy.dir * enemy.speed * flagSlow * dt, 88, 900);
+    tickTimers(enemy, dt);
+    contactWindup(enemy, `${enemy.name} looped back through active code.`);
+    rangedVolley(enemy, dt, 1);
+  }
+
+  const ENEMY_UPDATERS = {
+    transitive_bug: updateTransitiveBug,
+    version_conflict: updateVersionConflict,
+    version_conflict_half: updateVersionHalf,
+    deprecated_api: updateDeprecatedApi,
+    dependency_cycle: updateDependencyCycle,
+  };
+
+  // Special on-death behaviour for non-boss enemies (spawn replacements, etc.).
+  function onEnemyDeath(enemy) {
+    if (enemy.type === "version_conflict" && !enemy.forked) {
+      forkVersionConflict(enemy);
+      return true;
+    }
+    if (enemy.type === "dependency_cycle" && game.run.techDebt >= 16) {
+      spawnEnemy("regression", { x: enemy.x });
+      logEvent("cycle_reresolved", "Dependency Cycle re-resolved into a Regression under debt.");
+      return true;
+    }
+    return false;
+  }
+
+  // --- Boss engine ---------------------------------------------------------
+
+  const BOSS_INTROS = {
+    major_version_upgrade: "every requires edge you left on an old node, due at once. Semver was a promise; this is the invoice.",
+    distributed_monolith: "every service you wired together, now sharing one health bar and one very bad mood.",
+  };
+
+  // Compute both boss scores from run state in a single pass (no double counting),
+  // select the higher above threshold (tie -> default), and record mutations.
+  function selectBoss() {
+    const run = game.run;
+    const upgradeRisks = run.risks.filter((r) => r.kind === "upgrade").length;
+    const cascadeRisks = run.risks.filter((r) => r.kind === "cascade").length;
+    const addedEdges = run.graph.edges.filter((e) => e.createdBy).length;
+    // Discrete addBossScore accumulation + structural signals not covered by it.
+    const major = 3 + run.bossScores.major_version_upgrade + run.pins.length + upgradeRisks; // +3 baseline old-runtime edges
+    const monolith = run.bossScores.distributed_monolith + addedEdges + cascadeRisks;
+    let boss = "major_version_upgrade";
+    if (monolith > major && monolith >= 5) boss = "distributed_monolith";
+    run.selectedBoss = boss;
+    const loser = boss === "major_version_upgrade" ? monolith : major;
+    run.bossMutations = [];
+    if (loser >= 3) run.bossMutations.push(boss === "major_version_upgrade" ? "coupled_cascade" : "brittle_pins");
+    if (run.techDebt >= 75) run.bossMutations.push(boss === "major_version_upgrade" ? "audit_debt" : "cascade_debt");
+    run.bossScoreSnapshot = { major, monolith, threshold: 5 };
+    logEvent("boss_selected", `${enemyDefs[boss].name} selected (upgrade pressure ${major} vs coupling ${monolith}).`, { boss });
+    return boss;
+  }
+
+  function prepareBossRoom() {
+    const bossId = selectBoss();
+    const def = enemyDefs[bossId];
+    if (bossId === "distributed_monolith") {
+      game.enemies = game.enemies.map((e) => (e.type === "breaking_change" ? makeEnemy({ type: "memory_leak", x: e.x, y: FLOOR_Y }, e.id) : e));
+    }
+    const boss = makeEnemy({ type: bossId, x: 680, y: FLOOR_Y }, `boss`);
+    boss.boss = true;
+    boss.armored = true;
+    boss.windowTimer = def.phases[0].windowEvery;
+    boss.windowOpen = 0;
+    boss.arcTimer = 2.4;
+    boss.summonTimer = 8;
+    boss.phaseIndex = 0;
+    boss.pendingArc = null;
+    game.enemies.push(boss);
+    game.boss = boss;
+    game.bossIntroTimer = 3.4;
+    logEvent("boss_started", `${def.name}: ${BOSS_INTROS[bossId] || ""}`, { boss: bossId });
+  }
+
+  function updateBoss(boss, dt) {
+    const def = enemyDefs[boss.type];
+    const p = game.player;
+    const frac = boss.hp / boss.maxHp;
+    let phaseIndex = 0;
+    for (let i = 0; i < def.phases.length; i += 1) if (frac <= def.phases[i].at) phaseIndex = i;
+    if (phaseIndex !== boss.phaseIndex) {
+      boss.phaseIndex = phaseIndex;
+      logEvent("boss_phase", `${def.name} entered ${def.phases[phaseIndex].name}.`);
+    }
+    const phase = def.phases[boss.phaseIndex];
+
+    boss.x += Math.sign(680 - boss.x) * def.speed * 0.4 * dt;
+    boss.telegraph = Math.max(0, boss.telegraph - dt);
+
+    // Vulnerability window cycle — armored except during the compatibility window.
+    if (boss.windowOpen > 0) {
+      boss.windowOpen -= dt;
+      boss.armored = false;
+      if (boss.windowOpen <= 0) boss.armored = true;
+    } else {
+      boss.windowTimer -= dt;
+      if (boss.windowTimer <= 0) {
+        boss.windowOpen = phase.windowFor;
+        boss.windowTimer = phase.windowEvery;
+        boss.armored = false;
+        boss.telegraph = 0.5;
+        game.run.bossStats.safeWindows += 1;
+        logEvent("boss_window", `${def.name} exposed a compatibility window.`);
+      }
+    }
+
+    // Edge-travelling arc attack (telegraph -> launch along a real graph edge).
+    if (boss.pendingArc) {
+      boss.pendingArc.delay -= dt;
+      if (boss.pendingArc.delay <= 0) {
+        launchArc(boss, def);
+        boss.pendingArc = null;
+      }
+    }
+    boss.arcTimer -= dt;
+    if (boss.arcTimer <= 0) {
+      boss.arcTimer = phase.arcEvery;
+      if (!featureFlagActive() && !boss.pendingArc) {
+        const edgeId = def.edges.find((id) => game.run.graph.edges.some((e) => e.id === id)) || def.edges[0];
+        boss.pendingArc = { delay: 0.5, edgeId };
+        boss.telegraph = 0.5;
+        game.bossLitEdge = { id: edgeId, life: 1.0 };
+        sfx("bossEdgeAttack");
+        logEvent("boss_arc", `${def.name} charged a break along ${edgeId}.`);
+      }
+    }
+
+    // Phase summons.
+    if (phase.summon) {
+      boss.summonTimer -= dt;
+      if (boss.summonTimer <= 0) {
+        boss.summonTimer = 8;
+        spawnEnemy(phase.summon, { x: p.x > 480 ? 210 : 760 });
+        logEvent("boss_summon", `${def.name} summoned ${enemyDefs[phase.summon].name}.`);
+      }
+    }
+
+    if (game.bossLitEdge) {
+      game.bossLitEdge.life -= dt;
+      if (game.bossLitEdge.life <= 0) game.bossLitEdge = null;
+    }
+
+    tickTimers(boss, dt);
+    contactWindup(boss, `${def.name} rolled over active code.`, 70);
+  }
+
+  function launchArc(boss, def) {
+    const p = game.player;
+    const dirX = Math.sign(p.x - boss.x) || -1;
+    const damage = Math.round(def.damage * 0.7);
+    game.enemyShots.push({ x: boss.x, y: FLOOR_Y - 26, vx: dirX * 300, vy: 0, life: 3, damage, source: `${def.name} break`, arc: true });
+  }
+
+  function defeatBoss(enemy) {
+    enemy.alive = false;
+    game.run.bossStats.defeated = enemy.type;
+    logEvent("boss_defeated", `${enemy.name} defeated. Release candidate shipped.`, { boss: enemy.type });
+    endRun(true, `Defeated ${enemy.name}; the release shipped.`);
+  }
+
+  // --- Active tools: Rollback (R), Circuit Breaker (C) ----------------------
+
+  function circuitBreakerActive() {
+    return game.circuitBreakerTimer > 0;
+  }
+
+  function useRollback() {
+    if (!game.run.tools.includes("rollback")) {
+      logEvent("tool_unavailable", "Rollback not installed.");
+      renderAllUi();
+      return;
+    }
+    if (game.run.risks.some((r) => r.kind === "upgrade")) {
+      logEvent("tool_blocked", "Rollback blocked: a registered upgrade/migration risk cannot be un-shipped.");
+      renderAllUi();
+      return;
+    }
+    if (game.toolCooldowns.rollback > 0) return;
+    game.toolCooldowns.rollback = 12;
+    const before = Math.round(game.run.stability);
+    game.run.stability = Math.min(100, game.run.stability + 15);
+    game.enemyShots.length = 0;
+    game.hazards.length = 0;
+    game.run.techDebt += 4;
+    game.run.debtTags.push("rollback_drift");
+    game.run.bossStats.rolledBack += 1;
+    logEvent("rollback_used", `Rollback restored Stability ${before} -> ${Math.round(game.run.stability)} and cleared the wave. TDR +4.`);
+    renderAllUi();
+  }
+
+  function useCircuitBreaker() {
+    if (!game.run.tools.includes("circuit_breaker")) {
+      logEvent("tool_unavailable", "Circuit Breaker not installed.");
+      renderAllUi();
+      return;
+    }
+    if (game.toolCooldowns.circuit_breaker > 0 || game.circuitBreakerTimer > 0) return;
+    game.circuitBreakerTimer = 4;
+    game.toolCooldowns.circuit_breaker = 10;
+    game.enemyShots = game.enemyShots.filter((s) => s.arc);
+    logEvent("circuit_breaker_used", "Circuit Breaker tripped: projectiles blocked and cascade halted for 4s.");
+    renderAllUi();
+  }
+
+  // Rubber Duck — hold still to surface one hidden edge/node.
+  function updateDuck(dt) {
+    if (!game.run.tools.includes("rubber_duck")) return;
+    const p = game.player;
+    const still = Math.abs(p.vx) < 1 && p.y >= FLOOR_Y && game.roomIntroTimer <= 0;
+    if (!still) { game.duckHoldTimer = 0; return; }
+    game.duckHoldTimer += dt;
+    if (game.duckHoldTimer >= 1.6) {
+      game.duckHoldTimer = 0;
+      revealOneHidden();
+    }
+  }
+
+  function revealOneHidden() {
+    const run = game.run;
+    const edge = run.graph.edges.find((e) => e.visibility === "hidden");
+    if (edge) {
+      edge.visibility = "suspected";
+      logEvent("graph_revealed", `Rubber Duck surfaced a hidden edge: ${edge.source} ${edge.relation} ${edge.target}.`, { edge: edge.id });
+      renderAllUi();
+      return;
+    }
+    const node = run.graph.nodes.find((n) => n.hidden);
+    if (node) {
+      node.hidden = false;
+      logEvent("graph_revealed", `Rubber Duck surfaced hidden node ${node.name}.`, { node: node.id });
+      renderAllUi();
     }
   }
 
@@ -622,9 +1288,13 @@
 
   function applyRoomReward(reward, roomId) {
     if (reward.stability) game.run.stability = Math.min(100, game.run.stability + reward.stability);
-    if (reward.observability) game.run.observability = Math.min(5, game.run.observability + reward.observability);
+    if (reward.observability) game.run.observability = Math.max(0, Math.min(5, game.run.observability + reward.observability));
     if (reward.techDebt) game.run.techDebt = Math.max(0, game.run.techDebt + reward.techDebt);
     if (reward.text) logEvent("room_reward", reward.text, { room: roomId });
+    if (reward.effects) {
+      const room = roomById.get(roomId);
+      namespace.effects.applyEffectList(game.run, reward.effects, { id: roomId, name: room?.name || roomId }, logEvent);
+    }
   }
 
   function advanceFromRoom(room) {
@@ -652,6 +1322,7 @@
     game.player.invulnTimer = 0.75;
     hitFreezeTimer = 0.06;
     addHitSpark(game.player.x, game.player.y - 24, "#dfffee");
+    sfx("playerHit");
     logEvent("stability_damage", `${reason} Stability -${adjusted}.`);
     renderAllUi();
     if (game.run.stability <= 0) endRun(false, reason);
@@ -698,6 +1369,7 @@
     ui.debtBar.style.width = `${Math.min(100, run.techDebt)}%`;
     ui.debtValue.textContent = String(run.techDebt);
     ui.eventLog.innerHTML = run.eventLog.slice(-9).map((event) => `<li>${event.text}</li>`).join("");
+    syncAudioState();
     renderGraph();
     if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
     if (!ui.routeOverlay.classList.contains("hidden")) renderRouteGraph();
@@ -745,10 +1417,54 @@
         showRouteChoice(availableRoutes(game.currentRoom));
         return;
       }
+      if (mode === "boss") {
+        game.run.bossScores.major_version_upgrade += 4;
+        game.run.pins.push("libglitch");
+        loadRoom("release_boss");
+        game.roomIntroTimer = 0;
+        return;
+      }
+      if (mode === "monolith") {
+        game.run.bossScores.distributed_monolith += 8;
+        loadRoom("release_boss");
+        game.roomIntroTimer = 0;
+        return;
+      }
+      if (mode === "incident") {
+        game.run.techDebt = 22;
+        loadRoom("staging_incident");
+        game.roomIntroTimer = 0;
+        return;
+      }
+      if (mode.startsWith("room:")) {
+        loadRoom(mode.slice(5));
+        game.roomIntroTimer = 0;
+        return;
+      }
       if (mode === "report") {
         seedVisualSmokeReport();
       }
+      if (mode === "win") {
+        seedVisualSmokeWin();
+      }
     }, 0);
+  }
+
+  function seedVisualSmokeWin() {
+    const run = game.run;
+    for (const id of ["test_suite", "containerization"]) {
+      const pkg = packages.find((p) => p.id === id);
+      if (pkg && !run.installedPackages.includes(id)) {
+        run.installedPackages.push(id);
+        applyPackageEffects(run, pkg, logEvent);
+      }
+    }
+    run.bossScores.major_version_upgrade += 4;
+    selectBoss();
+    run.bossStats.defeated = run.selectedBoss;
+    run.bossStats.safeWindows = 6;
+    run.bossStats.rolledBack = 1;
+    endRun(true, `Defeated ${enemyDefs[run.selectedBoss].name}; the release shipped.`);
   }
 
   function seedVisualSmokeReport() {
@@ -785,7 +1501,7 @@
   }
 
   function isOverlayOpen() {
-    return !ui.choiceOverlay.classList.contains("hidden") || !ui.routeOverlay.classList.contains("hidden") || !ui.reportOverlay.classList.contains("hidden") || !ui.graphOverlay.classList.contains("hidden");
+    return !ui.choiceOverlay.classList.contains("hidden") || !ui.routeOverlay.classList.contains("hidden") || !ui.reportOverlay.classList.contains("hidden") || !ui.graphOverlay.classList.contains("hidden") || (ui.incidentOverlay && !ui.incidentOverlay.classList.contains("hidden"));
   }
 
   function draw() {
@@ -793,13 +1509,32 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBackdrop(room);
     drawPlatforms();
+    drawHazards();
     drawAttacks();
     drawEnemies();
     drawDashGhosts();
     drawPlayer();
     drawHitSparks();
     drawRoomTitle(room);
+    drawBossHud();
     drawRoomBanner(room);
+    drawBossIntro();
+  }
+
+  function drawHazards() {
+    const t = performance.now() / 300;
+    for (const hz of game.hazards) {
+      const life = Math.max(0, hz.life / hz.maxLife);
+      ctx.save();
+      ctx.globalAlpha = 0.18 + life * 0.22 + Math.sin(t) * 0.05;
+      ctx.fillStyle = "#ffa62b";
+      ctx.fillRect(hz.x - hz.w / 2, GROUND_TOP - hz.h, hz.w, hz.h);
+      ctx.globalAlpha = 0.6 * life;
+      ctx.strokeStyle = "#ffcf66";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hz.x - hz.w / 2, GROUND_TOP - hz.h, hz.w, hz.h);
+      ctx.restore();
+    }
   }
 
   function drawBackdrop(room) {
@@ -1034,37 +1769,133 @@
   function drawEnemies() {
     for (const enemy of game.enemies) {
       if (!enemy.alive) continue;
+      if (enemy.boss) { drawBoss(enemy); continue; }
       const def = enemyDefs[enemy.type];
+      const shielded = enemy.type === "version_conflict_half" && !enemy.exposed;
       ctx.save();
       ctx.translate(enemy.x, enemy.y);
-      if (enemy.telegraph > 0) {
+      if (enemy.telegraph > 0 && !shielded) {
         ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(0, -enemy.h / 2, enemy.w + 12, 0, Math.PI * 2);
         ctx.stroke();
       }
+      if (enemy.type === "version_conflict_half") {
+        ctx.strokeStyle = shielded ? "rgba(120,130,140,0.85)" : "rgba(255,255,255,0.95)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash(shielded ? [4, 4] : []);
+        ctx.beginPath();
+        ctx.arc(0, -enemy.h / 2, enemy.w + 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (shielded) ctx.globalAlpha = 0.5;
       const scale = enemy.type === "memory_leak" ? 1 + (enemy.maxHp - enemy.hp) / 120 : 1;
       ctx.scale(scale, scale);
       drawEnemySprite(enemy, def);
       ctx.restore();
       ctx.fillStyle = "rgba(223,255,238,0.18)";
       ctx.fillRect(enemy.x - 22, enemy.y - enemy.h - 14, 44, 4);
-      ctx.fillStyle = def.color;
+      ctx.fillStyle = enemy.color || def.color;
       ctx.fillRect(enemy.x - 22, enemy.y - enemy.h - 14, 44 * Math.max(0, enemy.hp / enemy.maxHp), 4);
     }
   }
 
   function drawEnemySprite(enemy, def) {
-    if (enemy.type === "breaking_change") {
-      drawBreakingChangeSprite(def.color, enemy.telegraph > 0);
-      return;
-    }
-    if (enemy.type === "memory_leak") {
-      drawMemoryLeakSprite(def.color, enemy.telegraph > 0);
-      return;
-    }
-    drawRegressionSprite(def.color, enemy.telegraph > 0);
+    const color = enemy.color || def.color;
+    const angry = enemy.telegraph > 0;
+    if (enemy.type === "breaking_change") return drawBreakingChangeSprite(color, angry);
+    if (enemy.type === "memory_leak") return drawMemoryLeakSprite(color, angry);
+    if (enemy.type === "transitive_bug") return drawTransitiveBugSprite(color, angry);
+    if (enemy.type === "version_conflict") return drawVersionConflictSprite(color, angry, enemy.seam || 0);
+    if (enemy.type === "version_conflict_half") return drawVersionHalfSprite(color, angry);
+    if (enemy.type === "deprecated_api") return drawDeprecatedApiSprite(color, angry);
+    if (enemy.type === "dependency_cycle") return drawDependencyCycleSprite(color, angry);
+    return drawRegressionSprite(color, angry);
+  }
+
+  function drawTransitiveBugSprite(color, angry) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = angry ? 20 : 10;
+    ctx.beginPath();
+    ctx.moveTo(0, -18); ctx.lineTo(9, -9); ctx.lineTo(0, 0); ctx.lineTo(-9, -9);
+    ctx.closePath();
+    ctx.fill();
+    drawBugLegs(color, 12, -4);
+    ctx.restore();
+  }
+
+  function drawVersionConflictSprite(color, angry, seam) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = angry ? 24 : 12;
+    ctx.fillRect(-15, -26, 30, 22);
+    ctx.fillRect(-9, -32, 18, 8);
+    // widening central crack
+    ctx.fillStyle = "#ffe0e6";
+    ctx.fillRect(-1 - seam * 2, -30, 2 + seam * 4, 26);
+    ctx.fillStyle = "#03070a";
+    ctx.fillRect(-9, -20, 4, 5);
+    ctx.fillRect(5, -20, 4, 5);
+    ctx.restore();
+  }
+
+  function drawVersionHalfSprite(color, angry) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = angry ? 18 : 8;
+    ctx.fillRect(-8, -18, 16, 16);
+    ctx.fillRect(-5, -22, 10, 6);
+    ctx.restore();
+  }
+
+  function drawDeprecatedApiSprite(color, angry) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = angry ? 22 : 11;
+    ctx.fillRect(-18, -34, 36, 30);
+    ctx.fillRect(-12, -42, 24, 10);
+    // crumbling flakes
+    ctx.fillStyle = "rgba(3,7,10,0.55)";
+    ctx.fillRect(-14, -28, 7, 7);
+    ctx.fillRect(6, -20, 6, 8);
+    ctx.fillRect(-4, -14, 8, 6);
+    // deprecation underline
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(-20, -2); ctx.lineTo(20, -2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function drawDependencyCycleSprite(color, angry) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = angry ? 22 : 11;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, -15, 13, 0.5, Math.PI * 2);
+    ctx.stroke();
+    // arrowhead closing the loop
+    ctx.beginPath();
+    ctx.moveTo(11, -20); ctx.lineTo(15, -13); ctx.lineTo(6, -13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#03070a";
+    ctx.fillRect(-6, -18, 4, 5);
+    ctx.fillRect(3, -18, 4, 5);
+    ctx.restore();
   }
 
   function drawRegressionSprite(color, angry) {
@@ -1171,8 +2002,21 @@
       ctx.stroke();
       ctx.restore();
     }
-    ctx.fillStyle = "#ffcf66";
     for (const shot of game.enemyShots) {
+      if (shot.arc) {
+        ctx.save();
+        ctx.strokeStyle = "#ff6a8a";
+        ctx.lineWidth = 5;
+        ctx.shadowColor = "#ff2d55";
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.moveTo(shot.x - Math.sign(shot.vx) * 22, shot.y);
+        ctx.lineTo(shot.x, shot.y);
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
+      ctx.fillStyle = "#ffcf66";
       ctx.beginPath();
       ctx.rect(shot.x - 5, shot.y - 5, 10, 10);
       ctx.fill();
@@ -1196,6 +2040,127 @@
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  function drawBoss(boss) {
+    const def = enemyDefs[boss.type];
+    const pulse = 0.5 + Math.sin(performance.now() / 260) * 0.5;
+    const vulnerable = !boss.armored;
+    ctx.save();
+    // Break-arc warning lane during telegraph / pending arc.
+    if (boss.pendingArc || boss.telegraph > 0.02) {
+      ctx.strokeStyle = "rgba(255,45,85,0.45)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.moveTo(90, FLOOR_Y - 26);
+      ctx.lineTo(910, FLOOR_Y - 26);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.translate(boss.x, boss.y);
+    const w = def.w;
+    const h = def.h;
+    ctx.shadowColor = def.color;
+    ctx.shadowBlur = vulnerable ? 34 : 16;
+    ctx.fillStyle = vulnerable ? "#ffe6a0" : def.color;
+    ctx.strokeStyle = def.color;
+    ctx.lineWidth = 3;
+    if (boss.type === "distributed_monolith") {
+      ctx.strokeStyle = "rgba(122,168,255,0.5)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -h / 2);
+        ctx.lineTo(Math.cos(a) * (w / 2 + 24), -h / 2 + Math.sin(a) * (h / 2 + 18));
+        ctx.stroke();
+      }
+      ctx.fillStyle = vulnerable ? "#ffe6a0" : def.color;
+      ctx.beginPath();
+      ctx.ellipse(0, -h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+        const x = Math.cos(a) * (w / 2);
+        const y = -h / 2 + Math.sin(a) * (h / 2);
+        if (i) ctx.lineTo(x, y);
+        else ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#2a1140";
+      for (let i = 0; i < 3; i += 1) ctx.fillRect(-14, -h / 2 - 6 + i * 10, 28, 4);
+    }
+    const ringColor = vulnerable ? `rgba(255,230,160,${0.5 + pulse * 0.4})` : "rgba(200,220,255,0.55)";
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = vulnerable ? 3 : 2;
+    ctx.beginPath();
+    ctx.arc(0, -h / 2, w / 2 + (vulnerable ? 10 + pulse * 4 : 6), 0, Math.PI * 2);
+    ctx.stroke();
+    if (boss.telegraph > 0) {
+      ctx.strokeStyle = "rgba(255,255,255,0.9)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, -h / 2, w / 2 + 18, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawBossHud() {
+    const boss = game.boss;
+    if (!boss || !boss.alive) return;
+    const def = enemyDefs[boss.type];
+    const frac = Math.max(0, boss.hp / boss.maxHp);
+    const bx = 200;
+    const bw = 560;
+    const by = 42;
+    ctx.save();
+    ctx.fillStyle = "rgba(3,10,14,0.82)";
+    ctx.fillRect(bx - 3, by - 3, bw + 6, 18);
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    ctx.fillRect(bx, by, bw, 12);
+    ctx.fillStyle = def.color;
+    ctx.shadowColor = def.color;
+    ctx.shadowBlur = 10;
+    ctx.fillRect(bx, by, bw * frac, 12);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#dfffee";
+    ctx.font = "12px Courier New";
+    ctx.textAlign = "center";
+    const phase = def.phases[boss.phaseIndex]?.name || "";
+    const state = boss.armored ? "ARMORED — wait for the window" : "VULNERABLE — strike now";
+    ctx.fillText(`${def.name.toUpperCase()}  ·  ${phase}  ·  ${state}`, bx + bw / 2, by - 6);
+    ctx.textAlign = "left";
+    ctx.restore();
+  }
+
+  function drawBossIntro() {
+    if (!game.boss || game.bossIntroTimer <= 0) return;
+    const def = enemyDefs[game.boss.type];
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, game.bossIntroTimer / 1.0 + 0.1);
+    ctx.fillStyle = "rgba(3,8,12,0.85)";
+    ctx.fillRect(150, 150, 660, 122);
+    ctx.strokeStyle = def.color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(150, 150, 660, 122);
+    ctx.fillStyle = def.color;
+    ctx.font = "12px Courier New";
+    ctx.fillText("ADAPTIVE BOSS", 176, 176);
+    ctx.fillStyle = "#dfffee";
+    ctx.font = "26px Courier New";
+    ctx.fillText(def.name.toUpperCase(), 176, 208);
+    ctx.fillStyle = "#7ccfc4";
+    ctx.font = "12px Courier New";
+    const snap = game.run.bossScoreSnapshot;
+    if (snap) ctx.fillText(`upgrade pressure ${snap.major} vs coupling ${snap.monolith} (threshold ${snap.threshold})`, 176, 232);
+    ctx.fillText((BOSS_INTROS[game.boss.type] || "").slice(0, 74), 176, 252);
+    ctx.restore();
   }
 
   function drawRoomTitle(room) {
@@ -1391,10 +2356,28 @@ function startSideErrorRail() {
 
 
 
+  function updateMuteButton() {
+    if (!ui.muteButton) return;
+    const muted = audio.isMuted();
+    ui.muteButton.textContent = muted ? "SOUND OFF" : "SOUND ON";
+    ui.muteButton.setAttribute("aria-pressed", muted ? "true" : "false");
+  }
+
+  function wakeAudio() {
+    if (!audio.isMuted()) audio.start();
+  }
+  window.addEventListener("keydown", wakeAudio, { once: true });
+  window.addEventListener("mousedown", wakeAudio, { once: true });
+
   window.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
       event.preventDefault();
+    }
+    if (key === "m") {
+      audio.toggleMute();
+      updateMuteButton();
+      return;
     }
     if (key === "escape" && !ui.graphOverlay.classList.contains("hidden")) {
       closeGraphOverlay();
@@ -1414,6 +2397,16 @@ function startSideErrorRail() {
       useFeatureFlag();
       return;
     }
+    if (key === "r" && !isOverlayOpen()) {
+      event.preventDefault();
+      useRollback();
+      return;
+    }
+    if (key === "c" && !isOverlayOpen()) {
+      event.preventDefault();
+      useCircuitBreaker();
+      return;
+    }
     keys.add(key);
   });
   window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
@@ -1429,6 +2422,13 @@ function startSideErrorRail() {
   window.addEventListener("mouseup", () => (mouse.down = false));
   ui.restartButton.addEventListener("click", resetGame);
   ui.reportRestartButton.addEventListener("click", resetGame);
+  if (ui.muteButton) {
+    ui.muteButton.addEventListener("click", () => {
+      audio.toggleMute();
+      updateMuteButton();
+    });
+  }
+  updateMuteButton();
   ui.graphInspectButton.addEventListener("click", openGraphOverlay);
   ui.graphSvg.addEventListener("click", openGraphOverlay);
   ui.graphCloseButton.addEventListener("click", closeGraphOverlay);

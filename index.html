@@ -42,7 +42,10 @@
             <div class="track"><i id="debtBar"></i></div>
             <b id="debtValue">0</b>
           </div>
-          <button id="restartButton" type="button" title="Start a new run">NEW RUN</button>
+          <div class="hud-buttons">
+            <button id="restartButton" type="button" title="Start a new run">NEW RUN</button>
+            <button id="muteButton" type="button" title="Toggle sound (M)" aria-pressed="false">SOUND ON</button>
+          </div>
         </section>
 
         <aside class="graph-card" aria-label="Dependency graph">
@@ -108,6 +111,17 @@
           </div>
         </section>
 
+        <section id="incidentOverlay" class="overlay hidden" aria-label="Incident triage">
+          <div class="route-frame">
+            <header>
+              <p class="kicker">INCIDENT TRIAGE</p>
+              <h1 id="incidentTitle">Incident</h1>
+              <p id="incidentBlurb">A consequence arrived.</p>
+            </header>
+            <div id="incidentChoices" class="route-choices"></div>
+          </div>
+        </section>
+
         <section id="choiceOverlay" class="overlay hidden" aria-label="Package selection">
           <div class="choice-frame">
             <div class="choice-header">
@@ -148,7 +162,10 @@
         <span>Strike <b>Mouse</b> or <b>Space</b></span>
         <span>Dash <b>Shift</b></span>
         <span>Flag <b>F</b></span>
+        <span>Rollback <b>R</b></span>
+        <span>Breaker <b>C</b></span>
         <span>Graph <b>G</b></span>
+        <span>Sound <b>M</b></span>
       </footer>
     </main>
     <script src="./scripts/constants.js"></script>
@@ -158,6 +175,7 @@
     <script src="./scripts/reports.js"></script>
     <script src="./scripts/effects.js"></script>
     <script src="./scripts/graph.js"></script>
+    <script src="./scripts/audio.js"></script>
     <script src="./scripts/game.js"></script>
   </body>
 </html>
