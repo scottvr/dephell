@@ -166,6 +166,12 @@
     flagExpire: () => { tone({ type: "square", from: 620, to: 300, attack: 0.006, hold: 0.03, release: 0.12, peak: 0.1 }); },
     pin: () => { tone({ type: "square", from: 300, to: 300, attack: 0.002, hold: 0.02, release: 0.05, peak: 0.14 }); later(0.05, () => tone({ type: "square", from: 300, to: 300, attack: 0.002, hold: 0.02, release: 0.05, peak: 0.1 })); },
 
+    // UI navigation (five-cue console vocabulary — dry terminal timbres)
+    uiMove: () => { tone({ type: "square", from: 660, to: 660, attack: 0.001, hold: 0.012, release: 0.03, peak: 0.06 }); },
+    uiConfirm: () => { tone({ type: "triangle", from: 520, to: 780, attack: 0.004, hold: 0.04, release: 0.1, peak: 0.13 }); duck(0.6, 130); },
+    uiBack: () => { tone({ type: "triangle", from: 420, to: 240, attack: 0.004, hold: 0.03, release: 0.09, peak: 0.1 }); },
+    uiInvalid: () => { tone({ type: "sawtooth", from: 300, to: 90, attack: 0.004, hold: 0.04, release: 0.12, peak: 0.11, detune: 20 }); },
+
     // Flow
     routeSelect: () => { tone({ type: "triangle", from: 500, to: 750, attack: 0.008, hold: 0.05, release: 0.12, peak: 0.14 }); },
     roomEnter: () => { tone({ type: "sine", from: 300, to: 400, attack: 0.02, hold: 0.06, release: 0.18, peak: 0.1 }); },

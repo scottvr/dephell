@@ -48,6 +48,15 @@
     incidentChoices: document.querySelector("#incidentChoices"),
     choiceOverlay: document.querySelector("#choiceOverlay"),
     packageChoices: document.querySelector("#packageChoices"),
+    choiceStage: document.querySelector("#choiceStage"),
+    choicePillCur: document.querySelector("#choicePillCur"),
+    choicePillTot: document.querySelector("#choicePillTot"),
+    choiceDots: document.querySelector("#choiceDots"),
+    choiceChevL: document.querySelector("#choiceChevL"),
+    choiceChevR: document.querySelector("#choiceChevR"),
+    choiceArrowL: document.querySelector("#choiceArrowL"),
+    choiceArrowR: document.querySelector("#choiceArrowR"),
+    choicePad: document.querySelector("#choicePad"),
     reportOverlay: document.querySelector("#reportOverlay"),
     reportKicker: document.querySelector("#reportKicker"),
     reportTitle: document.querySelector("#reportTitle"),
@@ -89,6 +98,12 @@
   let activeRouteChoice = null;
   let selectedGraphEntity = null;
   let activePreviewPackage = null;
+  let focusedIndex = 0;
+  let offeredList = [];
+  let packageInspecting = false;
+  let committingPackage = false;
+  const padPrev = { buttons: [] };
+  const padStickHold = { l: 0, r: 0 };
   let hitFreezeTimer = 0;
   let lastDebtBand = 0;
   let game;
@@ -469,8 +484,15 @@
     logEvent("package_installed", `Installed ${pkg.name}.`, { package: pkg.id });
     applyPackageEffects(run, pkg, logEvent);
     activePreviewPackage = null;
+    offeredList = [];
+    packageInspecting = false;
+    committingPackage = false;
+    ui.choiceStage.classList.remove("inspecting");
     renderAllUi();
     ui.choiceOverlay.classList.add("hidden");
+    // If the graph inspector was stacked over the choice (via G), close it too —
+    // otherwise a keyboard commit orphans it and isOverlayOpen() keeps update() paused.
+    if (!ui.graphOverlay.classList.contains("hidden")) closeGraphOverlay();
     choiceShown = true;
   }
 
@@ -490,6 +512,9 @@
     return available.slice(0, 4);
   }
 
+  // Controller-first package carousel: one hero card in focus, siblings peek.
+  // A single focusedIndex is the source of truth — pad/arrows MOVE it, clicks
+  // promote a neighbor to hero, and commit always acts on offeredList[focusedIndex].
   function showPackageChoice() {
     const offered = offeredPackages();
     if (!offered.length) {
@@ -497,13 +522,19 @@
       logEvent("package_skipped", "No new package on offer here.");
       return;
     }
+    offeredList = offered;
+    focusedIndex = 0;
+    packageInspecting = false;
+    committingPackage = false;
+    ui.choiceStage.classList.remove("inspecting");
     ui.packageChoices.innerHTML = "";
-    activePreviewPackage = offered[0] || null;
-    for (const pkg of offered) {
+    offered.forEach((pkg, index) => {
       const button = document.createElement("button");
       button.className = "package-card";
       button.type = "button";
       button.dataset.packageId = pkg.id;
+      button.dataset.index = String(index);
+      button.setAttribute("role", "option");
       button.innerHTML = `
         <span class="package-icon" aria-hidden="true">${packageIcon(pkg)}</span>
         <span class="package-copy">
@@ -516,28 +547,90 @@
         <p class="preview-copy"><b>Preview:</b> ${packagePreviewText(pkg)}</p>
         <div class="tag-row">${pkg.tags.map((tag) => `<span class="tag">${tag}</span>`).join("")}</div>
       `;
-      button.addEventListener("click", () => applyPackage(pkg));
-      button.addEventListener("mouseenter", () => previewPackage(pkg));
-      button.addEventListener("focus", () => previewPackage(pkg));
+      button.addEventListener("click", () => {
+        if (index === focusedIndex) commitPackage();
+        else setPackageFocus(index, index < focusedIndex ? -1 : 1);
+      });
       ui.packageChoices.appendChild(button);
-    }
-    syncPackagePreviewState();
-    renderChoiceGraph();
+    });
+    setPackageFocus(0, 0, true);
     ui.choiceOverlay.classList.remove("hidden");
   }
 
-  function previewPackage(pkg) {
-    activePreviewPackage = pkg;
-    syncPackagePreviewState();
-    renderGraph();
-    renderChoiceGraph();
-    if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
+  function packageCards() {
+    return ui.packageChoices.querySelectorAll(".package-card");
   }
 
-  function syncPackagePreviewState() {
-    for (const card of ui.packageChoices.querySelectorAll(".package-card")) {
-      card.classList.toggle("previewing", card.dataset.packageId === activePreviewPackage?.id);
+  function setPackageFocus(index, dir, silent) {
+    const n = offeredList.length;
+    if (!n || committingPackage) return;
+    if (index < 0 || index > n - 1) {
+      const cur = packageCards()[focusedIndex];
+      if (cur) { cur.classList.remove("nudge"); void cur.offsetWidth; cur.classList.add("nudge"); }
+      if (!silent) sfx("uiInvalid");
+      return;
     }
+    if (index === focusedIndex && !silent) return;
+    focusedIndex = index;
+    activePreviewPackage = offeredList[index] || null;
+    if (packageInspecting) { packageInspecting = false; ui.choiceStage.classList.remove("inspecting"); }
+    layoutCarousel();
+    renderChoiceGraph();
+    if (!ui.graphOverlay.classList.contains("hidden")) renderPauseGraph();
+    if (!silent) sfx("uiMove");
+  }
+
+  function layoutCarousel() {
+    const cards = packageCards();
+    const n = cards.length;
+    cards.forEach((card, i) => {
+      const off = i - focusedIndex;
+      const a = Math.abs(off);
+      let tx; let sc; let op;
+      if (off === 0) { tx = "-50%"; sc = 1; op = 1; }
+      else if (a === 1) { tx = `calc(-50% + ${off * 74}%)`; sc = 0.78; op = 1; }
+      else { tx = `calc(-50% + ${off > 0 ? 135 : -135}%)`; sc = 0.7; op = 0; }
+      card.style.transform = `translateX(${tx}) scale(${sc})`;
+      card.style.opacity = String(op);
+      card.style.zIndex = String(off === 0 ? 3 : 2 - a);
+      card.classList.toggle("hero", off === 0);
+      card.classList.toggle("previewing", off === 0);
+      card.setAttribute("aria-selected", off === 0 ? "true" : "false");
+    });
+    if (ui.choicePillCur) ui.choicePillCur.textContent = `0${focusedIndex + 1}`.slice(-2);
+    if (ui.choicePillTot) ui.choicePillTot.textContent = `0${n}`.slice(-2);
+    if (ui.choiceDots) {
+      ui.choiceDots.innerHTML = "";
+      for (let i = 0; i < n; i += 1) {
+        const dot = document.createElement("i");
+        if (i === focusedIndex) dot.className = "on";
+        ui.choiceDots.appendChild(dot);
+      }
+    }
+    const atStart = focusedIndex === 0;
+    const atEnd = focusedIndex === n - 1;
+    if (ui.choiceChevL) ui.choiceChevL.classList.toggle("dim", atStart);
+    if (ui.choiceChevR) ui.choiceChevR.classList.toggle("dim", atEnd);
+    if (ui.choiceArrowL) ui.choiceArrowL.classList.toggle("dim", atStart);
+    if (ui.choiceArrowR) ui.choiceArrowR.classList.toggle("dim", atEnd);
+  }
+
+  function toggleInspect() {
+    if (ui.choiceOverlay.classList.contains("hidden") || committingPackage) return;
+    packageInspecting = !packageInspecting;
+    ui.choiceStage.classList.toggle("inspecting", packageInspecting);
+    sfx(packageInspecting ? "uiMove" : "uiBack");
+  }
+
+  function commitPackage() {
+    if (!offeredList.length || committingPackage) return;
+    const pkg = offeredList[focusedIndex];
+    if (!pkg) return;
+    committingPackage = true;
+    const card = packageCards()[focusedIndex];
+    if (card) card.classList.add("punch", "installed");
+    sfx("uiConfirm");
+    window.setTimeout(() => applyPackage(pkg), 260);
   }
 
   function renderChoiceGraph() {
@@ -551,7 +644,7 @@
     });
     ui.choiceGraphCaption.textContent = activePreviewPackage
       ? `${activePreviewPackage.name} would commit ${packagePreviewText(activePreviewPackage)}.`
-      : "Hover or focus a package to preview its graph mutation.";
+      : "Cycle a package to preview its graph mutation.";
   }
 
   function packageIcon(pkg) {
@@ -2250,9 +2343,35 @@
     return Math.atan2(Math.sin(a - b), Math.cos(a - b));
   }
 
+  // Controller support for the package carousel. Scoped to the choice overlay for
+  // now (combat stays keyboard/mouse); no-ops gracefully when no pad is present.
+  function pollGamepad() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let pad = null;
+    for (let i = 0; i < pads.length; i += 1) { if (pads[i]) { pad = pads[i]; break; } }
+    if (ui.choicePad) ui.choicePad.classList.toggle("on", !!pad);
+    const choosing = !ui.choiceOverlay.classList.contains("hidden");
+    if (!pad || !choosing) { padPrev.buttons = pad ? pad.buttons.map((b) => b.pressed) : []; return; }
+    const edge = (n) => {
+      const pressed = !!(pad.buttons[n] && pad.buttons[n].pressed);
+      return pressed && !(padPrev.buttons && padPrev.buttons[n]);
+    };
+    if (edge(0)) commitPackage();                                    // Cross = INSTALL
+    if (edge(3)) toggleInspect();                                    // Triangle = READ
+    if (edge(1) && packageInspecting) toggleInspect();               // Circle = BACK (collapse)
+    if (edge(14) || edge(4)) setPackageFocus(focusedIndex - 1, -1);  // D-pad left / L1
+    if (edge(15) || edge(5)) setPackageFocus(focusedIndex + 1, 1);   // D-pad right / R1
+    const x = pad.axes[0] || 0;
+    const t = performance.now();
+    if (x < -0.5) { if (t - padStickHold.l > 220) { setPackageFocus(focusedIndex - 1, -1); padStickHold.l = t; } } else padStickHold.l = 0;
+    if (x > 0.5) { if (t - padStickHold.r > 220) { setPackageFocus(focusedIndex + 1, 1); padStickHold.r = t; } } else padStickHold.r = 0;
+    padPrev.buttons = pad.buttons.map((b) => b.pressed);
+  }
+
   function frame(now) {
     const dt = Math.min(0.033, (now - lastTime) / 1000);
     lastTime = now;
+    pollGamepad();
     update(dt);
     draw();
     requestAnimationFrame(frame);
@@ -2411,6 +2530,15 @@ function startSideErrorRail() {
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
       event.preventDefault();
     }
+    // Package carousel captures navigation before it can leak into player movement.
+    if (!ui.choiceOverlay.classList.contains("hidden")) {
+      if (event.repeat) return; // discrete steps only; no machine-gunned cues on held keys
+      if (key === "arrowleft" || key === "a") { setPackageFocus(focusedIndex - 1, -1); return; }
+      if (key === "arrowright" || key === "d") { setPackageFocus(focusedIndex + 1, 1); return; }
+      if (key === "enter" || key === " ") { commitPackage(); return; }
+      if (key === "i" || key === "arrowup") { toggleInspect(); return; }
+      if ((key === "escape" || key === "backspace") && packageInspecting) { toggleInspect(); return; }
+    }
     if (key === "m") {
       audio.toggleMute();
       updateMuteButton();
@@ -2466,6 +2594,15 @@ function startSideErrorRail() {
     });
   }
   updateMuteButton();
+  ui.choiceChevL.addEventListener("click", () => setPackageFocus(focusedIndex - 1, -1));
+  ui.choiceChevR.addEventListener("click", () => setPackageFocus(focusedIndex + 1, 1));
+  ui.choiceArrowL.addEventListener("click", () => setPackageFocus(focusedIndex - 1, -1));
+  ui.choiceArrowR.addEventListener("click", () => setPackageFocus(focusedIndex + 1, 1));
+  ui.choiceStage.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const step = event.deltaY > 0 ? 1 : -1;
+    setPackageFocus(focusedIndex + step, step);
+  }, { passive: false });
   ui.graphInspectButton.addEventListener("click", openGraphOverlay);
   ui.graphSvg.addEventListener("click", openGraphOverlay);
   ui.graphCloseButton.addEventListener("click", closeGraphOverlay);

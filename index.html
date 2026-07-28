@@ -124,16 +124,21 @@
 
         <section id="choiceOverlay" class="overlay hidden" aria-label="Package selection">
           <div class="choice-frame">
+            <div class="choice-titlebar">
+              <span class="ct-dot" aria-hidden="true"></span>
+              <span class="ct-path"><b>libglitch-v3</b> :: upgrade shell</span>
+              <span class="ct-pad" id="choicePad"><i aria-hidden="true"></i>PAD</span>
+            </div>
             <div class="choice-header">
-              <p class="kicker">UPGRADE PATH</p>
+              <p class="kicker">&gt; UPGRADE PATH</p>
               <h1>Select one package to patch libglitch-v3.</h1>
-              <p id="choicePrompt">Choose one upgrade; the graph keeps the receipt. Press G to inspect.</p>
+              <p id="choicePrompt">Cycle packages to preview each graph mutation. The graph keeps the receipt.</p>
             </div>
             <div class="choice-layout">
               <aside class="choice-graph" aria-label="Package graph preview">
                 <div class="panel-title">MUTATION PREVIEW</div>
                 <svg id="choiceGraphSvg" viewBox="0 0 280 190" role="img" aria-label="Previewed package mutation"></svg>
-                <p id="choiceGraphCaption">Hover or focus a package to preview its graph mutation.</p>
+                <p id="choiceGraphCaption">Cycle a package to preview its graph mutation.</p>
                 <div class="graph-legend compact" aria-label="Preview visual key">
                   <span><i class="legend-edge preview"></i>new relation</span>
                   <span><i class="legend-node preview"></i>new node</span>
@@ -141,7 +146,27 @@
                   <span><i class="legend-edge conflicts"></i>conflict</span>
                 </div>
               </aside>
-              <div id="packageChoices" class="choices"></div>
+              <div class="carousel-col">
+                <div class="rail-top">
+                  <span class="pill">
+                    <button class="chev" id="choiceChevL" type="button" aria-label="Previous package">&#9666;</button>
+                    <span><span class="cur" id="choicePillCur">01</span> / <span id="choicePillTot">04</span></span>
+                    <button class="chev" id="choiceChevR" type="button" aria-label="Next package">&#9656;</button>
+                    <span class="dots" id="choiceDots" aria-hidden="true"></span>
+                  </span>
+                </div>
+                <div class="carousel-stage" id="choiceStage">
+                  <button class="c-arrow l" id="choiceArrowL" type="button" aria-label="Previous">&#9666;</button>
+                  <button class="c-arrow r" id="choiceArrowR" type="button" aria-label="Next">&#9656;</button>
+                  <div id="packageChoices" class="choices" role="listbox" aria-label="Offered packages"></div>
+                </div>
+                <div class="choice-legend" aria-hidden="true">
+                  <span class="k g-x"><i class="glyph">&#10005;</i> INSTALL</span>
+                  <span class="k g-t"><i class="glyph">&#9651;</i> READ</span>
+                  <span class="k"><i class="glyph lr">L1/R1</i> CYCLE</span>
+                  <span class="keys">&#8592; &#8594; &nbsp;&middot;&nbsp; Enter &nbsp;&middot;&nbsp; I</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>

@@ -5,6 +5,10 @@ This is the single canonical planning document for Dependency Hell: what we are 
 > **Branch note:** The original plan referenced the MVP branch `mvp`. The current active working branch is **`phase-2`** (off `main`). Treat `phase-2` as the live branch; historical references to `mvp`/`mvp-uiux-overhaul` below are preserved verbatim as authored.
 >
 > **Audit note (2026-07-28):** Checkbox states below were re-synced against the actual code (`scripts/`, `tools/`). Sprints 4–5 are effectively complete, Sprint 6 audio/effects landed, and Sprint 7 tooling (linter + simulator) exists. The main remaining gaps are: seeded/procedural run generation, distinct room layouts, an on-screen debug + active-tool HUD, report fields (`what went well`/`action items`/shipped-version/customer-impact), richer simulator balance metrics, and actual playtests. See the [Recommended next slice](#recommended-next-slice) callout under the Sprint Plan.
+>
+> **Companion specs (2026-07-28):** Two "feel" specs now sit alongside this roadmap and feed the presentation/engagement work in [Sprint 6](#sprint-6-art-ui-and-audio-first-pass) and [Sprint 7](#sprint-7-playtest-balance-and-mvp-cut):
+> - [`fun-tuneup-protocol.md`](fun-tuneup-protocol.md) — the repeatable post-slice process that catches "reads great, feels flat": 3-tier cadence (headless checks → Playwright feel-telemetry → one-run human self-test), an 8-dimension feel rubric, and an AI proxy-tester angle.
+> - [`console-feel-ux.md`](console-feel-ux.md) — a 23-rule, screenshot-/grep-testable rubric for AAA console-native UI (focus, motion tokens, verb contract, audio, CRT curation), plus the controller-first package-carousel build plan. **Carousel implementation is in progress on `phase-2`.**
 
 ---
 
