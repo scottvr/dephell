@@ -90,6 +90,13 @@
 
   const keys = new Set();
   const mouse = { x: 480, y: 270, down: false };
+  // Mouse control is dormant until the player deliberately moves the mouse; until then
+  // the cursor position is ignored (and hidden) and the game plays keyboard-first.
+  let mouseActive = false;
+  let mouseMoveAccum = 0;
+  // Once the player right-clicks to toggle mouse mode, auto-wake-on-movement stops —
+  // the toggle is now the explicit control, so their choice sticks either way.
+  let mouseManual = false;
   let lastTime = performance.now();
   let roomClearTimer = 0;
   let choiceShown = false;
@@ -170,6 +177,7 @@
     choiceShown = false;
     roomClearedLogged = false;
     lastDebtBand = 0;
+    audio.setState({ interstitial: false });
     logEvent("run_started", "Run started: Release Candidate Pipeline.");
     loadRoom("local_dev");
     renderAllUi();
@@ -497,6 +505,7 @@
     ui.choiceStage.classList.remove("inspecting");
     renderAllUi();
     ui.choiceOverlay.classList.add("hidden");
+    audio.setState({ interstitial: false });
     // If the graph inspector was stacked over the choice (via G), close it too —
     // otherwise a keyboard commit orphans it and isOverlayOpen() keeps update() paused.
     if (!ui.graphOverlay.classList.contains("hidden")) closeGraphOverlay();
@@ -562,6 +571,7 @@
     });
     setPackageFocus(0, 0, true);
     ui.choiceOverlay.classList.remove("hidden");
+    audio.setState({ interstitial: true });
   }
 
   function packageCards() {
@@ -719,6 +729,7 @@
     }
     ui.routeOverlay.classList.remove("hidden");
     renderRouteGraph();
+    audio.setState({ interstitial: true });
   }
 
   function previewRoute(route) {
@@ -735,6 +746,7 @@
   function selectRoute(route) {
     const from = game.currentRoom?.id;
     ui.routeOverlay.classList.add("hidden");
+    audio.setState({ interstitial: false });
     pendingRoutes = [];
     activeRouteChoice = null;
     selectedGraphEntity = { type: "edge", id: route.edge };
@@ -796,7 +808,14 @@
     const down = keys.has("s") || keys.has("arrowdown");
     const axis = (right ? 1 : 0) - (left ? 1 : 0);
     p.vx = axis * game.run.stats.speed;
-    if (axis) p.facing = axis;
+    // Facing: when the mouse is live it aims (body faces the cursor, Quake-style);
+    // otherwise facing is movement-driven and persists until a direction key is pressed.
+    if (mouseActive) {
+      const aim = worldMouse();
+      p.facing = aim.x >= p.x + p.w / 2 ? 1 : -1;
+    } else if (axis) {
+      p.facing = axis;
+    }
     if (jump && p.y >= FLOOR_Y) p.vy = -410;
     if (down && p.y < FLOOR_Y) p.vy += 780 * dt;
     if ((keys.has("shift") || keys.has("shiftleft")) && p.dashTimer <= 0) {
@@ -862,9 +881,12 @@
 
   function swing() {
     const p = game.player;
-    const aim = worldMouse();
-    const angle = Math.atan2(aim.y - (p.y - 18), aim.x - (p.x + p.w / 2));
-    p.facing = Math.cos(angle) >= 0 ? 1 : -1;
+    // Dormant mouse (and keyboard-only players): strike issues in the facing direction,
+    // which changes only on a movement key, so attacking never flips you. The 100-degree
+    // arc still covers the near-diagonals. Once the mouse is live, it aims the strike.
+    const angle = mouseActive
+      ? (() => { const aim = worldMouse(); return Math.atan2(aim.y - (p.y - 18), aim.x - (p.x + p.w / 2)); })()
+      : (p.facing >= 0 ? 0 : Math.PI);
     game.slashes.push({
       x: p.x + p.w / 2,
       y: p.y - 18,
@@ -1578,6 +1600,8 @@
     logEvent(victory ? "run_won" : "run_failed", cause);
     renderReport(victory, cause);
     ui.reportOverlay.classList.remove("hidden");
+    // The results screen is a reading beat — drop to the dimmed, low, faster interstitial thrum.
+    audio.setState({ interstitial: true });
   }
 
   function renderReport(victory, cause) {
@@ -1588,6 +1612,142 @@
     ui.reportKicker.textContent = victory ? "RELEASE REPORT" : "MINI POSTMORTEM";
     ui.reportTitle.textContent = victory ? "Release candidate shipped." : "Build failed.";
     ui.reportBody.innerHTML = victory ? renderReleaseReport(run, installed, identity, conflict) : renderFailureReport(run, installed, identity, conflict, cause);
+    appendFeelCheck();
+  }
+
+  // Single source of truth for the playtester build id — shown in the badge, the
+  // report, and baked into every feel-check share code. Bump this per test build.
+  const BUILD_TAG = "PT1";
+
+  // Tier-3 self-playtest (docs/fun-tuneup-protocol.md) surfaced in-game so the loop
+  // can be exercised right after a run. Each question's `flag` is the answer that
+  // signals a feel problem.
+  const FEEL_QUESTIONS = [
+    { q: "When you killed an enemy, did the screen react — jolt, flash, debris?", flag: "no" },
+    { q: "Sound OFF for a fight: could you still tell the frame a hit connected?", flag: "no" },
+    { q: "Did you win a room standing still, holding attack, never repositioning?", flag: "yes" },
+    { q: "Can you name your installed package AND one way it changed the fight?", flag: "no" },
+    { q: "After ~room 4, was there any new power or item to chase?", flag: "no" },
+    { q: "After clearing a room, was there a stretch you couldn't move or act?", flag: "yes" },
+    { q: "The last thing that hurt you — can you name it without the log?", flag: "no" },
+    { q: "Did the boss feel like a different challenge (not just hold-swing + wait)?", flag: "no" },
+    { q: "At the end, did you want to restart with a specific thing to try?", flag: "no" },
+    { q: "At any single moment, did you lean forward or tense up?", flag: "no" },
+  ];
+
+  // A short, backend-free code the tester can copy or read aloud. Per-question:
+  // Y = yes, N = no, U = unsure/skipped. The flag answers are known here, so the
+  // code alone reconstructs which questions flagged and which were left unsure.
+  function feelCode(answers) {
+    let s = "";
+    for (let i = 0; i < FEEL_QUESTIONS.length; i += 1) {
+      const a = answers[i];
+      s += a === "yes" ? "Y" : a === "no" ? "N" : "U";
+    }
+    return `DHFEEL-${BUILD_TAG}-${s}`;
+  }
+
+  function copyFeelCode(text, btn) {
+    let ok = false;
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand("copy"); // works under file:// where clipboard API may not
+      document.body.removeChild(ta);
+    } catch (_error) { ok = false; }
+    if (!ok && navigator.clipboard) {
+      try { navigator.clipboard.writeText(text); ok = true; } catch (_error) { /* ignore */ }
+    }
+    btn.textContent = ok ? "COPIED ✓" : "SELECT THE CODE & COPY";
+    window.setTimeout(() => { btn.textContent = "COPY CODE"; }, 1600);
+  }
+
+  function appendFeelCheck() {
+    const wrap = document.createElement("section");
+    wrap.className = "feelcheck";
+    const heading = document.createElement("h3");
+    heading.innerHTML = "▸ FEEL CHECK <span class=\"fc-sub\">(Tier-3 self-test — skip any you're unsure about)</span>";
+    wrap.appendChild(heading);
+    const answers = {};
+
+    FEEL_QUESTIONS.forEach((item, i) => {
+      const row = document.createElement("div");
+      row.className = "fc-row";
+      const q = document.createElement("p");
+      q.className = "fc-q";
+      q.textContent = `${i + 1}. ${item.q}`;
+      const btns = document.createElement("div");
+      btns.className = "fc-btns";
+      ["yes", "no"].forEach((ans) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "fc-b";
+        b.textContent = ans.toUpperCase();
+        b.addEventListener("click", () => {
+          answers[i] = ans;
+          for (const c of btns.children) c.classList.remove("sel", "flag");
+          b.classList.add("sel");
+          if (ans === item.flag) b.classList.add("flag");
+          update();
+        });
+        btns.appendChild(b);
+      });
+      row.append(q, btns);
+      wrap.appendChild(row);
+    });
+
+    // Results: live flag/unsure summary + the shareable code + a copy button.
+    const results = document.createElement("div");
+    results.className = "fc-results";
+    const summary = document.createElement("div");
+    summary.className = "fc-summary";
+    const codeRow = document.createElement("div");
+    codeRow.className = "fc-code-row";
+    const code = document.createElement("code");
+    code.className = "fc-code";
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "fc-copy";
+    copyBtn.textContent = "COPY CODE";
+    copyBtn.addEventListener("click", () => copyFeelCode(feelCode(answers), copyBtn));
+    codeRow.append(code, copyBtn);
+    const send = document.createElement("p");
+    send.className = "fc-send";
+    send.innerHTML = `Playtester build <b>${BUILD_TAG}</b> — copy this code and send it to the dev. Play a few runs and send one each time.`;
+    results.append(summary, codeRow, send);
+    wrap.appendChild(results);
+
+    function update() {
+      const flagged = [];
+      let unsure = 0;
+      FEEL_QUESTIONS.forEach((item, i) => {
+        const a = answers[i];
+        if (a === undefined) unsure += 1;
+        else if (a === item.flag) flagged.push(i + 1);
+      });
+      const answered = FEEL_QUESTIONS.length - unsure;
+      summary.innerHTML =
+        `<b>${flagged.length}</b> flag${flagged.length === 1 ? "" : "s"} 🚩` +
+        (flagged.length ? ` <span class="fc-dim">(Q${flagged.join(", Q")})</span>` : "") +
+        ` · <b>${unsure}</b> unsure · ${answered}/${FEEL_QUESTIONS.length} answered`;
+      const c = feelCode(answers);
+      code.textContent = c;
+      try {
+        window.localStorage.setItem("dephell.feelcheck.last", c);
+        if (answered === FEEL_QUESTIONS.length) {
+          const log = JSON.parse(window.localStorage.getItem("dephell.feelchecks") || "[]");
+          log.push({ at: new Date().toISOString(), code: c, flags: flagged, unsure });
+          window.localStorage.setItem("dephell.feelchecks", JSON.stringify(log));
+        }
+      } catch (_error) { /* private-mode storage is optional */ }
+    }
+
+    update();
+    ui.reportBody.appendChild(wrap);
   }
 
   function renderAllUi() {
@@ -1759,6 +1919,7 @@
     drawBossHud();
     drawRoomBanner(room);
     drawBossIntro();
+    drawCrosshair();
     // Time-based decay so the shake rings out over the same wall-clock duration on
     // 60Hz and 144Hz displays (the exponent normalizes to a 60fps step).
     shakeMag = shakeMag > 0.3 ? shakeMag * Math.pow(0.86, dt * 60) : 0;
@@ -1778,6 +1939,26 @@
       ctx.strokeRect(hz.x - hz.w / 2, GROUND_TOP - hz.h, hz.w, hz.h);
       ctx.restore();
     }
+  }
+
+  // In-game reticle for live mouse aim — replaces the hidden OS cursor so aiming
+  // isn't blind. Only shown once the mouse is awake and combat is on screen.
+  function drawCrosshair() {
+    if (!mouseActive || game.run.ended || isOverlayOpen()) return;
+    const m = worldMouse();
+    ctx.save();
+    ctx.strokeStyle = "rgba(32, 247, 238, 0.85)";
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = "rgba(32, 247, 238, 0.6)";
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, 6, 0, Math.PI * 2);
+    ctx.moveTo(m.x - 12, m.y); ctx.lineTo(m.x - 4, m.y);
+    ctx.moveTo(m.x + 4, m.y); ctx.lineTo(m.x + 12, m.y);
+    ctx.moveTo(m.x, m.y - 12); ctx.lineTo(m.x, m.y - 4);
+    ctx.moveTo(m.x, m.y + 4); ctx.lineTo(m.x, m.y + 12);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawBackdrop(room) {
@@ -2499,11 +2680,17 @@
     for (let i = 0; i < pads.length; i += 1) { if (pads[i]) { pad = pads[i]; break; } }
     if (ui.choicePad) ui.choicePad.classList.toggle("on", !!pad);
     const choosing = !ui.choiceOverlay.classList.contains("hidden");
-    if (!pad || !choosing) { padPrev.buttons = pad ? pad.buttons.map((b) => b.pressed) : []; return; }
+    const reporting = !ui.reportOverlay.classList.contains("hidden");
+    if (!pad || (!choosing && !reporting)) { padPrev.buttons = pad ? pad.buttons.map((b) => b.pressed) : []; return; }
     const edge = (n) => {
       const pressed = !!(pad.buttons[n] && pad.buttons[n].pressed);
       return pressed && !(padPrev.buttons && padPrev.buttons[n]);
     };
+    if (reporting) {
+      if (edge(0)) resetGame();                                      // Cross = new run
+      padPrev.buttons = pad.buttons.map((b) => b.pressed);
+      return;
+    }
     if (edge(0)) commitPackage();                                    // Cross = INSTALL
     if (edge(3)) toggleInspect();                                    // Triangle = READ
     if (edge(1) && packageInspecting) toggleInspect();               // Circle = BACK (collapse)
@@ -2687,6 +2874,11 @@ function startSideErrorRail() {
       if (key === "i" || key === "arrowup") { toggleInspect(); return; }
       if ((key === "escape" || key === "backspace") && packageInspecting) { toggleInspect(); return; }
     }
+    // Report screen: Enter ships the next candidate (mouse can still answer the feel check).
+    if (!ui.reportOverlay.classList.contains("hidden") && (key === "enter" || key === " ")) {
+      resetGame();
+      return;
+    }
     if (key === "m") {
       audio.toggleMute();
       updateMuteButton();
@@ -2726,13 +2918,27 @@ function startSideErrorRail() {
   canvas.addEventListener("mousemove", (event) => {
     mouse.x = event.clientX;
     mouse.y = event.clientY;
+    // Wake mouse control on deliberate movement (threshold filters trackpad jitter),
+    // unless the player has taken explicit control via the right-click toggle.
+    if (!mouseActive && !mouseManual) {
+      mouseMoveAccum += Math.abs(event.movementX || 0) + Math.abs(event.movementY || 0);
+      if (mouseMoveAccum > 8) mouseActive = true;
+    }
   });
   canvas.addEventListener("mousedown", (event) => {
     mouse.x = event.clientX;
     mouse.y = event.clientY;
-    mouse.down = true;
+    if (event.button === 0) mouse.down = true; // only left button strikes
   });
   window.addEventListener("mouseup", () => (mouse.down = false));
+  // Right-click toggles mouse aim on/off — the explicit path back to keyboard-only
+  // (and out of an accidental wake). preventDefault suppresses the browser menu.
+  canvas.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    mouseActive = !mouseActive;
+    mouseManual = true;
+    mouseMoveAccum = 0;
+  });
   ui.restartButton.addEventListener("click", resetGame);
   ui.reportRestartButton.addEventListener("click", resetGame);
   if (ui.muteButton) {
@@ -2777,6 +2983,9 @@ function startSideErrorRail() {
       };
     },
   };
+
+  const ptBadge = document.querySelector("#ptBadge");
+  if (ptBadge) ptBadge.textContent = `PLAYTESTER BUILD · ${BUILD_TAG}`;
 
   startSideErrorRail();
   resetGame();

@@ -21,7 +21,7 @@
 
   // Persistent adaptive-music graph (built once, driven by setState).
   let music = null;
-  const state = { stability: 100, debt: 0, incident: null, boss: null, combat: false };
+  const state = { stability: 100, debt: 0, incident: null, boss: null, combat: false, interstitial: false };
 
   function readStoredMute() {
     try {
@@ -206,11 +206,37 @@
 
   // --- Adaptive ambience ----------------------------------------------------
 
+  // A synthetic impulse response (exponentially-decaying noise) for the ambience
+  // reverb — no asset files, just a long tail so transitions wash out instead of cut.
+  function makeImpulse(seconds, decay) {
+    const rate = ctx.sampleRate;
+    const len = Math.max(1, Math.floor(rate * seconds));
+    const buffer = ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch += 1) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < len; i += 1) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    return buffer;
+  }
+
   function buildMusic() {
     if (music || !ctx) return;
     const bus = ctx.createGain();
     bus.gain.value = 0.0;
     bus.connect(master);
+
+    // Long-tail reverb send: the whole ambience bus feeds a convolver in parallel,
+    // so when the pad/pulse dims on a state change the reverb keeps ringing — every
+    // ambient sound ending into the next one fades on a wash instead of a hard swap.
+    const reverb = ctx.createConvolver();
+    reverb.buffer = makeImpulse(2.6, 2.4);
+    const reverbGain = ctx.createGain();
+    reverbGain.gain.value = 0.25;
+    bus.connect(reverb);
+    reverb.connect(reverbGain);
+    reverbGain.connect(master);
 
     // Low detuned drone pad (two saws) for machine-room dread.
     const padFilter = ctx.createBiquadFilter();
@@ -232,6 +258,18 @@
     padA.start();
     padB.start();
 
+    // Interstitial throb: a 2.2 Hz sine (eighth notes at ~66 bpm) summed onto the pad
+    // gain, so on a cleared-round decision screen the flat drone becomes a pulsing
+    // "wub-wub-wub-wub." Depth is 0 during play (steady drone) and opens on interstitials.
+    const throbLfo = ctx.createOscillator();
+    throbLfo.type = "sine";
+    throbLfo.frequency.value = 2.2;
+    const throbDepth = ctx.createGain();
+    throbDepth.gain.value = 0.0;
+    throbLfo.connect(throbDepth);
+    throbDepth.connect(padGain.gain);
+    throbLfo.start();
+
     // Pulse (a soft repeating tick) via an LFO gating a gain node.
     const pulseOsc = ctx.createOscillator();
     pulseOsc.type = "triangle";
@@ -250,11 +288,12 @@
     pulseOsc.start();
     lfo.start();
 
-    music = { bus, padFilter, padA, padB, padB2: padB, lfo, lfoGain, detune: padB.detune, cutoff: padFilter.frequency, tempo: lfo.frequency };
+    music = { bus, padFilter, padA, padB, padB2: padB, lfo, lfoGain, detune: padB.detune, cutoff: padFilter.frequency, tempo: lfo.frequency, throbDepth: throbDepth.gain, reverbGain: reverbGain.gain };
   }
 
   function musicTarget() {
     if (muted) return 0;
+    if (state.interstitial) return 0.18; // dimmed on cleared-round decision screens
     if (state.boss) return 0.5;
     if (state.incident) return 0.42;
     return 0.3;
@@ -274,8 +313,17 @@
     const cutoff = 380 + stabilityTension * 900 + (state.incident ? 300 : 0) + (state.boss ? 500 : 0);
     music.cutoff.setTargetAtTime(cutoff, t, 0.8);
 
-    const tempo = state.boss ? 3.4 : state.incident ? 2.9 : state.combat ? 2.2 : 1.6;
+    const tempo = state.interstitial ? 1.1 : state.boss ? 3.4 : state.incident ? 2.9 : state.combat ? 2.2 : 1.6;
     music.tempo.setTargetAtTime(tempo, t, 0.8);
+
+    // Open the pad tremolo into a 2.2 Hz throb on interstitials; steady drone otherwise.
+    music.throbDepth.setTargetAtTime(state.interstitial ? 0.42 : 0.0, t, 0.4);
+
+    // Drop the pad a couple whole steps (4 semitones, 55 -> ~43.65 Hz) on interstitials
+    // so the throb sits lower; glide back up when combat resumes.
+    const padHz = state.interstitial ? 43.65 : 55;
+    music.padA.frequency.setTargetAtTime(padHz, t, 0.4);
+    music.padB.frequency.setTargetAtTime(padHz, t, 0.4);
   }
 
   function setState(patch) {

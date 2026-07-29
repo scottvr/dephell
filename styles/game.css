@@ -237,6 +237,9 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   filter: contrast(1.04) saturate(1.06);
+  /* Hide the OS cursor over the combat canvas; HUD/overlays (on top) keep theirs,
+     and a live mouse gets an in-game crosshair instead. */
+  cursor: none;
 }
 
 .scanlines {
@@ -1310,4 +1313,89 @@ button:focus-visible {
   #packageChoices .package-card { transition-duration: 0.001ms; }
   #packageChoices .package-card.hero,
   #packageChoices .package-card.hero::after { animation: none; }
+}
+
+/* =====================================================================
+   Report screen: results scroll internally; the restart reads as a pinned
+   terminal prompt (no scroll-to-a-button), plus the in-game feel check.
+   ===================================================================== */
+.report-frame { display: flex; flex-direction: column; overflow: hidden; }
+.report-frame .report-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.report-hint { flex: 0 0 auto; margin: 10px 0 0; color: var(--muted); font-size: 11px; letter-spacing: 0.06em; }
+
+#reportRestartButton {
+  flex: 0 0 auto;
+  width: 100%;
+  margin-top: 14px;
+  min-height: 46px;
+  padding: 0 14px;
+  text-align: left;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--select);
+  background: rgba(2, 8, 10, 0.6);
+  color: var(--ink);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.1);
+}
+#reportRestartButton::before { content: "\25B8  "; color: var(--cyan); }
+#reportRestartButton::after { content: " \2588"; color: var(--select); animation: caret-blink 1.05s steps(1) infinite; }
+#reportRestartButton:hover,
+#reportRestartButton:focus-visible { border-color: var(--cyan); box-shadow: 0 0 24px rgba(32, 247, 238, 0.24); }
+
+.feelcheck { margin-top: 18px; padding-top: 14px; border-top: 1px dashed rgba(124, 207, 196, 0.4); }
+.feelcheck h3 { margin: 0 0 8px; color: var(--cyan); font-size: 13px; letter-spacing: 0.08em; }
+.feelcheck .fc-sub { color: var(--muted); font-weight: 400; letter-spacing: 0; }
+.fc-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(223, 255, 238, 0.06);
+}
+.fc-q { margin: 0; font-size: 12px; color: var(--ink); line-height: 1.3; }
+.fc-btns { display: flex; gap: 6px; }
+.fc-b {
+  min-height: 26px;
+  padding: 0 11px;
+  font-size: 11px;
+  border: 1px solid rgba(124, 207, 196, 0.4);
+  background: rgba(0, 10, 13, 0.5);
+  color: var(--muted);
+  box-shadow: none;
+}
+.fc-b.sel { border-color: var(--cyan); color: var(--ink); }
+.fc-b.flag { border-color: var(--red); color: var(--red); box-shadow: 0 0 10px rgba(255, 66, 101, 0.25); }
+.fc-tally { margin-top: 12px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.fc-results { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 207, 102, 0.3); }
+.fc-summary { font-size: 12.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.fc-summary .fc-dim { color: var(--muted); }
+.fc-code-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 9px; }
+.fc-code {
+  padding: 5px 10px;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--amber);
+  background: rgba(0, 10, 13, 0.6);
+  border: 1px solid rgba(255, 207, 102, 0.45);
+  user-select: all;
+}
+.fc-copy { min-height: 30px; padding: 0 12px; font-size: 11px; }
+.fc-send { margin: 9px 0 0; font-size: 11px; color: var(--muted); line-height: 1.4; }
+.fc-send b { color: var(--amber); font-weight: 700; }
+
+/* Playtester-build badge in the controls footer */
+.pt-badge {
+  padding: 3px 9px;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  background: rgba(255, 207, 102, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  box-shadow: 0 0 12px rgba(255, 207, 102, 0.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #reportRestartButton::after { animation: none; }
 }

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dependency Hell: First Slice</title>
+    <title>Dependency Hell — Playtester Build</title>
     <link rel="stylesheet" href="./styles/game.css">
   </head>
   <body>
@@ -176,15 +176,18 @@
             <p class="kicker" id="reportKicker">MINI POSTMORTEM</p>
             <h1 id="reportTitle">Build failed.</h1>
             <div id="reportBody" class="report-body"></div>
-            <button id="reportRestartButton" type="button">NEW RUN</button>
+            <p class="report-hint" aria-hidden="true">&#9662; scroll to log the Tier-3 feel check</p>
+            <button id="reportRestartButton" type="button">ship the next candidate&nbsp;&nbsp;&nbsp;ENTER / &#10005;</button>
           </div>
         </section>
       </section>
 
       <footer class="controls">
+        <span class="pt-badge" id="ptBadge">PLAYTESTER BUILD</span>
         <span>Move <b>WASD</b> or <b>Arrows</b></span>
-        <span>Aim with mouse</span>
-        <span>Strike <b>Mouse</b> or <b>Space</b></span>
+        <span>Turn <b>A</b>/<b>D</b></span>
+        <span>Strike <b>LMB</b> or <b>Space</b></span>
+        <span>Mouse aim <b>RMB</b></span>
         <span>Dash <b>Shift</b></span>
         <span>Flag <b>F</b></span>
         <span>Rollback <b>R</b></span>
