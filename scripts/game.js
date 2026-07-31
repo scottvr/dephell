@@ -783,11 +783,14 @@
     return value > 0 ? `+${value}` : String(value);
   }
 
-  function showRouteChoice(routes) {
+  function showRouteChoice(routes, focusIndex = 0) {
     if (!ui.routeOverlay.classList.contains("hidden")) return;
     pendingRoutes = routes;
-    activeRouteChoice = routes[0];
-    ui.routePrompt.textContent = `${game.currentRoom.name} cleared. Choose the next graph exit.`;
+    const focus = Math.max(0, Math.min(focusIndex, routes.length - 1));
+    activeRouteChoice = routes[focus];
+    ui.routePrompt.textContent = routes.length > 1
+      ? `${game.currentRoom.name} cleared. Choose the next graph exit — or walk to a glowing door.`
+      : `${game.currentRoom.name} cleared. Confirm the next graph exit.`;
     ui.routeChoices.innerHTML = "";
     for (const route of routes) {
       const button = document.createElement("button");
@@ -810,7 +813,7 @@
       ui.routeChoices.appendChild(button);
     }
     ui.routeOverlay.classList.remove("hidden");
-    setRouteFocus(0, true);
+    setRouteFocus(focus, true);
     audio.setState({ interstitial: true });
   }
 
@@ -1742,12 +1745,15 @@
       d.newpath = !!(d.route.requiresPackage && game.run.installedPackages.includes(d.route.requiresPackage));
     }
     const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2;
-    spawnFloater(cx, cy - 30, "WALK TO A DOOR", "#9be7ff");
+    spawnFloater(cx, cy - 30, "EXITS OPEN", "#9be7ff");
     sfx("reveal");
-    logEvent("routes_open", `${game.currentRoom.name} cleared. ${routes.length} exits opened — walk to a door.`, { room: game.currentRoom.id });
+    logEvent("routes_open", `${game.currentRoom.name} cleared. ${routes.length} exits opened — pick one, or walk to a door.`, { room: game.currentRoom.id });
     for (const d of game.doors.filter((x) => x.newpath)) {
       logEvent("route_unlocked", `A new corridor opened toward ${d.node} — an installed package added that path.`, { room: game.currentRoom.id });
     }
+    // Auto-open the locus screen listing ALL exits on clear (the doors stay lit on
+    // the walls as a spatial shortcut for players who close the screen to walk).
+    showRouteChoice(routes);
   }
 
   function updateDoors() {
@@ -1756,8 +1762,9 @@
     const touched = game.doors.find((d) => rectsOverlap(p.x, p.y - p.h, p.w, p.h, d.x - d.w / 2, d.y - d.h / 2, d.w, d.h));
     if (!touched) { game.doorReopenBlock = false; return; } // stepped off — re-arm
     if (game.doorReopenBlock) return; // just backed out of this door; wait until they leave
-    // Open this route's detail; confirming travels, Escape returns to the doors.
-    showRouteChoice([touched.route]);
+    // Open the full locus screen (all exits), focused on the door walked into, so the
+    // spatial pick and the compare-all screen stay one and the same UI.
+    showRouteChoice(game.doors.map((d) => d.route), game.doors.indexOf(touched));
   }
 
   // Back out of a single door's detail without travelling, staying in the doors phase.
