@@ -38,8 +38,31 @@ Shipped in five verified phases (see git history on this branch):
 Verification per phase is headless (movement asserts, 2-D pursuit assert, feel-probe, doors flow assert) plus
 screenshots. Legacy `FLOOR_Y`/`GROUND_TOP` remain in `constants.js` but are no longer used by gameplay.
 
-**Follow-ups worth considering:** richer per-type top-down enemy silhouettes; door art polish; a brief top-down
-onboarding beat; controller support for 360° aim.
+### Slice 1 — graph-as-dungeon geography + room fill (2026-07-30)
+
+Follow-on to the camera change, targeting the core innovation (the dependency graph as the dungeon) and the
+"it feels like a plain melee fighter" note. Shipped in sub-phases 1A–1E:
+
+- **1A room-fill** — removed the CRT "safe_mode" error rail (shelved, guarded) and widened `ARENA` ~37%; HUD
+  panels became frosted translucent corner frames.
+- **1B orthogonal layout** — `GRAPH_POSITIONS` re-laid as a hierarchical grid (release at top, deps below);
+  `graph.js` routes edges as Manhattan/circuit elbows, styling walkable `requires` corridors vs coupling
+  wires. User approved the hierarchy orientation; a **pipeline/journey orientation** (Local Dev → Release,
+  L→R) is a noted future experiment.
+- **1C doors by geography** — door walls derive from each neighbour's compass direction on the layout
+  (`routeSide`/`routeTargetNode`), so exiting a door matches the map. Map = world.
+- **1D graph mutates the dungeon** — package installs fire an "ARCHITECTURE SHIFTED" cue; doors carry live
+  graph state (`NEW PATH` / `⚠ CONFLICT` / `△ RISKY`).
+- **1E** — gates green (lint/simulate/feel-probe, feel-probe window widened for the bigger arena),
+  visual-smoke re-baselined, docs updated.
+
+**Slice 2 (next) — card/economy rework.** The motivation gap is that packages are *free* (pick 1-of-4, no
+cost), so the player doesn't weigh the cards. Plan: a spend currency + **buy-on-credit** (take cheap/free,
+pay in Tech Debt / Security Risk) + refactor-to-remove, plus more verb-changing (not stat-only) packages and
+a visible loadout. This is the "every power has a shadow" pillar finally biting.
+
+**Follow-ups worth considering:** richer per-type top-down enemy silhouettes; door art polish; the pipeline
+orientation experiment; a brief top-down onboarding beat; controller support for 360° aim.
 
 ---
 

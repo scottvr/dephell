@@ -107,6 +107,13 @@ affect a report, it must leave a causal trace in run state or the event log.
 - Graph-route choices are level/location choices, surfaced as **hybrid doors**: clearing a room lights up one
   door per available route on the arena walls; walking into a door opens that route's detail, and confirming
   travels. A single onward route auto-advances (no dead walking).
+- **The graph IS the dungeon geography.** The minimap/INSPECT graph is a hierarchical orthogonal layout
+  (release goal at top, deps below; edges elbow-routed as walkable `requires` corridors vs thin coupling
+  wires — see `graph.js` `orthPoints` and `GRAPH_POSITIONS`). Each door is placed on the wall matching its
+  neighbour's compass direction on that layout (`routeSide` in `game.js`), so the map and the walkable world
+  share one geography. Altering the graph alters the world: installing a package fires an on-canvas
+  "ARCHITECTURE SHIFTED" cue, package-unlocked routes appear as `NEW PATH` doors, and doors glow red/amber
+  for conflicted/risky neighbour nodes.
 - Spatial constants live in `scripts/constants.js` as `ARENA` (the play rect); actors clamp to it on both axes.
   `FLOOR_Y`/`GROUND_TOP` are legacy side-view constants, no longer used by gameplay.
 - Keep the zero-build static browser prototype easy to open from `index.html`.

@@ -89,7 +89,9 @@ async function main() {
     // Drive room 1 adaptively: steer toward the nearest enemy and hold attack. The
     // room-intro lock elapses on its own; enemies are chasers, so contact is quick.
     const startedAt = Date.now();
-    const MAX_MS = 12000;
+    // The enlarged top-down arena gives enemies more room to evade, so the headless
+    // clear takes longer than the old cramped stage — widen the window accordingly.
+    const MAX_MS = 20000;
     let clearedAt = null;
     while (Date.now() - startedAt < MAX_MS) {
       const state = await evalIn(cdp, "DepHell.debug.state()");
