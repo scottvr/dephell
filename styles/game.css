@@ -437,12 +437,23 @@ button:focus-visible {
 }
 
 .edge {
+  fill: none;
   stroke: rgba(223, 255, 238, 0.64);
   stroke-width: 2;
+  stroke-linejoin: round;
 }
 
 .edge.requires {
   stroke: rgba(223, 255, 238, 0.7);
+}
+
+/* Walkable corridors (requires spine) read heavier than emergent coupling wires. */
+.edge.corridor {
+  stroke-width: 3;
+}
+
+.edge.coupling {
+  stroke-width: 1.5;
 }
 
 .edge.observes {
@@ -807,7 +818,7 @@ button:focus-visible {
 }
 
 #pauseGraphSvg .node-label {
-  font-size: 11px;
+  font-size: 8.5px;
 }
 
 .route-frame {

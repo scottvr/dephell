@@ -63,26 +63,48 @@
     return "known requires edges are stable; suspected relations need observability.";
   }
 
+  // Orthogonal (Manhattan) edge routing: aligned nodes get a straight segment;
+  // cross-layer edges get a Z-route (down to the mid-row, across, then down) so the
+  // graph reads as a circuit/subway map instead of a diagonal cat's-cradle.
+  function orthPoints(a, b) {
+    if (a[0] === b[0] || a[1] === b[1]) return `${a[0]},${a[1]} ${b[0]},${b[1]}`;
+    const my = Math.round((a[1] + b[1]) / 2);
+    return `${a[0]},${a[1]} ${a[0]},${my} ${b[0]},${my} ${b[0]},${b[1]}`;
+  }
+  function orthMidpoint(a, b) {
+    return [Math.round((a[0] + b[0]) / 2), Math.round((a[1] + b[1]) / 2)];
+  }
+
   function graphMarkup(run, visibleNodes, edges, selectedGraphEntity, options = {}) {
     const selectedType = selectedGraphEntity?.type;
     const selectedId = selectedGraphEntity?.id;
     const preview = options.preview || { nodeIds: new Set(), edgeIds: new Set() };
     const currentLocation = options.currentLocation || null;
+    // `requires` relations are the structural spine the player traverses — draw them
+    // as walkable "corridors"; every other relation (conflicts/observes/patches/…) is
+    // emergent coupling, drawn as a thinner wire. Both are routed orthogonally so the
+    // map reads as a circuit board that shares the arena's overhead orientation.
     const svgEdges = edges.map((edge) => {
       const a = GRAPH_POSITIONS[edge.source];
       const b = GRAPH_POSITIONS[edge.target];
+      const pts = orthPoints(a, b);
+      const mid = orthMidpoint(a, b);
       const selected = selectedType === "edge" && selectedId === edge.id;
       const isPreview = preview.edgeIds.has(edge.id);
       const current = currentLocation?.type === "edge" && currentLocation.id === edge.id;
       const flagged = run.activeFlag?.type === "edge" && run.activeFlag.target === edge.id;
-      const classes = ["edge", edge.relation, edge.visibility, selected ? "selected" : "", isPreview ? "preview" : "", flagged ? "flagged" : ""].join(" ");
-      const label = options.showLabels
-        ? `<text class="edge-label ${edge.relation} ${edge.visibility} ${isPreview ? "preview" : ""}" x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - 5}">${escapeHtml(edge.relation)}</text>`
+      const corridor = edge.relation === "requires";
+      const classes = ["edge", corridor ? "corridor" : "coupling", edge.relation, edge.visibility, selected ? "selected" : "", isPreview ? "preview" : "", flagged ? "flagged" : ""].join(" ");
+      // Only label the meaningful coupling relations — the `requires` corridors are
+      // already the visually dominant spine, so stamping "requires" on each just
+      // produces overlapping mush in the dense orthogonal layout.
+      const label = options.showLabels && edge.relation !== "requires"
+        ? `<text class="edge-label ${edge.relation} ${edge.visibility} ${isPreview ? "preview" : ""}" x="${mid[0]}" y="${mid[1] - 4}">${escapeHtml(edge.relation)}</text>`
         : "";
-      const currentMarker = current ? `<line class="edge-current" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>Current graph locus</title></line>` : "";
-      const visual = `${currentMarker}<line class="${classes}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><title>${edge.source} ${edge.relation} ${edge.target}</title></line>${label}`;
+      const currentMarker = current ? `<polyline class="edge-current" points="${pts}" fill="none"><title>Current graph locus</title></polyline>` : "";
+      const visual = `${currentMarker}<polyline class="${classes}" points="${pts}" fill="none"><title>${edge.source} ${edge.relation} ${edge.target}</title></polyline>${label}`;
       if (!options.interactive || isPreview) return visual;
-      return `${visual}<line class="edge-hit" data-entity-type="edge" data-entity-id="${edge.id}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"></line>`;
+      return `${visual}<polyline class="edge-hit" data-entity-type="edge" data-entity-id="${edge.id}" points="${pts}" fill="none"></polyline>`;
     });
     const svgNodes = visibleNodes.map((node) => {
       const p = GRAPH_POSITIONS[node.id] || [140, 96];
@@ -96,8 +118,8 @@
       const currentMarker = current ? `<circle class="node-current-ring" cx="${p[0]}" cy="${p[1]}" r="16"><title>Current graph locus</title></circle>` : "";
       return `
         ${currentMarker}
-        <rect class="node ${risk ? "risk" : ""} ${hazard ? "hazard" : ""} ${selected ? "selected" : ""} ${isPreview ? "preview" : ""} ${flagged ? "flagged" : ""}" ${dataAttrs} x="${p[0] - 9}" y="${p[1] - 9}" width="18" height="18"></rect>
-        <text class="node-label" x="${p[0]}" y="${p[1] + 24}">${shortName(node.name)}</text>
+        <rect class="node ${risk ? "risk" : ""} ${hazard ? "hazard" : ""} ${selected ? "selected" : ""} ${isPreview ? "preview" : ""} ${flagged ? "flagged" : ""}" ${dataAttrs} x="${p[0] - 8}" y="${p[1] - 8}" width="16" height="16"></rect>
+        <text class="node-label" x="${p[0]}" y="${p[1] + 16}">${shortName(node.name)}</text>
       `;
     });
     return [...svgEdges, ...svgNodes].join("");

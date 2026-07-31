@@ -12,34 +12,39 @@
     FLOOR_Y: 326,
     GROUND_TOP: 334,
     ROOM_INTRO_SECONDS: 1.2,
-    // Stable node positions in the 280x190 graph viewBox. New loci are spaced
-    // >=24px from their neighbours so the minimap stays legible even when a run
-    // installs several package nodes at once.
+    // Node positions in the 280x190 graph viewBox, laid out as a HIERARCHICAL GRID
+    // (top-down overhaul: the map is the dungeon). Rows are dependency layers with
+    // the release goal at the top and leaf deps at the bottom; columns keep edges
+    // short and mostly vertical. Edges are routed orthogonally (see graph.js), so
+    // the minimap reads as a circuit/subway map that shares the arena's orientation.
+    // Rows: R0 y=26 (goal) · R1 y=62 · R2 y=98 · R3 y=134 · R4 y=168 (installed pkgs).
     GRAPH_POSITIONS: {
-      // Core / initial graph
-      app: [48, 88],
-      runtime: [110, 58],
-      stdlib: [174, 72],
-      libglitch: [142, 126],
-      ci: [225, 128],
-      legacy_auth: [96, 142],
-      modern_crypto: [214, 42],
-      test_suite: [52, 42],
-      shim: [190, 154],
-      feature_flag: [238, 84],
-      // Floor loci (release pipeline spine)
-      telemetry: [34, 120],
-      staging: [166, 104],
-      di_container: [222, 158],
-      release: [128, 100],
-      // Package-created nodes
-      logging: [88, 30],
-      container: [120, 162],
-      rollback: [40, 152],
-      security_scanner: [140, 38],
-      circuit_breaker: [250, 148],
-      rubber_duck: [72, 108],
-      inline_util: [64, 68],
+      // R0 — the goal
+      release: [140, 26],
+      // R1 — top-level consumers
+      app: [86, 62],
+      staging: [196, 62],
+      rollback: [250, 62],
+      // R2 — mid layer
+      runtime: [44, 98],
+      libglitch: [110, 98],
+      ci: [176, 98],
+      di_container: [238, 98],
+      circuit_breaker: [250, 98],
+      // R3 — deeper deps
+      stdlib: [44, 134],
+      telemetry: [90, 134],
+      modern_crypto: [140, 134],
+      legacy_auth: [196, 134],
+      feature_flag: [238, 134],
+      // R4 — installed package/tool nodes
+      test_suite: [40, 168],
+      logging: [76, 168],
+      rubber_duck: [108, 168],
+      inline_util: [140, 168],
+      shim: [172, 168],
+      container: [204, 168],
+      security_scanner: [236, 168],
     },
   };
 })(window.DepHell = window.DepHell || {});
