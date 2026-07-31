@@ -89,7 +89,7 @@ async function main() {
     // Drive room 1 adaptively: steer toward the nearest enemy and hold attack. The
     // room-intro lock elapses on its own; enemies are chasers, so contact is quick.
     const startedAt = Date.now();
-    const MAX_MS = 9000;
+    const MAX_MS = 12000;
     let clearedAt = null;
     while (Date.now() - startedAt < MAX_MS) {
       const state = await evalIn(cdp, "DepHell.debug.state()");
@@ -101,14 +101,19 @@ async function main() {
         if (Date.now() - startedAt - clearedAt > 500) break;
         await evalIn(cdp, "DepHell.debug.input.set([' '])");
       } else {
-        const px = state.player.x;
-        const nearest = enemies.sort((a, b) => Math.abs(a.x - px) - Math.abs(b.x - px))[0];
-        let dirKey = null;
-        if (nearest.x > px + 12) dirKey = "d";
-        else if (nearest.x < px - 12) dirKey = "a";
-        await evalIn(cdp, `DepHell.debug.input.set(${JSON.stringify([dirKey, " "].filter(Boolean))})`);
+        // Top-down 2-D steering: chase the nearest enemy on BOTH axes (movement
+        // also drives aim when the mouse is dormant, so the strike lands), and
+        // hold attack. Enemy y is exposed by DepHell.debug.state() (top-down build).
+        const px = state.player.x, py = state.player.y;
+        const nearest = enemies.sort((a, b) => Math.hypot(a.x - px, a.y - py) - Math.hypot(b.x - px, b.y - py))[0];
+        const inputKeys = [" "];
+        if (nearest.x > px + 6) inputKeys.push("d");
+        else if (nearest.x < px - 6) inputKeys.push("a");
+        if (nearest.y > py + 6) inputKeys.push("s");
+        else if (nearest.y < py - 6) inputKeys.push("w");
+        await evalIn(cdp, `DepHell.debug.input.set(${JSON.stringify(inputKeys)})`);
       }
-      await delay(120);
+      await delay(90);
     }
     await evalIn(cdp, "DepHell.debug.input.clear()");
 

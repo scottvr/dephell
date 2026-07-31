@@ -12,6 +12,37 @@ This is the single canonical planning document for Dependency Hell: what we are 
 
 ---
 
+## Top-Down Overhaul (branch `topdown-remaake`, 2026-07-30)
+
+**The camera changed: combat is now top-down / overhead (Binding of Isaac style), replacing the side-view
+side-scroller.** Why: the dependency graph is already an overhead node map, so side-view chambers forced the
+player to translate between two perspectives. Overhead arenas share the graph's mental model — a room *is* a
+node seen from above, its edges are the doors — making "rooms are services, corridors are dependencies"
+literal. Combat stays melee (WASD move + mouse-aimed 360° sword + aim-dash).
+
+Shipped in five verified phases (see git history on this branch):
+
+1. **Movement/physics** — `ARENA` play rect in `constants.js` replaces the `FLOOR_Y` gravity model; WASD drives
+   both axes (normalized diagonals); `facing ±1` → live `p.aim` angle; dash lunges along aim.
+2. **Enemy AI, boss, hazards → 2-D** — all updaters pursue in 2-D (character preserved: cycle orbits a radial
+   stand-off band, conflict-halves repel, etc.); contact/ranged gate on true distance; 2-D knockback; boss
+   aims its break-arc at the player; hazards are 2-D footprints.
+3. **Rendering** — top-down floor (tile grid + center node motif), arena walls, ground shadows, aim-rotated
+   player/blade (no L/R flip), top-down enemy/boss sprites. Side-view cityscape/floor-slab removed.
+4. **Hybrid doors + 2-D content** — on clear, one glowing labelled door per route on the walls; walk in →
+   route detail → confirm travels; single route auto-advances. Enemy spawns placed in 2-D at load
+   (`placeSpawn`; legacy `FLOOR_Y`-only content scattered, explicit `{x,y}` honored).
+5. **Tooling/docs** — `feel-probe` steers in 2-D (uses new `enemy.y` in `debug.state()`); coupling-audit seed
+   synced; visual-smoke re-baselined; `simulate` unchanged (no balance regression).
+
+Verification per phase is headless (movement asserts, 2-D pursuit assert, feel-probe, doors flow assert) plus
+screenshots. Legacy `FLOOR_Y`/`GROUND_TOP` remain in `constants.js` but are no longer used by gameplay.
+
+**Follow-ups worth considering:** richer per-type top-down enemy silhouettes; door art polish; a brief top-down
+onboarding beat; controller support for 360° aim.
+
+---
+
 ## 1. MVP Goal & Product Questions
 
 Prove that a real-time room-based roguelite can use a live dependency graph as its central source of power, risk, humor, and run identity.
@@ -37,7 +68,7 @@ The prototype already proved the core bet: the dependency graph can be both map 
 
 This is the canonical scope list. It is stated once here; the Sprint Plan and Starter Backlog reference these numbers rather than redefining them.
 
-The MVP is **one playable character (The Resolver)** on **one floor (the Release Candidate Pipeline)**, side-view room combat with roguelite room progression and graph-driven route/state decisions.
+The MVP is **one playable character (The Resolver)** on **one floor (the Release Candidate Pipeline)**, top-down room combat (see [Top-Down Overhaul](#top-down-overhaul-branch-topdown-remaake-2026-07-30)) with roguelite room progression and graph-driven route/state decisions.
 
 **"First Slice"** below refers to what is already implemented in the current zero-build canvas prototype (see [Ground Truth](#current-ground-truth--what-is-implemented)).
 

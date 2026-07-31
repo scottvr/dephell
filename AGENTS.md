@@ -101,9 +101,14 @@ affect a report, it must leave a causal trace in run state or the event log.
 ## Current prototype shape
 
 - The dependency graph is the location map and the systemic cause/effect surface.
-- Side-view rooms are body-scale chamber views of graph nodes or edges.
-- Graph-route choices are level/location choices; body-scale hallway traversal should only exist if it adds
-  meaningful combat, risk, reward, or pacing.
+- Combat rooms are **top-down / overhead arenas** (Binding of Isaac style): the player moves on both axes,
+  aims 360°, and fights enemies that pursue in 2-D. This shares the overhead mental model with the graph, so
+  "a room is a graph node seen from above" reads literally. (Combat is melee — WASD move, mouse-aimed sword.)
+- Graph-route choices are level/location choices, surfaced as **hybrid doors**: clearing a room lights up one
+  door per available route on the arena walls; walking into a door opens that route's detail, and confirming
+  travels. A single onward route auto-advances (no dead walking).
+- Spatial constants live in `scripts/constants.js` as `ARENA` (the play rect); actors clamp to it on both axes.
+  `FLOOR_Y`/`GROUND_TOP` are legacy side-view constants, no longer used by gameplay.
 - Keep the zero-build static browser prototype easy to open from `index.html`.
 
 ## Work intake

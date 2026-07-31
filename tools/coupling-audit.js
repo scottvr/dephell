@@ -76,9 +76,9 @@ function reachable(seeds) {
 // The live combat tick. `update` pulls in room-flow + menus too, which we DON'T want
 // to count as "the fight," so seed from the actual combat/movement functions.
 const COMBAT_SEED = [
-  "updatePlayer", "updateAttacks", "updateEnemies", "updateBoss", "updateBoss2",
+  "updatePlayer", "updateAttacks", "updateEnemies", "updateBoss",
   "damagePlayer", "swing", "updateHazards", "useFeatureFlag", "weakenCurrentWave",
-  "onEnemyDeath", "makeEnemy", "spawnEnemy",
+  "onEnemyDeath", "makeEnemy", "spawnEnemy", "placeSpawn",
 ];
 const combatSet = reachable(COMBAT_SEED);
 const combatText = [...combatSet].map((n) => chunks.get(n)).join("\n");

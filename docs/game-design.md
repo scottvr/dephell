@@ -86,7 +86,14 @@ The genre influences are design promises, not cloning targets.
 
 ## 2. Camera & Framing
 
-The MVP uses **side-view room combat**, as shown in the gameplay mockups. "Room-based" refers to the roguelite structure — discrete encounter spaces, branching route choices, room rewards, boss gates — not a top-down camera. Side-view spaces read as service chambers, catacombs, build stages, terminal panes, or arcade-cabinet anterooms, while the dependency graph provides the true topology underneath.
+> **Camera update (top-down overhaul).** Combat is now **top-down / overhead** (Binding of Isaac style),
+> reversing the earlier side-view MVP decision. Rationale: the dependency graph is already an overhead node
+> map, so dropping into side-view chambers forced the player to mentally translate between two perspectives.
+> Overhead rooms share the graph's mental model — a room *is* a node seen from above, its edges are the doors —
+> making "rooms are services, corridors are dependencies" literal instead of metaphorical. The prose below is
+> kept for history; where it says "side-view," read "top-down." See `docs/roadmap.md` → Top-Down Overhaul.
+
+The MVP uses **top-down room combat**. "Room-based" refers to the roguelite structure — discrete encounter spaces, branching route choices, room rewards, boss gates. Overhead arenas read as service chambers, build stages, or terminal decks seen from above, while the dependency graph provides the true topology underneath.
 
 The game therefore holds **two maps at once**:
 
@@ -97,11 +104,11 @@ Exploit the visual rhyme between dungeon maps, terminal minimaps, and dependency
 
 ### Graph-scale view (framing philosophy)
 
-The default MVP camera is side-view, but the game is not conceptually locked to one camera forever. The dependency graph can become the primary full-screen play space in special rooms, pauses, boss phases, postmortems, or later levels. Treat this as a **graph-scale view**: the analog to a bird's-eye dungeon map, except the map *is* the software architecture.
+The default MVP camera is top-down/overhead, and the game is not conceptually locked to one camera forever. The dependency graph can become the primary full-screen play space in special rooms, pauses, boss phases, postmortems, or later levels. Treat this as a **graph-scale view**: the analog to a bird's-eye dungeon map, except the map *is* the software architecture. (The overhead combat camera and the graph-scale view now share an orientation, which strengthens the rhyme rather than competing with it.)
 
 The **FTL** comparison is central. Graph-scale view is designed to become the game's subsystem-triage layer: pausable or slowed panic, cascading failures, limited attention, and choices about which failing node, edge, service, or package to save first. It is not merely a larger decorative minimap.
 
-- **(implemented)** For MVP, graph-scale interaction is **pause/between-room inspection and package-choice context**. Combat uses the graph as a live minimap and consequence surface, not an active tactical board. Traversal uses the dependency graph as the map: clearing a body-scale room exposes graph exits; a single valid exit auto-advances, multiple exits present a graph-route choice. No literal hallway walking.
+- **(implemented)** For MVP, graph-scale interaction is **pause/between-room inspection and package-choice context**. Combat uses the graph as a live minimap and consequence surface, not an active tactical board. Traversal uses the dependency graph as the map: clearing a top-down room lights up **hybrid doors** on the arena walls (one per graph exit); walking into a door opens that route's detail and confirming travels. A single valid exit auto-advances (no dead walking); a fork presents multiple doors.
 - **(planned)** Promote graph-scale view into active gameplay once graph rules are proven: select a node to patch, sever an edge temporarily, isolate a subsystem, trace infection spread, reroute around a conflict, or choose a deployment path. The UI must always signal clearly whether the player is acting on the avatar-scale room or the system-scale graph.
 
 ---
@@ -146,7 +153,7 @@ Debt is a meter plus tags. The numeric meter drives thresholds; tags drive speci
 
 ## 4. Dependency Graph & Edge/Relation Types
 
-The graph is a node-and-edge model attached to the run. It is also the run's **location topology**: side-view combat rooms are body-scale chamber views of graph loci; the minimap and paused graph show the system-scale map. This is expressed through current-location highlights, route pressure, and consequence spread — not lore.
+The graph is a node-and-edge model attached to the run. It is also the run's **location topology**: top-down combat rooms are overhead views of graph loci; the minimap and paused graph show the system-scale map. This is expressed through current-location highlights, route pressure, and consequence spread — not lore.
 
 - **(implemented)** Initial graph seeds at **6 nodes / 5 edges**, including a **hidden Modern Crypto conflict seed** that a LegacyAuth install can later activate. Current rooms have graph anchors so the minimap and paused graph show player location without a separate dungeon map.
 
@@ -378,7 +385,7 @@ Action Items: {3_suggestions_from_actual_causes}.
 
 ## 9. Visual Identity & Art Direction
 
-> **Staleness note.** The concept-art mockup *text descriptions* in `docs/concept-art/*.txt` describe a **top-down** perspective. The design has since **pivoted to side-view** (see §2). Treat those `.txt` files as **historical**. The `.jpg` mockups (`DependencyHell-gameplay-mockss1–4.jpg`) remain valid **reference only** for visual/HUD/graph language. The CRT reference asset lives in `docs/fracking.css` — reference it, don't inline it.
+> **Staleness note.** The concept-art mockup *text descriptions* in `docs/concept-art/*.txt` describe a **top-down** perspective, which — after a side-view MVP detour — is again the game's camera (see §2, top-down overhaul). The `.jpg` mockups (`DependencyHell-gameplay-mockss1–4.jpg`) remain valid **reference only** for visual/HUD/graph language; note their combat framing predates the current overhead arena. The CRT reference asset lives in `docs/fracking.css` — reference it, don't inline it.
 
 ### Visual target & identity
 
@@ -455,8 +462,8 @@ Decisions and rationale carried forward from the Technical Creative Director's w
 ### First-slice bet & scope
 
 - **Zero-build browser prototype.** The first slice is a zero-build browser prototype, directly openable from `index.html`, keeping the earliest playable loop easy to run, inspect, and throw away if a stronger engine choice emerges. (Runtime-system design favors tunable data, composable rules, and clear event logs over literal package-manager simulation. The biggest technical risk is the graph-effect framework — keep it small, inspectable, and content-driven. Code file architecture is documented in `AGENTS.md`.)
-- **Graph as location topology, not a second dungeon map.** The dependency graph *is* the run's location topology; side-view rooms are body-scale chambers of graph loci. Do not design the room map and dependency graph as competing navigational systems.
-- **Traversal uses the graph as the map.** Clearing a body-scale room exposes graph exits. One valid exit → auto-advance; multiple exits → player chooses the next locus from a graph-route view. No literal body-scale hallway walking unless it creates meaningful combat, risk, reward, or pacing. Room progression is route-based, not array-index teleportation.
+- **Graph as location topology, not a second dungeon map.** The dependency graph *is* the run's location topology; top-down rooms are overhead views of graph loci. Do not design the room map and dependency graph as competing navigational systems.
+- **Traversal uses the graph as the map.** Clearing a top-down room lights up graph exits as **hybrid doors** on the arena walls. One valid exit → auto-advance; multiple exits → the player walks into a door to choose the next locus (which opens that route's detail before committing). Room progression is route-based, not array-index teleportation.
 - **Graph-scale interaction starts passive.** For MVP the graph is a live minimap and consequence surface plus a paused inspection/package-context surface — not yet an active tactical board. The design preserves the option to promote it later.
 
 ### Combat & feel decisions (UAT)
