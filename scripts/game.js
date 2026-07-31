@@ -564,7 +564,22 @@
     const run = game.run;
     run.installedPackages.push(pkg.id);
     logEvent("package_installed", `Installed ${pkg.name}.`, { package: pkg.id });
+    // Snapshot the graph so we can tell the player, in the WORLD, that installing
+    // this package reshaped the dungeon — not just the minimap. The floater lands
+    // when the overlay closes and play resumes.
+    const beforeNodes = run.graph.nodes.length, beforeEdges = run.graph.edges.length;
     applyPackageEffects(run, pkg, logEvent);
+    const dNodes = run.graph.nodes.length - beforeNodes;
+    const dEdges = run.graph.edges.length - beforeEdges;
+    if (dNodes > 0 || dEdges > 0) {
+      const parts = [];
+      if (dNodes > 0) parts.push(`+${dNodes} node${dNodes > 1 ? "s" : ""}`);
+      if (dEdges > 0) parts.push(`+${dEdges} edge${dEdges > 1 ? "s" : ""}`);
+      logEvent("graph_mutated", `${pkg.name} reshaped the architecture (${parts.join(", ")}). The dungeon changed with it.`);
+      const p = game.player;
+      spawnFloater(p.x + p.w / 2, p.y - 46, "ARCHITECTURE SHIFTED", "#9be7ff");
+      sfx("reveal");
+    }
     activePreviewPackage = null;
     offeredList = [];
     packageInspecting = false;
@@ -1716,10 +1731,23 @@
         d.w = DTH; d.h = DW;
       }
     }
+    // Annotate each door with live graph state at its target node, so the exits
+    // themselves carry the consequences of how the player has reshaped the graph:
+    // a conflicted neighbour warns red, a risky one cautions amber, and a path only
+    // opened because of an installed package is flagged NEW.
+    for (const d of game.doors) {
+      const node = game.run.graph.nodes.find((n) => n.id === d.node);
+      d.risk = !!node?.tags?.some((t) => ["legacy", "debt", "security_risk", "unstable"].includes(t));
+      d.conflict = game.run.graph.edges.some((e) => e.relation === "conflicts" && e.active && (e.source === d.node || e.target === d.node) && e.visibility !== "hidden");
+      d.newpath = !!(d.route.requiresPackage && game.run.installedPackages.includes(d.route.requiresPackage));
+    }
     const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2;
     spawnFloater(cx, cy - 30, "WALK TO A DOOR", "#9be7ff");
     sfx("reveal");
     logEvent("routes_open", `${game.currentRoom.name} cleared. ${routes.length} exits opened — walk to a door.`, { room: game.currentRoom.id });
+    for (const d of game.doors.filter((x) => x.newpath)) {
+      logEvent("route_unlocked", `A new corridor opened toward ${d.node} — an installed package added that path.`, { room: game.currentRoom.id });
+    }
   }
 
   function updateDoors() {
@@ -2388,13 +2416,16 @@
     if (!game.doorsPhase || !game.doors.length) return;
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 240);
     for (const d of game.doors) {
+      // Door hue reflects the live graph state of the neighbour it leads to.
+      const glow = d.conflict ? "#ff2d55" : d.risk ? "#ffa62b" : "#20f7ee";
+      const edge = d.conflict ? "rgba(255,120,150," : d.risk ? "rgba(255,207,102," : "rgba(155,231,255,";
+      const fill = d.conflict ? "rgba(255,45,85," : d.risk ? "rgba(255,166,43," : "rgba(32,247,238,";
       ctx.save();
-      // Bright gap in the wall.
-      ctx.shadowColor = "#20f7ee";
+      ctx.shadowColor = glow;
       ctx.shadowBlur = 14 + pulse * 8;
-      ctx.fillStyle = `rgba(32, 247, 238, ${0.14 + 0.12 * pulse})`;
+      ctx.fillStyle = `${fill}${(0.14 + 0.12 * pulse).toFixed(3)})`;
       ctx.fillRect(d.x - d.w / 2, d.y - d.h / 2, d.w, d.h);
-      ctx.strokeStyle = `rgba(155, 231, 255, ${0.7 + 0.3 * pulse})`;
+      ctx.strokeStyle = `${edge}${(0.7 + 0.3 * pulse).toFixed(3)})`;
       ctx.lineWidth = 3;
       ctx.strokeRect(d.x - d.w / 2, d.y - d.h / 2, d.w, d.h);
       // Outward chevron cueing "exit this way".
@@ -2405,16 +2436,24 @@
       else if (d.side === "left") { ctx.moveTo(d.x + 2, d.y - a); ctx.lineTo(d.x - 12, d.y); ctx.lineTo(d.x + 2, d.y + a); }
       else { ctx.moveTo(d.x - 2, d.y - a); ctx.lineTo(d.x + 12, d.y); ctx.lineTo(d.x - 2, d.y + a); }
       ctx.stroke();
-      // Route label, placed just inside the arena from the door.
+      // Route label + graph-state tag, placed just inside the arena from the door.
       ctx.shadowBlur = 0;
-      ctx.fillStyle = "#dffbff";
       ctx.font = "12px 'Courier New', monospace";
       let lx = d.x, ly = d.y;
       if (d.side === "top") { ly = d.y + 24; ctx.textAlign = "center"; }
       else if (d.side === "bottom") { ly = d.y - 18; ctx.textAlign = "center"; }
       else if (d.side === "left") { lx = d.x + 16; ly = d.y + 4; ctx.textAlign = "left"; }
       else { lx = d.x - 16; ly = d.y + 4; ctx.textAlign = "right"; }
+      ctx.fillStyle = "#dffbff";
       ctx.fillText(d.route.label, lx, ly);
+      // Live graph-state tag under the label: NEW path / conflict / risk.
+      const tag = d.newpath ? "◆ NEW PATH" : d.conflict ? "⚠ CONFLICT" : d.risk ? "△ RISKY" : "";
+      if (tag) {
+        ctx.font = "9px 'Courier New', monospace";
+        ctx.fillStyle = d.newpath ? "#9be7a0" : d.conflict ? "#ff8098" : "#ffcf66";
+        const ty = d.side === "bottom" ? ly - 12 : ly + 12;
+        ctx.fillText(tag, lx, ty);
+      }
       ctx.restore();
     }
   }
@@ -3389,8 +3428,9 @@ function startSideErrorRail() {
         mouseActive,
         overlayOpen: isOverlayOpen(),
         doorsPhase: !!game.doorsPhase,
-        doors: (game.doors || []).map((d) => ({ label: d.route.label, side: d.side, node: d.node, x: d.x, y: d.y })),
+        doors: (game.doors || []).map((d) => ({ label: d.route.label, side: d.side, node: d.node, x: d.x, y: d.y, newpath: !!d.newpath, conflict: !!d.conflict, risk: !!d.risk })),
         locusNode: game.doorsPhase ? resolveLocationNode() : undefined,
+        graph: { nodes: game.run.graph.nodes.length, edges: game.run.graph.edges.length },
         // ms since the run ended (report opened); null while a run is live. Lets tooling
         // reason about the restart input-lock deterministically.
         sinceEnd: game.run.ended ? Math.round(performance.now() - runEndedAt) : null,
