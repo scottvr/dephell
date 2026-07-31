@@ -399,7 +399,7 @@
     if (!game.pendingSpawns.length) return;
     for (const spawn of game.pendingSpawns) {
       const idx = game.enemies.length;
-      const enemy = makeEnemy({ type: spawn.type, x: spawn.overrides.x ?? game.player.x, y: FLOOR_Y }, idx);
+      const enemy = makeEnemy({ type: spawn.type, x: spawn.overrides.x ?? game.player.x, y: spawn.overrides.y ?? (ARENA.y0 + ARENA.y1) / 2 }, idx);
       Object.assign(enemy, spawn.overrides);
       game.enemies.push(enemy);
     }
@@ -413,8 +413,10 @@
   }
 
   // --- Floor hazards (deprecation zones, boss audit zones) ---
-  function addHazard(x, opts = {}) {
-    game.hazards.push({ x, y: FLOOR_Y, w: opts.w ?? 70, h: opts.h ?? 16, life: opts.life ?? 6, maxLife: opts.life ?? 6, dps: opts.dps ?? 4, source: opts.source || "hazard", tickTimer: 0 });
+  function addHazard(x, y, opts = {}) {
+    // 2-D deprecation-zone footprint centered on (x,y). Square-ish so it reads as
+    // a floor decal in the top-down view (render lands in Phase 3).
+    game.hazards.push({ x, y, w: opts.w ?? 70, h: opts.h ?? 70, life: opts.life ?? 6, maxLife: opts.life ?? 6, dps: opts.dps ?? 4, source: opts.source || "hazard", tickTimer: 0 });
   }
 
   function updateHazards(dt) {
@@ -422,7 +424,7 @@
     for (const hz of game.hazards) {
       hz.life -= dt;
       const p = game.player;
-      if (rectsOverlap(p.x - p.w / 2, p.y - p.h, p.w, p.h, hz.x - hz.w / 2, hz.y - 6, hz.w, hz.h)) {
+      if (rectsOverlap(p.x, p.y - p.h, p.w, p.h, hz.x - hz.w / 2, hz.y - hz.h / 2, hz.w, hz.h)) {
         if (!featureFlagActive()) {
           game.run.techDebt += hz.dps * dt * (tested ? 0.5 : 1);
           hz.tickTimer -= dt;
@@ -1060,8 +1062,11 @@
           addShake(2.5);
           let knockbackApplied = false;
           if (!enemy.boss) {
-            const dir = Math.sign(enemy.x - game.player.x) || 1;
-            enemy.knockbackVx = dir * 160;
+            // Knock the enemy directly away from the player, in 2-D.
+            const t = playerTarget();
+            const kang = Math.atan2(enemy.y - t.y, enemy.x - t.x);
+            enemy.knockbackVx = Math.cos(kang) * 160;
+            enemy.knockbackVy = Math.sin(kang) * 160;
             knockbackApplied = true;
           }
           pushFeel({ kind: "hit", hitFreezeAfter: hitFreezeTimer, shakeAfter: shakeMag, particles: 0, floater: true, knockbackApplied });
@@ -1070,17 +1075,40 @@
     }
     flushPendingSpawns();
     game.slashes = game.slashes.filter((slash) => slash.life > 0);
-    game.enemyShots = game.enemyShots.filter((shot) => shot.life > 0 && shot.x > -20 && shot.x < 1000);
+    game.enemyShots = game.enemyShots.filter((shot) => shot.life > 0 && shot.x > -20 && shot.x < 1000 && shot.y > -20 && shot.y < 560);
+  }
+
+  // --- Top-down targeting helpers ------------------------------------------
+  // Enemy body center: x is already the sprite's horizontal center, y is the
+  // feet anchor, so subtract half-height. The player anchors its box at the
+  // left edge / bottom, so playerTarget() offsets differently — keep separate.
+  function enemyCenter(e) { return { x: e.x, y: e.y - (e.h || 0) / 2 }; }
+  function playerTarget() { const p = game.player; return { x: p.x + p.w / 2, y: p.y - p.h / 2 }; }
+  function distToPlayer(e) {
+    const a = enemyCenter(e); const t = playerTarget();
+    return Math.hypot(t.x - a.x, t.y - a.y);
+  }
+  // Move an actor toward (tx,ty) at spd px/s, clamped to the arena on both axes.
+  // Returns the heading angle so callers can reuse it (facing / repel / orbit).
+  function chaseToward(e, tx, ty, spd, dt) {
+    const ang = Math.atan2(ty - e.y, tx - e.x);
+    e.x = clamp(e.x + Math.cos(ang) * spd * dt, ARENA.x0, ARENA.x1);
+    e.y = clamp(e.y + Math.sin(ang) * spd * dt, ARENA.y0, ARENA.y1);
+    return ang;
   }
 
   function updateEnemies(dt) {
     for (const enemy of game.enemies) {
       if (!enemy.alive) continue;
       if (enemy.hitFlash > 0) enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
-      if (enemy.knockbackVx) {
-        enemy.x = clamp(enemy.x + enemy.knockbackVx * dt, 40, 920);
-        enemy.knockbackVx *= Math.pow(0.82, dt * 60);
+      if (enemy.knockbackVx || enemy.knockbackVy) {
+        const decay = Math.pow(0.82, dt * 60);
+        enemy.x = clamp(enemy.x + (enemy.knockbackVx || 0) * dt, ARENA.x0, ARENA.x1);
+        enemy.y = clamp(enemy.y + (enemy.knockbackVy || 0) * dt, ARENA.y0, ARENA.y1);
+        enemy.knockbackVx = (enemy.knockbackVx || 0) * decay;
+        enemy.knockbackVy = (enemy.knockbackVy || 0) * decay;
         if (Math.abs(enemy.knockbackVx) < 4) enemy.knockbackVx = 0;
+        if (Math.abs(enemy.knockbackVy) < 4) enemy.knockbackVy = 0;
       }
       if (enemy.boss) { updateBoss(enemy, dt); continue; }
       const handler = ENEMY_UPDATERS[enemy.type];
@@ -1101,11 +1129,11 @@
   }
 
   function contactWindup(enemy, reason, range = 46) {
-    const p = game.player;
-    if (enemy.wasWindup && enemy.windupTimer <= 0 && Math.abs(p.x - enemy.x) < range + 18) {
+    const d = distToPlayer(enemy);
+    if (enemy.wasWindup && enemy.windupTimer <= 0 && d < range + 18) {
       damagePlayer(enemy.damage, reason);
     }
-    if (Math.abs(p.x - enemy.x) < range && enemy.attackTimer <= 0 && enemy.contactTimer <= 0) {
+    if (d < range && enemy.attackTimer <= 0 && enemy.contactTimer <= 0) {
       enemy.telegraph = 0.28;
       enemy.windupTimer = 0.26;
       enemy.attackTimer = 1.5;
@@ -1114,25 +1142,24 @@
   }
 
   function rangedVolley(enemy, dt, count) {
-    const p = game.player;
-    if (Math.abs(p.x - enemy.x) >= 46 && enemy.attackTimer <= 0.05 && enemy.contactTimer <= 0) {
+    if (distToPlayer(enemy) >= 46 && enemy.attackTimer <= 0.05 && enemy.contactTimer <= 0) {
       enemy.attackTimer = featureFlagActive() ? 2.4 : 1.7;
       enemy.telegraph = 0.32;
       if (featureFlagActive() || circuitBreakerActive()) return;
-      const base = Math.atan2(p.y - enemy.y, p.x - enemy.x);
+      const c = enemyCenter(enemy); const t = playerTarget();
+      const base = Math.atan2(t.y - c.y, t.x - c.x);
       for (let i = 0; i < count; i += 1) {
         const a = base + (i - (count - 1) / 2) * 0.18;
-        game.enemyShots.push({ x: enemy.x, y: enemy.y - 22, vx: Math.cos(a) * 220, vy: Math.sin(a) * 220, life: 2.4, damage: enemy.damage, source: enemy.name });
+        game.enemyShots.push({ x: c.x, y: c.y, vx: Math.cos(a) * 220, vy: Math.sin(a) * 220, life: 2.4, damage: enemy.damage, source: enemy.name });
       }
     }
   }
 
   function updateGenericEnemy(enemy, dt) {
-    const p = game.player;
     const flagSlow = featureFlagActive() ? 0.58 : 1;
-    const dir = Math.sign(p.x - enemy.x) || 1;
     const growth = enemy.type === "memory_leak" ? (enemy.maxHp - enemy.hp) * 0.5 : 0;
-    enemy.x = clamp(enemy.x + dir * (enemy.speed + growth) * flagSlow * dt, 88, 900);
+    const t = playerTarget();
+    chaseToward(enemy, t.x, t.y, (enemy.speed + growth) * flagSlow, dt);
     tickTimers(enemy, dt);
     contactWindup(enemy, `${enemy.name} collided with active code.`);
     if (enemy.type === "breaking_change") rangedVolley(enemy, dt, 1);
@@ -1141,18 +1168,17 @@
   // Transitive Bug — smallest thing on screen; spreads to a linked enemy, or when
   // alone infects a graph neighbour (registered risk + pin + debt).
   function updateTransitiveBug(enemy, dt) {
-    const p = game.player;
     const flagSlow = featureFlagActive() ? 0.58 : 1;
+    const dist2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
     const kin = game.enemies.filter((e) => e.alive && e !== enemy && !e.boss && e.type !== "transitive_bug");
-    const mate = kin.sort((a, b) => Math.abs(a.x - enemy.x) - Math.abs(b.x - enemy.x))[0] || null;
+    const mate = kin.sort((a, b) => dist2(a, enemy) - dist2(b, enemy))[0] || null;
     enemy.infectTimer -= dt * flagSlow;
     tickTimers(enemy, dt);
-    const chaseX = mate && enemy.infectTimer < 0.8 ? mate.x : p.x;
-    const dir = Math.sign(chaseX - enemy.x) || 1;
-    enemy.x = clamp(enemy.x + dir * enemy.speed * flagSlow * dt, 88, 900);
+    const target = mate && enemy.infectTimer < 0.8 ? { x: mate.x, y: mate.y } : playerTarget();
+    chaseToward(enemy, target.x, target.y, enemy.speed * flagSlow, dt);
     if (enemy.infectTimer <= 0.3 && enemy.telegraph <= 0) enemy.telegraph = 0.3;
     if (enemy.infectTimer <= 0) {
-      if (mate && Math.abs(mate.x - enemy.x) < 70) {
+      if (mate && dist2(mate, enemy) < 70) {
         // Spreading to kin is repeatable (an escalating swarm).
         mate.maxHp += 8; mate.hp += 8; mate.speed += 14; mate.infected = true;
         logEvent("enemy_infected", `${enemy.name} spread to ${mate.name} (+8 HP / +14 spd).`);
@@ -1176,10 +1202,9 @@
   // Version Conflict — advances as one mass until half HP, then forks into two
   // incompatible halves that alternate a damage shield.
   function updateVersionConflict(enemy, dt) {
-    const p = game.player;
     const flagSlow = featureFlagActive() ? 0.58 : 1;
-    const dir = Math.sign(p.x - enemy.x) || 1;
-    enemy.x = clamp(enemy.x + dir * enemy.speed * flagSlow * dt, 88, 900);
+    const t = playerTarget();
+    chaseToward(enemy, t.x, t.y, enemy.speed * flagSlow, dt);
     tickTimers(enemy, dt);
     enemy.seam = 1 - enemy.hp / enemy.maxHp;
     if (!enemy.forked && enemy.hp <= enemy.maxHp * 0.5) { forkVersionConflict(enemy); return; }
@@ -1190,8 +1215,8 @@
     if (enemy.forked) return;
     enemy.forked = true;
     enemy.alive = false;
-    spawnEnemy("version_conflict_half", { x: clamp(enemy.x - 20, 100, 880), variant: "v1", color: "#ff2d55", phase: 0, coexist: 0 });
-    spawnEnemy("version_conflict_half", { x: clamp(enemy.x + 20, 100, 880), variant: "v2", color: "#ff8a3d", phase: Math.PI, coexist: 0 });
+    spawnEnemy("version_conflict_half", { x: clamp(enemy.x - 20, ARENA.x0, ARENA.x1), y: enemy.y, variant: "v1", color: "#ff2d55", phase: 0, coexist: 0 });
+    spawnEnemy("version_conflict_half", { x: clamp(enemy.x + 20, ARENA.x0, ARENA.x1), y: enemy.y, variant: "v2", color: "#ff8a3d", phase: Math.PI, coexist: 0 });
     const node = resolveLocationNode();
     const edge = ensureConflictEdge(node, "modern_crypto");
     applyGraphEffects([
@@ -1202,17 +1227,20 @@
   }
 
   function updateVersionHalf(enemy, dt) {
-    const p = game.player;
     const flagSlow = featureFlagActive() ? 0.58 : 1;
     enemy.shieldClock += dt;
     const shimHold = game.run.installedPackages.includes("compatibility_shim") && enemy.variant === "v1";
     enemy.exposed = Math.sin(enemy.shieldClock * 2.2 + enemy.phase) > 0 || featureFlagActive() || shimHold;
     enemy.telegraph = enemy.exposed ? 0.2 : 0;
     const sib = game.enemies.find((e) => e.alive && e.type === "version_conflict_half" && e !== enemy);
-    let d = Math.sign(p.x - enemy.x) || 1;
-    const near = sib && Math.abs(sib.x - enemy.x) < 40;
-    if (near) d = Math.sign(enemy.x - sib.x) || d; // repel — semver incompatibility
-    enemy.x = clamp(enemy.x + d * enemy.speed * flagSlow * dt, 88, 900);
+    const near = sib && Math.hypot(sib.x - enemy.x, sib.y - enemy.y) < 40;
+    if (near) {
+      // Repel away from the sibling — semver incompatibility pushes them apart.
+      chaseToward(enemy, enemy.x + (enemy.x - sib.x), enemy.y + (enemy.y - sib.y), enemy.speed * flagSlow, dt);
+    } else {
+      const t = playerTarget();
+      chaseToward(enemy, t.x, t.y, enemy.speed * flagSlow, dt);
+    }
     tickTimers(enemy, dt);
     // If they can't be pushed apart (cornered), they reconcile into an active conflict.
     if (near) {
@@ -1235,16 +1263,15 @@
   // Deprecated API — slow; paves the arena with deprecation zones and, if left
   // alive too long, deprecates the current node.
   function updateDeprecatedApi(enemy, dt) {
-    const p = game.player;
     const flagSlow = featureFlagActive() ? 0.58 : 1;
-    const dir = Math.sign(p.x - enemy.x) || 1;
-    enemy.x = clamp(enemy.x + dir * enemy.speed * flagSlow * dt, 88, 900);
+    const t = playerTarget();
+    chaseToward(enemy, t.x, t.y, enemy.speed * flagSlow, dt);
     enemy.zoneTimer -= dt;
     enemy.lifeClock += dt;
     tickTimers(enemy, dt);
-    if (enemy.zoneTimer <= 0.4 && !enemy.stamping) { enemy.stamping = true; enemy.stampX = enemy.x; enemy.telegraph = 0.4; }
+    if (enemy.zoneTimer <= 0.4 && !enemy.stamping) { enemy.stamping = true; enemy.stampX = enemy.x; enemy.stampY = enemy.y; enemy.telegraph = 0.4; }
     if (enemy.zoneTimer <= 0) {
-      addHazard(enemy.stampX ?? enemy.x, { dps: 4, life: 6, source: enemy.name });
+      addHazard(enemy.stampX ?? enemy.x, enemy.stampY ?? enemy.y, { dps: 4, life: 6, source: enemy.name });
       enemy.zoneTimer = featureFlagActive() ? 3.4 : 2.0;
       enemy.stamping = false;
       logEvent("zone_dropped", `${enemy.name} shed a deprecation zone.`);
@@ -1265,12 +1292,18 @@
   // Dependency Cycle — oscillates so it can't be face-tanked; on death under debt
   // it re-resolves into a regression (the cycle never fully breaks under debt).
   function updateDependencyCycle(enemy, dt) {
-    const p = game.player;
     const flagSlow = featureFlagActive() ? 0.58 : 1;
-    const gap = enemy.x - p.x;
-    if (Math.abs(gap) < 70) enemy.dir = Math.sign(gap) || 1;
-    else if (Math.abs(gap) > 210) enemy.dir = -(Math.sign(gap) || 1);
-    enemy.x = clamp(enemy.x + enemy.dir * enemy.speed * flagSlow * dt, 88, 900);
+    // Radial oscillation: hold a stand-off band from the player so it can't be
+    // face-tanked. Too close -> back off; too far -> close in; the sign flips the
+    // pursuit vector so it orbits/yo-yos instead of committing to contact.
+    const t = playerTarget();
+    const d = distToPlayer(enemy);
+    if (d < 70) enemy.dir = -1;
+    else if (d > 210) enemy.dir = 1;
+    const toward = Math.atan2(t.y - enemy.y, t.x - enemy.x);
+    const ang = enemy.dir >= 0 ? toward : toward + Math.PI;
+    enemy.x = clamp(enemy.x + Math.cos(ang) * enemy.speed * flagSlow * dt, ARENA.x0, ARENA.x1);
+    enemy.y = clamp(enemy.y + Math.sin(ang) * enemy.speed * flagSlow * dt, ARENA.y0, ARENA.y1);
     tickTimers(enemy, dt);
     contactWindup(enemy, `${enemy.name} looped back through active code.`);
     rangedVolley(enemy, dt, 1);
@@ -1331,9 +1364,9 @@
     const bossId = selectBoss();
     const def = enemyDefs[bossId];
     if (bossId === "distributed_monolith") {
-      game.enemies = game.enemies.map((e) => (e.type === "breaking_change" ? makeEnemy({ type: "memory_leak", x: e.x, y: FLOOR_Y }, e.id) : e));
+      game.enemies = game.enemies.map((e) => (e.type === "breaking_change" ? makeEnemy({ type: "memory_leak", x: e.x, y: e.y }, e.id) : e));
     }
-    const boss = makeEnemy({ type: bossId, x: 680, y: FLOOR_Y }, `boss`);
+    const boss = makeEnemy({ type: bossId, x: (ARENA.x0 + ARENA.x1) / 2, y: (ARENA.y0 + ARENA.y1) / 2 }, `boss`);
     boss.boss = true;
     boss.armored = true;
     boss.windowTimer = def.phases[0].windowEvery;
@@ -1360,7 +1393,11 @@
     }
     const phase = def.phases[boss.phaseIndex];
 
-    boss.x += Math.sign(680 - boss.x) * def.speed * 0.4 * dt;
+    // Slow drift back toward the arena center on both axes (a lane boss, not a
+    // pursuer — it dominates the middle and attacks outward).
+    const homeX = (ARENA.x0 + ARENA.x1) / 2, homeY = (ARENA.y0 + ARENA.y1) / 2;
+    boss.x += Math.sign(homeX - boss.x) * def.speed * 0.4 * dt;
+    boss.y += Math.sign(homeY - boss.y) * def.speed * 0.4 * dt;
     boss.telegraph = Math.max(0, boss.telegraph - dt);
 
     // Vulnerability window cycle — armored except during the compatibility window.
@@ -1410,7 +1447,8 @@
       boss.summonTimer -= dt;
       if (boss.summonTimer <= 0) {
         boss.summonTimer = 11;
-        spawnEnemy(phase.summon, { x: p.x > 480 ? 210 : 760 });
+        // Summon on the opposite side of the arena from the player (both axes).
+        spawnEnemy(phase.summon, { x: p.x > 480 ? 210 : 760, y: (p.y - p.h / 2) > 270 ? 150 : 390 });
         logEvent("boss_summon", `${def.name} summoned ${enemyDefs[phase.summon].name}.`);
       }
     }
@@ -1420,10 +1458,12 @@
   }
 
   function launchArc(boss, def) {
-    const p = game.player;
-    const dirX = Math.sign(p.x - boss.x) || -1;
+    // Break travels along the aim to the player, in 2-D (was a horizontal
+    // floor-skimmer). Still flagged arc:true — unblockable by circuit breaker.
+    const c = enemyCenter(boss); const t = playerTarget();
+    const ang = Math.atan2(t.y - c.y, t.x - c.x);
     const damage = Math.round(def.damage * 0.7);
-    game.enemyShots.push({ x: boss.x, y: FLOOR_Y - 26, vx: dirX * 300, vy: 0, life: 3, damage, source: `${def.name} break`, arc: true });
+    game.enemyShots.push({ x: c.x, y: c.y, vx: Math.cos(ang) * 300, vy: Math.sin(ang) * 300, life: 3, damage, source: `${def.name} break`, arc: true });
   }
 
   function defeatBoss(enemy) {
@@ -3219,7 +3259,7 @@ function startSideErrorRail() {
         stability: Math.round(game.run.stability),
         ended: game.run.ended,
         player: { x: game.player.x, y: game.player.y, aim: game.player.aim },
-        enemies: game.enemies.filter((e) => e.alive).map((e) => ({ type: e.type, x: e.x, hp: e.hp, telegraph: e.telegraph, boss: !!e.boss, armored: !!e.armored })),
+        enemies: game.enemies.filter((e) => e.alive).map((e) => ({ type: e.type, x: e.x, y: e.y, hp: e.hp, telegraph: e.telegraph, boss: !!e.boss, armored: !!e.armored })),
         canvasWidth: canvas.width,
         mouseActive,
         overlayOpen: isOverlayOpen(),
