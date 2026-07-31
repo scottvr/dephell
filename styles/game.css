@@ -324,6 +324,10 @@ button:focus-visible {
   background: var(--amber);
 }
 
+.commit .track i {
+  background: #7aa8ff;
+}
+
 /* Mid-run build identity — a quiet status line under the meters that names the
    architecture the player is assembling. Collapses entirely until a package is in. */
 .build-identity {
@@ -1096,6 +1100,36 @@ button:focus-visible {
   border: 1px solid rgba(124, 207, 196, 0.52);
   color: var(--muted);
   font-size: 11px;
+}
+
+/* Install price banner on each package card (Slice 2 economy) — sits near the top
+   under the name so the cost is always visible without scrolling the card. */
+.package-price {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 8px 0 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(93, 255, 235, 0.28);
+}
+
+.price-cash {
+  font-size: 15px;
+  font-weight: 700;
+  color: #7aa8ff;
+  letter-spacing: 0.4px;
+}
+
+.price-cash.unaffordable {
+  color: var(--red);
+  opacity: 0.85;
+}
+
+.price-credit {
+  font-size: 11px;
+  color: var(--amber);
+  opacity: 0.85;
 }
 
 .report-body {

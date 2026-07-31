@@ -8,6 +8,11 @@
       stability: 100,
       observability: 2,
       techDebt: 0,
+      // Commits: the Slice-2 spend currency. Packages cost Commits to install, or
+      // can be taken on credit (paid in Technical Debt). Earned by clearing rooms.
+      commits: 3,
+      commitsSpent: 0,
+      creditTaken: 0,
       stats: { fireRate: 0.25, damage: 10, speed: 250, dashCooldown: 0.55 },
       installedPackages: [],
       tools: [],

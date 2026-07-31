@@ -21,6 +21,11 @@
   const ctx = canvas.getContext("2d");
   const roomById = new Map(rooms.map((room) => [room.id, room]));
 
+  // --- Slice 2 economy tuning ------------------------------------------------
+  const COMMITS_PER_ROOM = 2;   // earned per cleared combat room
+  const DEBT_PER_COMMIT = 6;    // credit financing: on-credit install costs cost * this in TDR
+  const packageCost = (pkg) => (pkg && pkg.cost != null ? pkg.cost : 2);
+
   const ui = {
     stabilityBar: document.querySelector("#stabilityBar"),
     stabilityValue: document.querySelector("#stabilityValue"),
@@ -28,6 +33,8 @@
     observabilityValue: document.querySelector("#observabilityValue"),
     debtBar: document.querySelector("#debtBar"),
     debtValue: document.querySelector("#debtValue"),
+    commitBar: document.querySelector("#commitBar"),
+    commitValue: document.querySelector("#commitValue"),
     buildIdentity: document.querySelector("#buildIdentity"),
     eventLog: document.querySelector("#eventLog"),
     graphSvg: document.querySelector("#graphSvg"),
@@ -39,6 +46,7 @@
     graphDetails: document.querySelector("#graphDetails"),
     choiceGraphSvg: document.querySelector("#choiceGraphSvg"),
     choiceGraphCaption: document.querySelector("#choiceGraphCaption"),
+    choicePrompt: document.querySelector("#choicePrompt"),
     routeOverlay: document.querySelector("#routeOverlay"),
     routeGraphSvg: document.querySelector("#routeGraphSvg"),
     routeChoices: document.querySelector("#routeChoices"),
@@ -560,10 +568,24 @@
     return game.run.graph.edges.find((edge) => edge.relation === "conflicts" && edge.active);
   }
 
-  function applyPackage(pkg) {
+  function applyPackage(pkg, mode = "cash") {
     const run = game.run;
+    const cost = packageCost(pkg);
+    // Pay for it: Commits up front, or finance it as Technical Debt on credit.
+    if (mode === "credit") {
+      const financeDebt = cost * DEBT_PER_COMMIT;
+      run.techDebt += financeDebt;
+      run.creditTaken += cost;
+      run.debtTags.push("bought_on_credit");
+      logEvent("package_credit", `${pkg.name} bought on credit — financed as +${financeDebt} TDR (no Commits spent).`, { package: pkg.id });
+      const p = game.player;
+      spawnFloater(p.x + p.w / 2, p.y - 58, `CREDIT +${financeDebt} TDR`, "#ffcf66");
+    } else {
+      run.commits = Math.max(0, run.commits - cost);
+      run.commitsSpent += cost;
+    }
     run.installedPackages.push(pkg.id);
-    logEvent("package_installed", `Installed ${pkg.name}.`, { package: pkg.id });
+    logEvent("package_installed", `Installed ${pkg.name} (${mode === "credit" ? "on credit" : cost + " Commits"}).`, { package: pkg.id });
     // Snapshot the graph so we can tell the player, in the WORLD, that installing
     // this package reshaped the dungeon — not just the minimap. The floater lands
     // when the overlay closes and play resumes.
@@ -639,6 +661,10 @@
           <span class="package-name">${pkg.name}</span>
           <span class="package-kind">${packageKind(pkg)}</span>
         </span>
+        <div class="package-price" aria-label="Install cost">
+          <span class="price-cash ${game.run.commits >= packageCost(pkg) ? "" : "unaffordable"}">${packageCost(pkg)} ⇿ Commits</span>
+          <span class="price-credit">or credit: +${packageCost(pkg) * DEBT_PER_COMMIT} TDR</span>
+        </div>
         <p><b>Benefit:</b> ${pkg.benefit}</p>
         <p><b>Risk:</b> ${visibleRiskText(pkg)}</p>
         <div class="effect-row" aria-label="Graph mutation preview">${packageEffectBadges(pkg)}</div>
@@ -652,6 +678,7 @@
       ui.packageChoices.appendChild(button);
     });
     setPackageFocus(0, 0, true);
+    if (ui.choicePrompt) ui.choicePrompt.textContent = `You have ${game.run.commits} Commits. Install with Commits (Enter / ✕), or on credit (C / □) to defer the cost as Technical Debt.`;
     ui.choiceOverlay.classList.remove("hidden");
     audio.setState({ interstitial: true });
   }
@@ -721,15 +748,24 @@
     sfx(packageInspecting ? "uiMove" : "uiBack");
   }
 
-  function commitPackage() {
+  function commitPackage(mode = "cash") {
     if (!offeredList.length || committingPackage) return;
     const pkg = offeredList[focusedIndex];
     if (!pkg) return;
+    const cost = packageCost(pkg);
+    if (mode === "cash" && game.run.commits < cost) {
+      // Can't afford cash — nudge, and point the player at the credit option.
+      const cur = packageCards()[focusedIndex];
+      if (cur) { cur.classList.remove("nudge"); void cur.offsetWidth; cur.classList.add("nudge"); }
+      sfx("uiInvalid");
+      if (ui.choicePrompt) ui.choicePrompt.textContent = `Not enough Commits (${game.run.commits}/${cost}). Take it on credit — press C / □ — for +${cost * DEBT_PER_COMMIT} Technical Debt.`;
+      return;
+    }
     committingPackage = true;
     const card = packageCards()[focusedIndex];
     if (card) card.classList.add("punch", "installed");
     sfx("uiConfirm");
-    window.setTimeout(() => applyPackage(pkg), 260);
+    window.setTimeout(() => applyPackage(pkg, mode), 260);
   }
 
   function renderChoiceGraph() {
@@ -1628,7 +1664,10 @@
       game.run.stability = Math.min(100, game.run.stability + clearHeal);
       const healed = Math.round(game.run.stability) - before;
       if (healed > 0) spawnFloater(game.player.x + game.player.w / 2, game.player.y - 40, `+${healed} STABILITY`, "#9be7a0");
-      logEvent("room_cleared", `${room.name} cleared. Stability ${before} -> ${Math.round(game.run.stability)}.`, { room: room.id });
+      // Clearing a combat room pays out Commits — the currency you spend on packages.
+      game.run.commits += COMMITS_PER_ROOM;
+      spawnFloater(game.player.x + game.player.w / 2, game.player.y - 58, `+${COMMITS_PER_ROOM} COMMITS`, "#9be7ff");
+      logEvent("room_cleared", `${room.name} cleared. Stability ${before} -> ${Math.round(game.run.stability)}. +${COMMITS_PER_ROOM} Commits.`, { room: room.id });
     } else {
       logEvent("room_cleared", `${room.name} cleared.`, { room: room.id });
     }
@@ -2069,7 +2108,9 @@
     ui.observabilityBar.style.width = `${(run.observability / 5) * 100}%`;
     ui.observabilityValue.textContent = `${run.observability}/5`;
     ui.debtBar.style.width = `${Math.min(100, run.techDebt)}%`;
-    ui.debtValue.textContent = String(run.techDebt);
+    ui.debtValue.textContent = String(Math.round(run.techDebt));
+    if (ui.commitBar) ui.commitBar.style.width = `${Math.min(100, (run.commits || 0) * 12)}%`;
+    if (ui.commitValue) ui.commitValue.textContent = String(run.commits || 0);
     // Surface build identity DURING the run (it was previously only shown post-mortem),
     // so the player feels the architecture they're assembling actually taking shape.
     if (ui.buildIdentity) ui.buildIdentity.textContent = run.installedPackages.length ? `▸ becoming ${buildIdentity(run)}` : "";
@@ -3120,7 +3161,8 @@
       padPrev.buttons = pad.buttons.map((b) => b.pressed);
       return;
     }
-    if (edge(0)) commitPackage();                                    // Cross = INSTALL
+    if (edge(0)) commitPackage("cash");                              // Cross = INSTALL (Commits)
+    if (edge(2)) commitPackage("credit");                            // Square = INSTALL ON CREDIT
     if (edge(3)) toggleInspect();                                    // Triangle = READ
     if (edge(1) && packageInspecting) toggleInspect();               // Circle = BACK (collapse)
     if (edge(14) || edge(4)) setPackageFocus(focusedIndex - 1, -1);  // D-pad left / L1
@@ -3299,7 +3341,8 @@ function startSideErrorRail() {
       if (event.repeat) return; // discrete steps only; no machine-gunned cues on held keys
       if (key === "arrowleft" || key === "a") { setPackageFocus(focusedIndex - 1, -1); return; }
       if (key === "arrowright" || key === "d") { setPackageFocus(focusedIndex + 1, 1); return; }
-      if (key === "enter" || key === " ") { commitPackage(); return; }
+      if (key === "enter" || key === " ") { commitPackage("cash"); return; }
+      if (key === "c") { commitPackage("credit"); return; }
       if (key === "i" || key === "arrowup") { toggleInspect(); return; }
       if ((key === "escape" || key === "backspace") && packageInspecting) { toggleInspect(); return; }
     }
@@ -3428,6 +3471,11 @@ function startSideErrorRail() {
       return {
         room: game.currentRoom?.id,
         stability: Math.round(game.run.stability),
+        commits: game.run.commits,
+        commitsSpent: game.run.commitsSpent,
+        creditTaken: game.run.creditTaken,
+        techDebt: game.run.techDebt,
+        installedPackages: game.run.installedPackages.slice(),
         ended: game.run.ended,
         player: { x: game.player.x, y: game.player.y, aim: game.player.aim },
         enemies: game.enemies.filter((e) => e.alive).map((e) => ({ type: e.type, x: e.x, y: e.y, hp: e.hp, telegraph: e.telegraph, boss: !!e.boss, armored: !!e.armored })),

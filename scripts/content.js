@@ -187,6 +187,17 @@
     },
   ];
 
+  // Package prices in Commits (Slice 2 economy). Higher = more build-defining. Cost
+  // is paid in Commits at install, OR taken on credit as Technical Debt (cost * a
+  // financing multiplier, in game.js). Tuned so the player affords ~one mid package
+  // every couple of rooms and must weigh cash vs. credit vs. saving for a big one.
+  const PACKAGE_COSTS = {
+    legacy_auth: 3, test_suite: 3, compatibility_shim: 3, feature_flag: 2,
+    modern_crypto: 4, logging_framework: 2, containerization: 4, rollback_plan: 3,
+    pin_version: 1, security_scanner: 3, circuit_breaker: 3, rubber_duck: 1,
+  };
+  packages.forEach((p) => { p.cost = PACKAGE_COSTS[p.id] ?? 2; });
+
   // ---------------------------------------------------------------------------
   // Incidents — run-level pressure created by graph state. Each has >=2 resolution
   // paths with an immediate effect and a traceable later consequence. Selection
