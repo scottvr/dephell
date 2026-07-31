@@ -7,15 +7,9 @@
     <link rel="stylesheet" href="./styles/game.css">
   </head>
   <body>
-    <aside class="side-error-rail" aria-hidden="true">
-      <div class="side-error-lines">
-        <span>0xDEADBEEF 000 0100 SEGFAULT (SIGSEGV) at PTR exception *0A000000 BITBLT_23ff</span>
-        <span>NULL_POINTER Exception *0A000000 UID0 H4X0R:'kill -9' stacktrace=5m45h3d1</span>
-        <span>0xC4F3B4B3 0x0031337 core dump heap walk unstable module=libglitch_v3</span>
-        <span>CRITICAL_ERROR![STACK_5m45h3d1] </span>
-      </div>
-      <div class="side-error-prompt">safe_mode&gt;</div>
-    </aside>
+    <!-- The CRT "safe_mode" error rail is shelved for a future corrupted/glitch
+         level. Its CSS (.side-error-*) and JS (startSideErrorRail, guarded on the
+         element's absence) remain in place; re-add this <aside> to bring it back. -->
     <main class="shell" aria-label="Dependency Hell first playable slice">
       <section class="stage">
         <canvas id="game" width="960" height="540" aria-label="Top-down combat room"></canvas>

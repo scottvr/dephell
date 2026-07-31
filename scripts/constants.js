@@ -2,9 +2,10 @@
   namespace.constants = {
     // --- Top-down arena bounds (walls) ---------------------------------------
     // The playable rect for the overhead combat view. Player and enemies clamp
-    // to this on BOTH axes. Inset from the 960x540 canvas for wall thickness and
-    // to keep actors clear of the screen-anchored HUD overlays.
-    ARENA: { x0: 88, y0: 88, x1: 872, y1: 452 },
+    // to this on BOTH axes. Widened to fill most of the 960x540 canvas (the CRT
+    // error rail was removed); the HUD/log/graph panels are translucent corner
+    // overlays that frame rather than carve out the floor.
+    ARENA: { x0: 44, y0: 46, x1: 916, y1: 502 },
     // FLOOR_Y / GROUND_TOP are legacy side-view constants. Gameplay no longer
     // pins to a floor line; the render layer still references them until the
     // top-down floor lands (see roadmap: top-down overhaul, Phase 3).

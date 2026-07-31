@@ -264,7 +264,10 @@ button:focus-visible {
   position: absolute;
   z-index: 4;
   border: 1px solid var(--line);
-  background: var(--panel);
+  /* More translucent than --panel so the enlarged arena floor reads through the
+     corner overlays — they frame the play field rather than carve it out. */
+  background: rgba(3, 14, 17, 0.62);
+  backdrop-filter: blur(1.5px);
   box-shadow: 0 0 18px rgba(32, 247, 238, 0.16);
 }
 
