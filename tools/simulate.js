@@ -20,6 +20,12 @@ const { makeInitialRunState } = D.runState;
 
 const RUNS = Number.parseInt(process.argv[2], 10) || 4000;
 
+// Mirror of game.js economy tuning.
+const COMMITS_START = 3;
+const COMMITS_PER_ROOM = 2;
+const DEBT_PER_COMMIT = 6;
+const costOf = (pkg) => (pkg && pkg.cost != null ? pkg.cost : 2);
+
 // Deterministic PRNG so runs are reproducible.
 let seed = 1234567;
 function rand() {
@@ -80,6 +86,10 @@ const stats = {
   observability: [],
   rollbackLocked: 0,
   installedRollback: 0,
+  cashInstalls: 0,
+  creditInstalls: 0,
+  couldAffordCash: 0,
+  costChosen: [],
 };
 
 const POOL = roomById.get("package_gate").packagePool;
@@ -102,6 +112,16 @@ for (let i = 0; i < RUNS; i += 1) {
   run.installedPackages.push(chosenId);
   applyPackageEffects(run, pkg, noop);
   stats.pickCount[chosenId] = (stats.pickCount[chosenId] || 0) + 1;
+
+  // Economy: model a Commit balance at some point in the floor (start + a random
+  // number of cleared rooms' payouts, minus prior spend) and pay cash if affordable,
+  // else finance on credit as Technical Debt. This Monte-Carlos the cash/credit mix.
+  run.commits = COMMITS_START + COMMITS_PER_ROOM * Math.floor(rand() * 4) - Math.floor(rand() * 6);
+  if (run.commits < 0) run.commits = 0;
+  const cost = costOf(pkg);
+  stats.costChosen.push(cost);
+  if (run.commits >= cost) { run.commits -= cost; stats.cashInstalls += 1; stats.couldAffordCash += 1; }
+  else { run.techDebt += cost * DEBT_PER_COMMIT; run.debtTags.push("bought_on_credit"); stats.creditInstalls += 1; }
 
   // test_gate always cleared.
   applyRoomEffects(run, "test_gate");
@@ -146,6 +166,16 @@ console.log("\nResources:");
 console.log(`  Technical Debt: avg ${avg(stats.debt)}, max ${maxOf(stats.debt)}`);
 console.log(`  Observability : avg ${avg(stats.observability)} of 5`);
 console.log(`  Rollback installed: ${pct(stats.installedRollback)}; would be upgrade-locked: ${pct(stats.rollbackLocked)}`);
+
+// --- Economy (Slice 2): does the Commit cost make the pick a real decision? ---
+const costs = POOL.map((id) => costOf(packages.find((p) => p.id === id)));
+const creditShare = stats.creditInstalls / RUNS;
+const cashShare = stats.cashInstalls / RUNS;
+console.log("\nEconomy (Commits):");
+console.log(`  Start ${COMMITS_START}, +${COMMITS_PER_ROOM}/room; credit finances at ${DEBT_PER_COMMIT}x cost in TDR.`);
+console.log(`  Package costs: min ${Math.min(...costs)}, max ${Math.max(...costs)}, avg ${avg(costs)} Commits.`);
+console.log(`  Install payment mix (random mid-floor balance): cash ${pct(stats.cashInstalls)}, credit ${pct(stats.creditInstalls)}.`);
+console.log(`  Avg cost of chosen package: ${avg(stats.costChosen)} Commits.`);
 
 // --- Build reach (fun-tuneup-protocol.md Tier-1: build-invariance + build-cadence) ---
 // Does the assembled build actually reach the player's hands? Enumerate single-package
@@ -202,6 +232,10 @@ if (Number(avg(stats.debt)) > 60) problems.push("Average Technical Debt is very 
 if (speedDiv === 0 && dashDiv === 0) problems.push("Build-invariance: nothing moves speed or dashCooldown — every build pilots identically on movement/dodge.");
 if (dpsSwing < 0.15) problems.push(`Build-invariance: effective-DPS swing is only ${(dpsSwing * 100).toFixed(0)}% across builds (<15%).`);
 if (buildAffecting.length < 3) problems.push(`Build-cadence: only ${buildAffecting.length} offered packages affect a combat stat (<3 build-defining choices).`);
+// Economy pathologies: cost has to bite sometimes (else it's free), but not always
+// (else credit isn't a choice, it's a tax).
+if (creditShare > 0.6) problems.push(`Economy too tight: ${(creditShare * 100).toFixed(0)}% of installs are forced onto credit (>60%). Raise Commit income or lower costs.`);
+if (cashShare > 0.97) problems.push(`Economy too loose: ${(cashShare * 100).toFixed(0)}% of installs are affordable in cash — the cost almost never bites.`);
 
 console.log("");
 if (problems.length) {

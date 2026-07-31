@@ -56,13 +56,28 @@ Follow-on to the camera change, targeting the core innovation (the dependency gr
 - **1E** — gates green (lint/simulate/feel-probe, feel-probe window widened for the bigger arena),
   visual-smoke re-baselined, docs updated.
 
-**Slice 2 (next) — card/economy rework.** The motivation gap is that packages are *free* (pick 1-of-4, no
-cost), so the player doesn't weigh the cards. Plan: a spend currency + **buy-on-credit** (take cheap/free,
-pay in Tech Debt / Security Risk) + refactor-to-remove, plus more verb-changing (not stat-only) packages and
-a visible loadout. This is the "every power has a shadow" pillar finally biting.
+### Slice 2 — card economy (2026-07-31)
 
-**Follow-ups worth considering:** richer per-type top-down enemy silhouettes; door art polish; the pipeline
-orientation experiment; a brief top-down onboarding beat; controller support for 360° aim.
+The motivation fix: packages were *free* (pick 1-of-4), so the player didn't weigh the cards. Shipped:
+
+- **Commits currency** (`run.commits`, start 3, +2/cleared room) with a `PACKAGE_COSTS` table (1-4 by build
+  impact) and a **CMT** HUD meter. A package room is a priced pick.
+- **Buy-on-credit** — install without Commits, financed as `cost * 6` Technical Debt (on top of inherent
+  debt). Cash = Enter/✕; credit = C/□. Can't-afford cash points at credit.
+- **Refactor-remove** (press **R**) — swap the carousel to your installed packages; remove one for 2 Commits,
+  reversing its nodes/edges/mods/debt (`removePackageEffects`, keyed off `createdBy`; reveals left intact).
+  Grow vs. prune is one action per package room.
+- **Balance** — `simulate.js` models the economy (cash 65% / credit 34% at a random mid-floor balance) and
+  gates it (fails if ~always-cash or >60% forced-credit). Reports show the Commit budget.
+
+Verified headless: cash debits / credit finances (7/7); all 12 packages install→remove round-trip to baseline
+(4/4). Chosen model: pick-one-but-priced (not a multi-buy shop) with refactor included; currency named Commits.
+
+**Deferred to a follow-up:** more verb-changing (not stat-only) packages; a visible full loadout panel;
+Security-Risk as a real resource (credit currently finances to Tech Debt only).
+
+**Follow-ups worth considering:** the pipeline (L→R) map-orientation experiment; richer per-type top-down enemy
+silhouettes; door art polish; a brief top-down onboarding beat; controller support for 360° aim.
 
 ---
 

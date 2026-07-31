@@ -54,9 +54,17 @@
 
   function stateLines(run) {
     const lines = [
-      `Technical Debt closed at ${run.techDebt}.`,
+      `Technical Debt closed at ${Math.round(run.techDebt)}.`,
       `Observability closed at ${run.observability} of 5.`,
     ];
+    const spent = run.commitsSpent || 0;
+    const credit = run.creditTaken || 0;
+    if (spent || credit || run.commits != null) {
+      const parts = [`${run.commits ?? 0} Commits unspent`];
+      if (spent) parts.push(`${spent} spent`);
+      if (credit) parts.push(`${credit} Commits' worth financed on credit (still on the debt sheet)`);
+      lines.push(`Budget: ${parts.join(", ")}.`);
+    }
     if (run.risks.length) lines.push(`Registered risks: ${run.risks.slice(0, 3).map((r) => `${r.kind} on ${r.target}`).join(", ")}.`);
     if (run.pins.length) lines.push(`Pinned nodes: ${run.pins.join(", ")}.`);
     if (run.resolvedIncidents.length) lines.push(`Incident calls: ${run.resolvedIncidents.map((r) => `${r.incident} → ${r.resolution}`).join(", ")}.`);

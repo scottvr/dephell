@@ -73,7 +73,7 @@ The genre influences are design promises, not cloning targets.
 
 **Slay the Spire** — design freedoms and quality targets (not a mandate to copy a card map):
 - *Strategic route selection:* where the room graph, dependency graph, or graph-scale view presents paths, routes imply different risk/reward profiles. A route can mean physical traversal, dependency routing, upgrade path, deployment path, or incident-resolution path.
-- *Tradeoff-heavy upgrades:* package choices rarely reduce to "best stat wins." Upgrades ask what kind of system the player is willing to become. A strong upgrade can be correct for one build and dangerous for another.
+- *Tradeoff-heavy upgrades:* package choices rarely reduce to "best stat wins." Upgrades ask what kind of system the player is willing to become. A strong upgrade can be correct for one build and dangerous for another. **Packages also cost Commits** (a spend currency earned per cleared room; Slice 2), so a package room is a real economic decision: pay Commits, take it on **credit** (financed as Technical Debt), or **refactor** (spend Commits to remove an installed package and cut coupling). Scarcity is what makes the player actually read the cards — see `docs/roadmap.md` → Slice 2.
 - *Risk evaluation:* players evaluate partial information (visible reward, risk tags, suspected hidden edges, current debt, observability, upcoming pressure). Risk stays legible enough for intentional play without becoming fully solved.
 - *Build-shaping decisions:* individual choices push the run toward recognizable architecture, not just temporary power.
 

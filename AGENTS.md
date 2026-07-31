@@ -116,6 +116,12 @@ affect a report, it must leave a causal trace in run state or the event log.
   for conflicted/risky neighbour nodes.
 - Spatial constants live in `scripts/constants.js` as `ARENA` (the play rect); actors clamp to it on both axes.
   `FLOOR_Y`/`GROUND_TOP` are legacy side-view constants, no longer used by gameplay.
+- **Packages cost Commits** (the run's spend currency, `run.commits`; earned per cleared room). A package room
+  is a priced pick: install with Commits, or on **credit** — financed as Technical Debt (`cost * DEBT_PER_COMMIT`).
+  Press **R** at a package room to **refactor** instead: remove an installed package for Commits, reversing its
+  effects (`removePackageEffects` in `effects.js`, keyed off `createdBy`). New content packages need a cost in
+  `PACKAGE_COSTS` (content.js). `simulate.js` gates the economy (cash/credit mix must not be ~always-cash or
+  >60% forced-credit).
 - Keep the zero-build static browser prototype easy to open from `index.html`.
 
 ## Work intake
