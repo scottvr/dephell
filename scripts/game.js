@@ -2108,14 +2108,25 @@
     const t = performance.now() / 300;
     for (const hz of game.hazards) {
       const life = Math.max(0, hz.life / hz.maxLife);
+      // 2-D floor decal centered on the hazard footprint (top-down deprecation zone).
       ctx.save();
-      ctx.globalAlpha = 0.18 + life * 0.22 + Math.sin(t) * 0.05;
+      ctx.globalAlpha = 0.16 + life * 0.2 + Math.sin(t) * 0.05;
       ctx.fillStyle = "#ffa62b";
-      ctx.fillRect(hz.x - hz.w / 2, GROUND_TOP - hz.h, hz.w, hz.h);
+      ctx.fillRect(hz.x - hz.w / 2, hz.y - hz.h / 2, hz.w, hz.h);
       ctx.globalAlpha = 0.6 * life;
       ctx.strokeStyle = "#ffcf66";
       ctx.lineWidth = 2;
-      ctx.strokeRect(hz.x - hz.w / 2, GROUND_TOP - hz.h, hz.w, hz.h);
+      ctx.setLineDash([6, 5]);
+      ctx.strokeRect(hz.x - hz.w / 2, hz.y - hz.h / 2, hz.w, hz.h);
+      ctx.setLineDash([]);
+      // Hazard glyph so it reads even at low alpha.
+      ctx.globalAlpha = 0.5 * life;
+      ctx.strokeStyle = "#ffcf66";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(hz.x - 8, hz.y - 8); ctx.lineTo(hz.x + 8, hz.y + 8);
+      ctx.moveTo(hz.x + 8, hz.y - 8); ctx.lineTo(hz.x - 8, hz.y + 8);
+      ctx.stroke();
       ctx.restore();
     }
   }
@@ -2140,125 +2151,70 @@
     ctx.restore();
   }
 
+  // Soft ground shadow under a top-down entity. Drawn in the entity's local space
+  // at its ground point (0,0), so the raised body reads as hovering over the floor.
+  function drawGroundShadow(rx, ry) {
+    ctx.save();
+    ctx.globalAlpha *= 0.32;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawBackdrop(room) {
     const pulse = 0.5 + Math.sin(performance.now() / 700) * 0.5;
-    ctx.fillStyle = "#03070a";
+    // Void beyond the arena walls.
+    ctx.fillStyle = "#02060a";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const glow = ctx.createRadialGradient(520, 230, 80, 520, 230, 520);
-    glow.addColorStop(0, "rgba(32, 247, 238, 0.08)");
-    glow.addColorStop(0.55, "rgba(8, 28, 32, 0.08)");
-    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Top-down floor: a filled arena plate with a soft radial light from center.
+    const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2;
+    ctx.fillStyle = "#061217";
+    ctx.fillRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
+    const floorGlow = ctx.createRadialGradient(cx, cy, 40, cx, cy, (ARENA.x1 - ARENA.x0) * 0.62);
+    floorGlow.addColorStop(0, "rgba(32, 247, 238, 0.10)");
+    floorGlow.addColorStop(0.6, "rgba(12, 40, 46, 0.06)");
+    floorGlow.addColorStop(1, "rgba(0, 0, 0, 0.28)");
+    ctx.fillStyle = floorGlow;
+    ctx.fillRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
 
-    ctx.strokeStyle = "rgba(32, 247, 238, 0.11)";
+    // Floor tile grid (both axes) — the overhead "deck plating" read.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
+    ctx.clip();
+    ctx.strokeStyle = "rgba(32, 247, 238, 0.09)";
     ctx.lineWidth = 1;
-    for (let x = 92; x < canvas.width; x += 86) {
-      ctx.beginPath();
-      ctx.moveTo(x, 96);
-      ctx.lineTo(x, 438);
-      ctx.stroke();
+    const tile = 48;
+    for (let x = ARENA.x0 + tile; x < ARENA.x1; x += tile) {
+      ctx.beginPath(); ctx.moveTo(x, ARENA.y0); ctx.lineTo(x, ARENA.y1); ctx.stroke();
     }
-
-    drawArchitectureBlocks();
-    drawBinaryColumns();
-    drawRightServiceFrame();
-
-    ctx.strokeStyle = "rgba(32, 247, 238, 0.08)";
-    for (let y = 132; y < 418; y += 14) {
-      ctx.beginPath();
-      ctx.moveTo(128, y);
-      ctx.lineTo(906, y);
-      ctx.stroke();
+    for (let y = ARENA.y0 + tile; y < ARENA.y1; y += tile) {
+      ctx.beginPath(); ctx.moveTo(ARENA.x0, y); ctx.lineTo(ARENA.x1, y); ctx.stroke();
     }
+    // Center node motif — this room is a graph node seen from above.
+    ctx.strokeStyle = "rgba(32, 247, 238, 0.10)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, 120, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 64, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
 
     if (game.run.incident) {
       ctx.fillStyle = `rgba(255, 66, 101, ${0.08 + pulse * 0.05})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
       drawIncidentArcs(pulse);
     }
     if (featureFlagActive()) {
       ctx.fillStyle = "rgba(70, 255, 131, 0.08)";
-      ctx.fillRect(86, 130, 830, 228);
+      ctx.fillRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
       ctx.strokeStyle = "rgba(70, 255, 131, 0.64)";
       ctx.lineWidth = 2;
       ctx.setLineDash([10, 8]);
-      ctx.strokeRect(92, 136, 818, 216);
+      ctx.strokeRect(ARENA.x0 + 6, ARENA.y0 + 6, ARENA.x1 - ARENA.x0 - 12, ARENA.y1 - ARENA.y0 - 12);
       ctx.setLineDash([]);
     }
-    // Room name + subtitle are shown only in the fading intro banner now (drawRoomBanner),
-    // so neither sits permanently across the top behind the HUD and build log.
-  }
-
-  function drawArchitectureBlocks() {
-    const blocks = [
-      [120, 224, 54, 104], [168, 186, 76, 142], [235, 164, 104, 164],
-      [326, 118, 74, 210], [392, 154, 64, 174], [455, 210, 62, 118],
-      [710, 154, 66, 174], [770, 108, 44, 220], [810, 236, 78, 92],
-    ];
-    ctx.save();
-    ctx.fillStyle = "rgba(58, 103, 121, 0.18)";
-    ctx.strokeStyle = "rgba(101, 181, 205, 0.2)";
-    ctx.lineWidth = 2;
-    for (const [x, y, w, h] of blocks) {
-      ctx.fillRect(x, y, w, h);
-      ctx.strokeRect(x + 0.5, y + 0.5, w, h);
-      ctx.fillStyle = "rgba(6, 18, 24, 0.58)";
-      ctx.fillRect(x + 8, y + 20, Math.max(12, w - 22), Math.max(14, h - 44));
-      ctx.fillStyle = "rgba(58, 103, 121, 0.18)";
-    }
-    ctx.fillStyle = "rgba(32, 247, 238, 0.07)";
-    for (let i = 0; i < 18; i += 1) {
-      const x = 170 + i * 34;
-      const y = 340 + (i % 3) * 10;
-      ctx.fillRect(x, y, 24, 18 + (i % 4) * 7);
-    }
-    ctx.restore();
-  }
-
-  function drawBinaryColumns() {
-    const columns = [
-      { x: 548, y: 18, rows: 15, text: "110100111001011" },
-      { x: 604, y: 18, rows: 14, text: "00111001011100" },
-      { x: 658, y: 18, rows: 16, text: "1110001011011010" },
-    ];
-    ctx.save();
-    ctx.font = "14px Courier New";
-    ctx.textAlign = "left";
-    for (const column of columns) {
-      for (let i = 0; i < column.rows; i += 1) {
-        const digit = column.text[i % column.text.length];
-        const alpha = digit === "1" ? 0.28 : 0.18;
-        ctx.fillStyle = `rgba(32, 247, 238, ${alpha})`;
-        ctx.fillText(column.text.slice(i % 5, i % 5 + 4), column.x, column.y + i * 18);
-      }
-    }
-    ctx.restore();
-  }
-
-  function drawRightServiceFrame() {
-    ctx.save();
-    ctx.strokeStyle = "rgba(105, 230, 255, 0.54)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(788, 36);
-    ctx.lineTo(788, 218);
-    ctx.lineTo(910, 218);
-    ctx.stroke();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(105, 230, 255, 0.2)";
-    for (let y = 60; y < 210; y += 18) {
-      ctx.strokeRect(804, y, 24, 10);
-      ctx.strokeRect(838, y + 6, 52, 8);
-    }
-    ctx.strokeStyle = "rgba(32, 247, 238, 0.36)";
-    ctx.strokeRect(878, 242, 34, 86);
-    ctx.beginPath();
-    ctx.moveTo(886, 296);
-    ctx.quadraticCurveTo(898, 272, 904, 298);
-    ctx.stroke();
-    ctx.restore();
   }
 
   function drawIncidentArcs(pulse) {
@@ -2276,82 +2232,84 @@
     ctx.restore();
   }
 
+  // Arena walls — the four borders of the top-down room. Doors (Phase 4) will be
+  // carved into these as glowing gaps mapped to graph routes.
   function drawPlatforms() {
     ctx.save();
-    ctx.fillStyle = "rgba(4, 15, 18, 0.96)";
+    // Wall band just outside the play rect.
+    const t = 10;
     ctx.strokeStyle = "#20f7ee";
     ctx.lineWidth = 3;
-    ctx.fillRect(86, GROUND_TOP, 830, 24);
-    ctx.strokeRect(86, GROUND_TOP, 830, 24);
     ctx.shadowColor = "#20f7ee";
     ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.moveTo(86, GROUND_TOP + 1);
-    ctx.lineTo(916, GROUND_TOP + 1);
-    ctx.stroke();
+    ctx.strokeRect(ARENA.x0, ARENA.y0, ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0);
     ctx.shadowBlur = 0;
-
-    ctx.fillStyle = "rgba(58, 103, 121, 0.18)";
-    for (let x = 118; x < 900; x += 28) {
-      const h = 10 + ((x / 28) % 5) * 4;
-      ctx.fillRect(x, GROUND_TOP + 28, 18, h);
-    }
-    ctx.strokeStyle = "rgba(32, 247, 238, 0.34)";
+    // Inner bevel for a bit of wall thickness.
+    ctx.strokeStyle = "rgba(58, 103, 121, 0.5)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(250, 322, 140, 16);
-    ctx.strokeRect(540, 270, 150, 16);
+    ctx.strokeRect(ARENA.x0 - t, ARENA.y0 - t, (ARENA.x1 - ARENA.x0) + t * 2, (ARENA.y1 - ARENA.y0) + t * 2);
+    // Corner brackets — arcade console framing.
+    ctx.strokeStyle = "rgba(105, 230, 255, 0.7)";
+    ctx.lineWidth = 3;
+    const c = 22;
+    for (const [ox, oy, sx, sy] of [[ARENA.x0, ARENA.y0, 1, 1], [ARENA.x1, ARENA.y0, -1, 1], [ARENA.x0, ARENA.y1, 1, -1], [ARENA.x1, ARENA.y1, -1, -1]]) {
+      ctx.beginPath();
+      ctx.moveTo(ox, oy + sy * c); ctx.lineTo(ox, oy); ctx.lineTo(ox + sx * c, oy);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
   function drawPlayer() {
     const p = game.player;
     ctx.save();
-    ctx.translate(p.x, p.y);
+    // Origin at the ground point (feet-center); body is drawn raised above it,
+    // top-down style, with a shadow on the floor at the origin.
+    ctx.translate(p.x + p.w / 2, p.y);
+    drawGroundShadow(15, 6);
     const invulnFlash = p.invulnTimer > 0 && Math.floor(p.invulnTimer * 22) % 2 === 0;
-    ctx.scale(p.facing, 1);
     const swingT = p.swingTimer > 0 ? 1 - p.swingTimer / (p.swingDur || 0.14) : -1;
-    const moving = Math.abs(p.vx) > 5 && p.y >= FLOOR_Y;
-    const airborne = p.y < FLOOR_Y - 1;
-    drawResolverSprite(invulnFlash ? "#dfffee" : "#20f7ee", 1, swingT, p.swingDir || 1, p.walkPhase || 0, moving, airborne);
+    const moving = Math.hypot(p.vx, p.vy) > 5;
+    drawResolverSprite(invulnFlash ? "#dfffee" : "#20f7ee", 1, swingT, p.swingDir || 1, p.walkPhase || 0, moving, p.aim || 0);
     ctx.restore();
   }
 
-  function drawResolverSprite(color, alpha, swingT = -1, swingDir = 1, phase = 0, moving = false, airborne = false) {
+  // The Resolver, top-down: an upright figure whose aim wedge and blade rotate a
+  // full 360 degrees toward `aim` (no left/right sprite flip). Body stays readable;
+  // direction is carried by the weapon and the visor wedge, Isaac-style.
+  function drawResolverSprite(color, alpha, swingT = -1, swingDir = 1, phase = 0, moving = false, aim = 0) {
     ctx.save();
     ctx.globalAlpha *= alpha;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 16;
+    ctx.shadowBlur = 14;
 
-    // Legs swing from fixed hips: a walk cycle while grounded and moving, a leaping
-    // stagger in the air, a relaxed stance at rest.
+    // Legs: a small walk cycle while moving, a relaxed stance at rest.
     let legA;
     let legB;
-    if (airborne) { legA = -0.4; legB = 0.55; }
-    else if (moving) { legA = Math.sin(phase) * 0.5; legB = Math.sin(phase + Math.PI) * 0.5; }
+    if (moving) { legA = Math.sin(phase) * 0.5; legB = Math.sin(phase + Math.PI) * 0.5; }
     else { legA = 0.06; legB = -0.06; }
     drawResolverLeg(color, -4, legA);
     drawResolverLeg(color, 5, legB);
 
-    // Head/torso/arms bob gently over each step.
-    const bob = moving && !airborne ? Math.abs(Math.sin(phase)) * -1.6 : 0;
+    // Body bobs gently over each step.
+    const bob = moving ? Math.abs(Math.sin(phase)) * -1.6 : 0;
     ctx.save();
     ctx.translate(0, bob);
-
-    ctx.fillStyle = color;
-    ctx.fillRect(-9, -49, 18, 14); // head
-    ctx.fillRect(-5, -53, 14, 4);  // crest
-    ctx.fillStyle = "#dfffee";
-    ctx.fillRect(2, -45, 5, 3);    // visor
     ctx.fillStyle = color;
     ctx.fillRect(-7, -34, 15, 22); // torso
+    ctx.fillRect(-9, -49, 18, 14); // head
+    ctx.fillRect(-5, -53, 14, 4);  // crest
+    ctx.restore();
 
-    // Free arm swings opposite its leg; the weapon arm holds the blade.
-    const armA = airborne ? -0.6 : moving ? -legA * 0.9 : -0.12;
-    drawResolverArm(color, -10, -31, armA);
-    ctx.fillStyle = color;
-    ctx.fillRect(8, -31, 7, 14); // weapon shoulder
+    // Aim wedge + blade both pivot about the body center toward `aim`.
+    ctx.save();
+    ctx.translate(0, -26 + bob);
+    ctx.rotate(aim);
+    ctx.fillStyle = "#dfffee";
+    ctx.beginPath();
+    ctx.moveTo(12, 0); ctx.lineTo(3, -4); ctx.lineTo(3, 4); ctx.closePath();
+    ctx.fill(); // visor wedge pointing along aim
     drawPatchBlade(swingT, swingDir);
-
     ctx.restore();
     ctx.restore();
   }
@@ -2366,38 +2324,30 @@
     ctx.restore();
   }
 
-  function drawResolverArm(color, px, py, angle) {
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(angle);
-    ctx.fillStyle = color;
-    ctx.fillRect(-3, 0, 6, 17);
-    ctx.restore();
-  }
-
-  // The patch blade sweeps through an arc while attacking (alternating up/down
-  // per swing), with a fading motion smear. At rest it sits raised and ready.
+  // Blade drawn from the hand outward along +x (the caller has already rotated the
+  // context to the aim direction). A swing sweeps it across the aim axis; the main
+  // slash arc itself is rendered separately in drawAttacks at the true swing angle.
   function drawPatchBlade(swingT, swingDir) {
     const dir = swingDir || 1;
     ctx.save();
-    ctx.translate(9, -28); // hand pivot
-    const bladeAngle = swingT >= 0 ? dir * (-1.05 + swingT * 1.9) : -0.28;
+    ctx.translate(12, 0); // hand offset along aim
+    const sweep = swingT >= 0 ? dir * (-0.9 + swingT * 1.8) : dir * -0.18;
 
     if (swingT >= 0) {
-      // Motion smear trailing the blade.
-      const a0 = bladeAngle - dir * 0.7;
+      // Motion smear trailing the blade tip.
+      const a0 = sweep - dir * 0.7;
       ctx.strokeStyle = `rgba(223,255,238,${0.5 * (1 - swingT)})`;
       ctx.lineWidth = 7;
       ctx.lineCap = "round";
       ctx.shadowColor = "#20f7ee";
       ctx.shadowBlur = 20;
       ctx.beginPath();
-      ctx.arc(0, 0, 54, Math.min(a0, bladeAngle), Math.max(a0, bladeAngle));
+      ctx.arc(0, 0, 44, Math.min(a0, sweep), Math.max(a0, sweep));
       ctx.stroke();
     }
 
-    ctx.rotate(bladeAngle);
-    const blade = ctx.createLinearGradient(0, 0, 54, 0);
+    ctx.rotate(sweep);
+    const blade = ctx.createLinearGradient(0, 0, 44, 0);
     blade.addColorStop(0, "#20f7ee");
     blade.addColorStop(0.3, "#dfffee");
     blade.addColorStop(1, "#7aa8ff");
@@ -2405,15 +2355,15 @@
     ctx.shadowBlur = swingT >= 0 ? 26 : 18;
     ctx.fillStyle = blade;
     ctx.beginPath();
-    ctx.moveTo(2, -4);
-    ctx.lineTo(50, -9);
-    ctx.lineTo(58, -5);
-    ctx.lineTo(6, 3);
+    ctx.moveTo(0, -4);
+    ctx.lineTo(40, -8);
+    ctx.lineTo(48, -4);
+    ctx.lineTo(4, 3);
     ctx.closePath();
     ctx.fill();
     // Hilt.
     ctx.fillStyle = "#dfffee";
-    ctx.fillRect(-2, -3, 12, 5);
+    ctx.fillRect(-4, -3, 10, 5);
     ctx.restore();
   }
 
@@ -2422,9 +2372,8 @@
       const t = ghost.life / ghost.maxLife;
       ctx.save();
       ctx.globalAlpha = t * 0.38;
-      ctx.translate(ghost.x, ghost.y);
-      ctx.scale(ghost.facing, 1);
-      drawResolverSprite("#20f7ee", 0.72);
+      ctx.translate(ghost.x + game.player.w / 2, ghost.y);
+      drawResolverSprite("#20f7ee", 0.72, -1, 1, 0, false, ghost.aim || 0);
       ctx.restore();
     }
   }
@@ -2437,6 +2386,7 @@
       const shielded = enemy.type === "version_conflict_half" && !enemy.exposed;
       ctx.save();
       ctx.translate(enemy.x, enemy.y);
+      drawGroundShadow((enemy.w || 16) * 0.7, (enemy.w || 16) * 0.28);
       if (enemy.telegraph > 0 && !shielded) {
         ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
         ctx.lineWidth = 3;
@@ -2631,30 +2581,35 @@
     ctx.restore();
   }
 
-  function drawBugLegs(color, width, footY) {
+  // Top-down legs: splay out to both sides of the body from a vertical mid-line,
+  // reading as a bug seen from above rather than a biped standing in profile.
+  function drawBugLegs(color, width, midY) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
-    ctx.lineCap = "square";
+    ctx.lineCap = "round";
     for (const side of [-1, 1]) {
       for (let i = 0; i < 3; i += 1) {
-        const y = -23 + i * 7;
+        const y = midY - 7 + i * 7;
+        const kneeX = side * (width * 0.6);
         ctx.beginPath();
-        ctx.moveTo(side * 8, y);
-        ctx.lineTo(side * width, y + 5);
-        ctx.lineTo(side * (width + 7), footY + i * 2);
+        ctx.moveTo(side * 6, y);
+        ctx.lineTo(kneeX, y - 3);
+        ctx.lineTo(side * (width + 4), y + 3);
         ctx.stroke();
       }
     }
   }
 
+  // Forward feelers, kept short so the body's top-down silhouette stays dominant.
   function drawAntennae(color, width, y) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
+    ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.moveTo(-7, y + 4);
-    ctx.lineTo(-width, y - 8);
-    ctx.moveTo(7, y + 4);
-    ctx.lineTo(width, y - 8);
+    ctx.moveTo(-5, y + 4);
+    ctx.lineTo(-width * 0.7, y - 6);
+    ctx.moveTo(5, y + 4);
+    ctx.lineTo(width * 0.7, y - 6);
     ctx.stroke();
   }
 
@@ -2675,13 +2630,16 @@
     }
     for (const shot of game.enemyShots) {
       if (shot.arc) {
+        const spd = Math.hypot(shot.vx, shot.vy) || 1;
+        const ux = shot.vx / spd, uy = shot.vy / spd;
         ctx.save();
         ctx.strokeStyle = "#ff6a8a";
         ctx.lineWidth = 5;
         ctx.shadowColor = "#ff2d55";
         ctx.shadowBlur = 16;
+        ctx.lineCap = "round";
         ctx.beginPath();
-        ctx.moveTo(shot.x - Math.sign(shot.vx) * 22, shot.y);
+        ctx.moveTo(shot.x - ux * 22, shot.y - uy * 22);
         ctx.lineTo(shot.x, shot.y);
         ctx.stroke();
         ctx.restore();
@@ -2718,20 +2676,25 @@
     const pulse = 0.5 + Math.sin(performance.now() / 260) * 0.5;
     const vulnerable = !boss.armored;
     ctx.save();
-    // Break-arc warning lane during telegraph / pending arc.
+    const w = def.w;
+    const h = def.h;
+    // Break warning: a dashed lane from the boss toward the player, tracing where
+    // the 2-D break-arc will travel (was a fixed horizontal floor lane).
     if (boss.pendingArc || boss.telegraph > 0.02) {
+      const bcx = boss.x, bcy = boss.y - h / 2;
+      const t = playerTarget();
+      const ang = Math.atan2(t.y - bcy, t.x - bcx);
       ctx.strokeStyle = "rgba(255,45,85,0.45)";
       ctx.lineWidth = 3;
       ctx.setLineDash([10, 8]);
       ctx.beginPath();
-      ctx.moveTo(90, FLOOR_Y - 26);
-      ctx.lineTo(910, FLOOR_Y - 26);
+      ctx.moveTo(bcx, bcy);
+      ctx.lineTo(bcx + Math.cos(ang) * 900, bcy + Math.sin(ang) * 900);
       ctx.stroke();
       ctx.setLineDash([]);
     }
     ctx.translate(boss.x, boss.y);
-    const w = def.w;
-    const h = def.h;
+    drawGroundShadow(w * 0.6, w * 0.26);
     ctx.shadowColor = def.color;
     ctx.shadowBlur = vulnerable ? 34 : 16;
     ctx.fillStyle = vulnerable ? "#ffe6a0" : def.color;
