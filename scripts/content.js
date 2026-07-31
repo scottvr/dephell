@@ -48,6 +48,7 @@
         { op: "addNode", id: "shim", name: "Compat Shim", tags: ["debt", "patch"] },
         { op: "addEdge", source: "shim", target: "libglitch", relation: "patches", strength: 2, visibility: "known" },
         { op: "modifyStat", stat: "damage", amount: 4 },
+        { op: "modifyStat", stat: "dashCooldown", amount: 0.08 },
         { op: "increaseDebt", amount: 18, tag: "compatibility_shim" },
       ],
     },
@@ -103,6 +104,7 @@
       effects: [
         { op: "addNode", id: "container", name: "Container", tags: ["orchestration", "isolator"] },
         { op: "addEdge", source: "container", target: "libglitch", relation: "isolates", strength: 3, visibility: "known" },
+        { op: "modifyStat", stat: "speed", amount: -20 },
         { op: "addTag", list: "mitigations", tag: "cascade_isolation" },
         { op: "addBossScore", boss: "distributed_monolith", amount: -2, reason: "Containerization isolates an edge and cuts blast radius" },
         { op: "modifyResource", resource: "observability", amount: -1 },
@@ -120,6 +122,7 @@
         { op: "addEdge", source: "rollback", target: "app", relation: "reverts", strength: 2, visibility: "known" },
         { op: "addTool", tool: "rollback" },
         { op: "addTag", list: "mitigations", tag: "damage_recovery" },
+        { op: "modifyStat", stat: "dashCooldown", amount: -0.10 },
         { op: "increaseDebt", amount: 4, tag: "rollback_scripts" },
       ],
     },

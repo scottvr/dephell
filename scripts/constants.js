@@ -2,7 +2,7 @@
   namespace.constants = {
     FLOOR_Y: 326,
     GROUND_TOP: 334,
-    ROOM_INTRO_SECONDS: 1.35,
+    ROOM_INTRO_SECONDS: 1.2,
     // Stable node positions in the 280x190 graph viewBox. New loci are spaced
     // >=24px from their neighbours so the minimap stays legible even when a run
     // installs several package nodes at once.

@@ -122,6 +122,8 @@
   function statPreview(effect) {
     if (effect.stat === "fireRate") return effect.amount > 0 ? "slower swing" : "faster swing";
     if (effect.stat === "damage") return `damage ${signed(effect.amount)}`;
+    if (effect.stat === "speed") return effect.amount > 0 ? "faster feet" : "heavier feet";
+    if (effect.stat === "dashCooldown") return effect.amount > 0 ? "slower dash" : "quicker dash";
     return `${effect.stat} ${signed(effect.amount)}`;
   }
 

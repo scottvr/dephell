@@ -21,7 +21,7 @@
 
   // Persistent adaptive-music graph (built once, driven by setState).
   let music = null;
-  const state = { stability: 100, debt: 0, incident: null, boss: null, combat: false, interstitial: false };
+  const state = { stability: 100, debt: 0, incident: null, boss: null, combat: false, interstitial: false, room: 0, critical: false };
 
   function readStoredMute() {
     try {
@@ -170,6 +170,8 @@
     conflict: () => { tone({ type: "sawtooth", from: 220, to: 233, attack: 0.005, hold: 0.18, release: 0.3, peak: 0.16, detune: 30 }); noise({ duration: 0.3, peak: 0.08, type: "highpass", freq: 2400, q: 2 }); },
     reveal: () => { tone({ type: "sine", from: 900, to: 1500, attack: 0.01, hold: 0.02, release: 0.18, peak: 0.12 }); later(0.06, () => tone({ type: "sine", from: 1400, to: 2000, attack: 0.01, hold: 0.02, release: 0.14, peak: 0.08 })); },
     debtThreshold: () => { tone({ type: "sawtooth", from: 140, to: 132, attack: 0.02, hold: 0.22, release: 0.4, peak: 0.16, detune: 18 }); },
+    // Low descending two-tone klaxon when Stability crosses into the critical band.
+    criticalAlarm: () => { tone({ type: "sawtooth", from: 220, to: 175, attack: 0.008, hold: 0.14, release: 0.3, peak: 0.2, detune: 22 }); later(0.17, () => tone({ type: "sawtooth", from: 175, to: 138, attack: 0.008, hold: 0.16, release: 0.34, peak: 0.18, detune: 22 })); },
     flag: () => { tone({ type: "square", from: 520, to: 780, attack: 0.006, hold: 0.04, release: 0.1, peak: 0.14 }); },
     flagExpire: () => { tone({ type: "square", from: 620, to: 300, attack: 0.006, hold: 0.03, release: 0.12, peak: 0.1 }); },
     pin: () => { tone({ type: "square", from: 300, to: 300, attack: 0.002, hold: 0.02, release: 0.05, peak: 0.14 }); later(0.05, () => tone({ type: "square", from: 300, to: 300, attack: 0.002, hold: 0.02, release: 0.05, peak: 0.1 })); },
@@ -299,6 +301,102 @@
     return 0.3;
   }
 
+  // --- Ambience tuning ------------------------------------------------------
+  // One place for every knob that shapes how the drone PITCH escalates, so the
+  // rising-tension pitch can be dialed in without spelunking the graph code.
+  // Edit the defaults here, OR audition values LIVE from the browser console
+  // (no reload — tune() re-applies immediately):
+  //     DepHell.audio.tune({ pitch: { mode: "inRoom" } })
+  //     DepHell.audio.tune({ pitch: { risePerRoomSemis: 0.2, capSemis: 2 } })
+  //     DepHell.audio.tune({ pitch: { mode: "off" } })   // freeze pitch at baseHz
+  //     DepHell.audio.getTuning()                          // read current values
+  const AMBIENCE = {
+    pitch: {
+      // How the base drone pitch climbs to signal mounting tension:
+      //   "perRoom" — nudges up a little with each room reached (cumulative run arc)
+      //   "inRoom"  — resets to base every interstitial, climbs only WHILE a room plays
+      //   "off"     — pitch never moves off baseHz
+      mode: "perRoom",
+      baseHz: 55, // root drone (~A1) at zero tension
+      // perRoom: semitones added per room, and the ceiling. (The prior build rose a
+      // FULL semitone/room to a 9-semitone cap — nearly an octave — which read as
+      // "too much"; this is deliberately gentle and stays under a minor third.)
+      risePerRoomSemis: 0.3, // < 1 semitone per step, per the owner's note
+      capSemis: 3, // never climb more than a minor third above base
+      // inRoom: how far a single room's play can lift the pitch, and how long the
+      // climb takes. Resets to base each interstitial ("a breath between rooms").
+      inRoomCeilingSemis: 1.5,
+      inRoomRampSeconds: 40,
+      // Interstitials exhale this many semitones below the current base.
+      interstitialDropSemis: 2,
+      glideSeconds: 0.5, // portamento time for pitch changes (larger = slower glide)
+    },
+  };
+
+  // Transition memory so "inRoom" mode only (re)schedules its climb on an actual
+  // room/interstitial change — mid-room state updates (e.g. taking damage) must not
+  // restart the ramp.
+  let pitchRoomAnchor = -1;
+  let pitchWasInterstitial = false;
+
+  function semisToHz(semis) {
+    return AMBIENCE.pitch.baseHz * Math.pow(2, semis / 12);
+  }
+
+  // Glide both pad oscillators toward a steady target frequency.
+  function setPadHz(hz, glide) {
+    if (!music) return;
+    const t = now();
+    for (const p of [music.padA.frequency, music.padB.frequency]) {
+      p.cancelScheduledValues(t);
+      p.setTargetAtTime(Math.max(1, hz), t, Math.max(0.001, glide));
+    }
+  }
+
+  // Schedule a real time-based climb on the audio thread (used by "inRoom" mode so
+  // the pitch keeps rising across a room even though applyMusicState is event-driven,
+  // not called every frame). Starts from wherever the pad currently sits (click-free).
+  function rampPadTo(hz, seconds) {
+    if (!music) return;
+    const t = now();
+    for (const p of [music.padA.frequency, music.padB.frequency]) {
+      const cur = p.value;
+      p.cancelScheduledValues(t);
+      p.setValueAtTime(cur, t);
+      p.linearRampToValueAtTime(Math.max(1, hz), t + Math.max(0.01, seconds));
+    }
+  }
+
+  // Drive the drone pitch according to AMBIENCE.pitch. Split out of applyMusicState
+  // so the escalation model is legible and swappable.
+  function applyPitch() {
+    if (!music) return;
+    const cfg = AMBIENCE.pitch;
+    const room = Math.max(0, state.room || 0);
+    const glide = cfg.glideSeconds;
+
+    if (cfg.mode === "off") {
+      setPadHz(semisToHz(state.interstitial ? -cfg.interstitialDropSemis : 0), glide);
+    } else if (cfg.mode === "inRoom") {
+      const enteringInterstitial = state.interstitial && !pitchWasInterstitial;
+      const enteringRoom = !state.interstitial && (pitchWasInterstitial || room !== pitchRoomAnchor);
+      if (enteringInterstitial) {
+        setPadHz(semisToHz(-cfg.interstitialDropSemis), glide); // exhale
+      } else if (enteringRoom) {
+        rampPadTo(semisToHz(cfg.inRoomCeilingSemis), cfg.inRoomRampSeconds); // climb across the room
+      }
+      // Any other call (mid-room damage etc.) leaves the scheduled ramp untouched.
+    } else {
+      // perRoom (default): gentle, cumulative, capped.
+      const climbed = Math.min(cfg.capSemis, room * cfg.risePerRoomSemis);
+      const semis = state.interstitial ? climbed - cfg.interstitialDropSemis : climbed;
+      setPadHz(semisToHz(semis), glide);
+    }
+
+    pitchWasInterstitial = state.interstitial;
+    pitchRoomAnchor = room;
+  }
+
   function applyMusicState() {
     if (!music || !ctx) return;
     const t = now();
@@ -313,17 +411,15 @@
     const cutoff = 380 + stabilityTension * 900 + (state.incident ? 300 : 0) + (state.boss ? 500 : 0);
     music.cutoff.setTargetAtTime(cutoff, t, 0.8);
 
-    const tempo = state.interstitial ? 1.1 : state.boss ? 3.4 : state.incident ? 2.9 : state.combat ? 2.2 : 1.6;
+    let tempo = state.interstitial ? 1.1 : state.boss ? 3.4 : state.incident ? 2.9 : state.combat ? 2.2 : 1.6;
+    if (state.critical) tempo += 0.8; // race the pulse when Stability is critical
     music.tempo.setTargetAtTime(tempo, t, 0.8);
 
     // Open the pad tremolo into a 2.2 Hz throb on interstitials; steady drone otherwise.
     music.throbDepth.setTargetAtTime(state.interstitial ? 0.42 : 0.0, t, 0.4);
 
-    // Drop the pad a couple whole steps (4 semitones, 55 -> ~43.65 Hz) on interstitials
-    // so the throb sits lower; glide back up when combat resumes.
-    const padHz = state.interstitial ? 43.65 : 55;
-    music.padA.frequency.setTargetAtTime(padHz, t, 0.4);
-    music.padB.frequency.setTargetAtTime(padHz, t, 0.4);
+    // Rising-tension drone pitch — model + all knobs live in AMBIENCE.pitch above.
+    applyPitch();
   }
 
   function setState(patch) {
@@ -350,5 +446,26 @@
     return muted;
   }
 
-  namespace.audio = { start, play, setState, setMuted, toggleMute, isMuted };
+  // --- Live tuning ----------------------------------------------------------
+  // Shallow-merge a patch into AMBIENCE (nested one level for `pitch`) and re-apply
+  // immediately, so ambience knobs can be auditioned from the console without a reload.
+  function tune(patch) {
+    if (patch && typeof patch === "object") {
+      for (const key of Object.keys(patch)) {
+        if (key === "pitch" && patch.pitch && typeof patch.pitch === "object") Object.assign(AMBIENCE.pitch, patch.pitch);
+        else AMBIENCE[key] = patch[key];
+      }
+    }
+    // Force the next applyPitch() to treat this as a transition so "inRoom" reschedules.
+    pitchRoomAnchor = -1;
+    pitchWasInterstitial = !state.interstitial;
+    applyMusicState();
+    return getTuning();
+  }
+
+  function getTuning() {
+    return JSON.parse(JSON.stringify(AMBIENCE));
+  }
+
+  namespace.audio = { start, play, setState, setMuted, toggleMute, isMuted, tune, getTuning };
 })(window.DepHell = window.DepHell || {});

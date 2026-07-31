@@ -28,6 +28,7 @@
     observabilityValue: document.querySelector("#observabilityValue"),
     debtBar: document.querySelector("#debtBar"),
     debtValue: document.querySelector("#debtValue"),
+    buildIdentity: document.querySelector("#buildIdentity"),
     eventLog: document.querySelector("#eventLog"),
     graphSvg: document.querySelector("#graphSvg"),
     graphCaption: document.querySelector("#graphCaption"),
@@ -103,6 +104,9 @@
   let roomClearedLogged = false;
   let pendingRoutes = [];
   let activeRouteChoice = null;
+  let routeFocus = 0; // keyboard-focused route card index (parity with the package carousel)
+  let incidentResolutions = [];
+  let incidentFocus = 0; // keyboard-focused incident resolution index
   let selectedGraphEntity = null;
   let activePreviewPackage = null;
   let focusedIndex = 0;
@@ -115,7 +119,30 @@
   let shakeMag = 0;
   let bossVictoryPending = false;
   let lastDebtBand = 0;
+  let wasCritical = false; // tracks the stability<CRITICAL edge so the alarm fires once
+  let runEndedAt = 0; // timestamp the report screen opened, for the restart input-lock
   let game;
+
+  // The end screen ignores restart input for this long so a reflexive strike or a swing
+  // finished a beat after death can't skip past the report/questions into a new run.
+  const RESTART_LOCK_MS = 800;
+  // Below this Stability the run enters a "critical" state: a pulsing red vignette + an
+  // alarm, so low health finally reads as a lean-forward tension moment (playtest PT1 Q10).
+  const CRITICAL_STABILITY = 30;
+
+  // --- Feel tuning (experimental knobs) -------------------------------------
+  // Tune these live from the console (no rebuild) to A/B feel changes:
+  //     DepHell.debug.tune({ clearHealTaper: false })   // back to a flat +8 refund per clear
+  //     DepHell.debug.tune({ swingCommit: 0.55 })        // root movement during the 0.14s swing (anti hold-to-win)
+  //     DepHell.debug.tune({ introSkipOnInput: true })   // eager players end the room-intro lock early by holding a key
+  //     DepHell.debug.tune()                             // read the current values
+  const FEEL = {
+    // ON since playtest PT1 (flat tension / no lean-forward): late rooms stop fully
+    // refunding combat damage, so Stability trends down and pressure mounts across a run.
+    clearHealTaper: true, // true = max(3, 8 - roomIndex) heal per clear; false = flat +8
+    swingCommit: 1.0, // movement-speed multiplier while mid-swing (1.0 = no change)
+    introSkipOnInput: false, // let a held move/attack/dash key cut the room-intro lock short
+  };
 
   function debtBand(debt) {
     if (debt >= 75) return 3;
@@ -129,12 +156,18 @@
     const band = debtBand(run.techDebt);
     if (band > lastDebtBand) sfx("debtThreshold");
     lastDebtBand = band;
+    // Fire the critical alarm once, on the downward crossing into the danger band.
+    const critical = run.stability > 0 && run.stability < CRITICAL_STABILITY;
+    if (critical && !wasCritical) sfx("criticalAlarm");
+    wasCritical = critical;
     audio.setState({
       stability: run.stability,
       debt: run.techDebt,
       incident: run.incident ? run.incident.id : null,
       boss: run.selectedBoss || (game.boss ? game.boss.id : null),
       combat: game.enemies ? game.enemies.some((enemy) => enemy.alive) : false,
+      room: run.roomIndex || 0,
+      critical,
     });
   }
 
@@ -143,13 +176,14 @@
     mouse.down = false;
     game = {
       run: makeInitialRunState(),
-      player: { x: 170, y: FLOOR_Y, w: 24, h: 42, vx: 0, vy: 0, facing: 1, attackTimer: 0, dashTimer: 0, invulnTimer: 0, swingTimer: 0, swingDir: 1 },
+      player: { x: 170, y: FLOOR_Y, w: 24, h: 42, vx: 0, vy: 0, facing: 1, attackTimer: 0, dashTimer: 0, invulnTimer: 0, swingTimer: 0, swingDir: 1, walkPhase: 0 },
       slashes: [],
       enemyShots: [],
       hitSparks: [],
       particles: [],
       floaters: [],
       dashGhosts: [],
+      feelLog: [], // Tier-2 telemetry ring buffer (see pushFeel / debug.feel)
       enemies: [],
       hazards: [],
       pendingSpawns: [],
@@ -177,6 +211,7 @@
     choiceShown = false;
     roomClearedLogged = false;
     lastDebtBand = 0;
+    wasCritical = false;
     audio.setState({ interstitial: false });
     logEvent("run_started", "Run started: Release Candidate Pipeline.");
     loadRoom("local_dev");
@@ -457,7 +492,8 @@
     ui.incidentTitle.textContent = inc.name;
     ui.incidentBlurb.textContent = inc.blurb;
     ui.incidentChoices.innerHTML = "";
-    for (const res of inc.resolutions) {
+    incidentResolutions = inc.resolutions;
+    inc.resolutions.forEach((res, i) => {
       const button = document.createElement("button");
       button.className = "incident-card";
       button.type = "button";
@@ -472,9 +508,21 @@
       consequence.append(strong, res.consequence);
       button.append(h, immediate, consequence);
       button.addEventListener("click", () => resolveIncident(res));
+      button.addEventListener("mouseenter", () => setIncidentFocus(i, true));
       ui.incidentChoices.appendChild(button);
-    }
+    });
     ui.incidentOverlay.classList.remove("hidden");
+    setIncidentFocus(0, true);
+  }
+
+  // Highlight one incident resolution for keyboard selection; hover syncs to it too, so
+  // the mouse and keyboard never disagree about which card is armed.
+  function setIncidentFocus(index, silent) {
+    const cards = [...ui.incidentChoices.children];
+    if (!cards.length) return;
+    incidentFocus = ((index % cards.length) + cards.length) % cards.length;
+    cards.forEach((card, i) => card.classList.toggle("focused", i === incidentFocus));
+    if (!silent) sfx("uiMove");
   }
 
   function resolveIncident(res) {
@@ -722,14 +770,25 @@
       tradeoff.append(strong, route.tradeoff);
 
       button.append(title, description, tradeoff);
+      const index = routes.indexOf(route);
       button.addEventListener("click", () => selectRoute(route));
-      button.addEventListener("mouseenter", () => previewRoute(route));
-      button.addEventListener("focus", () => previewRoute(route));
+      button.addEventListener("mouseenter", () => setRouteFocus(index, true));
       ui.routeChoices.appendChild(button);
     }
     ui.routeOverlay.classList.remove("hidden");
-    renderRouteGraph();
+    setRouteFocus(0, true);
     audio.setState({ interstitial: true });
+  }
+
+  // Highlight one route card for keyboard selection and preview it on the minimap.
+  // Hover routes through here too, so mouse and keyboard share one focused card.
+  function setRouteFocus(index, silent) {
+    const cards = [...ui.routeChoices.children];
+    if (!cards.length) return;
+    routeFocus = ((index % cards.length) + cards.length) % cards.length;
+    cards.forEach((card, i) => card.classList.toggle("focused", i === routeFocus));
+    previewRoute(pendingRoutes[routeFocus]);
+    if (!silent) sfx("uiMove");
   }
 
   function previewRoute(route) {
@@ -768,8 +827,11 @@
       return;
     }
     if (game.roomIntroTimer > 0) {
-      game.roomIntroTimer -= dt;
-      return;
+      // introSkipOnInput (default off): a player already reaching for a control cuts
+      // the intro lock short instead of waiting it out — trims transition dead air.
+      const eager = FEEL.introSkipOnInput && (mouse.down || keys.has("a") || keys.has("d") || keys.has("w") || keys.has("s") || keys.has(" ") || keys.has("arrowleft") || keys.has("arrowright") || keys.has("shift") || keys.has("shiftleft"));
+      game.roomIntroTimer = eager ? 0 : game.roomIntroTimer - dt;
+      if (game.roomIntroTimer > 0) return;
     }
     updatePlayer(dt);
     updateDuck(dt);
@@ -807,7 +869,9 @@
     const jump = keys.has("w") || keys.has("arrowup");
     const down = keys.has("s") || keys.has("arrowdown");
     const axis = (right ? 1 : 0) - (left ? 1 : 0);
-    p.vx = axis * game.run.stats.speed;
+    // swingCommit (default 1.0 = no change) optionally roots movement during the
+    // brief swing so the core verb rewards spacing over hold-to-win. Experimental knob.
+    p.vx = axis * game.run.stats.speed * (p.swingTimer > 0 ? FEEL.swingCommit : 1);
     // Facing: when the mouse is live it aims (body faces the cursor, Quake-style);
     // otherwise facing is movement-driven and persists until a direction key is pressed.
     if (mouseActive) {
@@ -829,6 +893,8 @@
     p.x = clamp(p.x + p.vx * dt, 92, 900);
     p.y = Math.min(FLOOR_Y, p.y + p.vy * dt);
     if (p.y >= FLOOR_Y) p.vy = 0;
+    // Advance the walk-cycle phase while grounded and moving (speed-scaled cadence).
+    if (Math.abs(p.vx) > 5 && p.y >= FLOOR_Y) p.walkPhase += dt * (9 + Math.abs(p.vx) * 0.02);
     p.attackTimer -= dt;
     p.dashTimer -= dt;
     p.invulnTimer -= dt;
@@ -940,6 +1006,7 @@
         if (enemy.type === "version_conflict_half" && !enemy.exposed) {
           addHitSpark(enemyCenterX, enemyCenterY, "#6b7280");
           spawnFloater(enemyCenterX, enemyCenterY - 8, "BLOCKED", "#9aa4ad");
+          pushFeel({ kind: "blocked", hitFreezeAfter: hitFreezeTimer, shakeAfter: shakeMag, particles: 0, floater: true });
           continue;
         }
         if (enemy.boss && enemy.armored) {
@@ -947,6 +1014,7 @@
           spawnFloater(enemyCenterX, enemyCenterY - 8, "ARMORED", "#9aa4ad");
           sfx("bossHit");
           addShake(1.2);
+          pushFeel({ kind: "armored", hitFreezeAfter: hitFreezeTimer, shakeAfter: shakeMag, particles: 0, floater: true });
           continue;
         }
         enemy.hp -= slash.damage;
@@ -957,12 +1025,14 @@
         if (enemy.hp <= 0) {
           if (enemy.boss) {
             setHitStop(0.1);
+            pushFeel({ kind: "bossKill", hitFreezeAfter: hitFreezeTimer, shakeAfter: shakeMag, particles: 0, floater: true });
             defeatBoss(enemy);
             break;
           }
           setHitStop(0.06);
           addShake(5);
           spawnBurst(enemyCenterX, enemyCenterY, enemyDefs[enemy.type].color, 12);
+          pushFeel({ kind: "kill", hitFreezeAfter: hitFreezeTimer, shakeAfter: shakeMag, particles: 12, floater: true });
           const spawnedReplacement = onEnemyDeath(enemy);
           enemy.alive = false;
           logEvent("enemy_defeated", `${enemy.name} patched out.`);
@@ -971,10 +1041,13 @@
         } else {
           setHitStop(0.03);
           addShake(2.5);
+          let knockbackApplied = false;
           if (!enemy.boss) {
             const dir = Math.sign(enemy.x - game.player.x) || 1;
             enemy.knockbackVx = dir * 160;
+            knockbackApplied = true;
           }
+          pushFeel({ kind: "hit", hitFreezeAfter: hitFreezeTimer, shakeAfter: shakeMag, particles: 0, floater: true, knockbackApplied });
         }
       }
     }
@@ -1287,6 +1360,11 @@
         boss.telegraph = 0.5;
         game.run.bossStats.safeWindows += 1;
         logEvent("boss_window", `${def.name} exposed a compatibility window.`);
+        // On-canvas echo so the vulnerability window reads in the arena (and by ear),
+        // not only in the side log — this is the boss's one "strike now" moment.
+        spawnFloater(boss.x, boss.y - boss.h - 12, "WINDOW OPEN", "#9be7a0");
+        addShake(3);
+        sfx("reveal");
       }
     }
 
@@ -1448,7 +1526,12 @@
     // Clearing a combat room patches a little Stability back — sustain for the run.
     if (room.enemies && room.enemies.length && !room.bossRoom && game.run.stability > 0) {
       const before = Math.round(game.run.stability);
-      game.run.stability = Math.min(100, game.run.stability + 8);
+      // Flat +8 by default; the clearHealTaper knob ramps it down by room so late-run
+      // combat damage stops being fully refunded (rising tension). Off = current behavior.
+      const clearHeal = FEEL.clearHealTaper ? Math.max(3, 8 - game.run.roomIndex) : 8;
+      game.run.stability = Math.min(100, game.run.stability + clearHeal);
+      const healed = Math.round(game.run.stability) - before;
+      if (healed > 0) spawnFloater(game.player.x + game.player.w / 2, game.player.y - 40, `+${healed} STABILITY`, "#9be7a0");
       logEvent("room_cleared", `${room.name} cleared. Stability ${before} -> ${Math.round(game.run.stability)}.`, { room: room.id });
     } else {
       logEvent("room_cleared", `${room.name} cleared.`, { room: room.id });
@@ -1494,7 +1577,9 @@
     hitFreezeTimer = 0.06;
     addShake(6);
     addHitSpark(game.player.x, game.player.y - 24, "#dfffee");
+    spawnFloater(game.player.x + game.player.w / 2, game.player.y - 40, `-${adjusted}`, "#ff6b6b");
     sfx("playerHit");
+    pushFeel({ kind: "playerHit", hitFreezeAfter: hitFreezeTimer, shakeAfter: shakeMag, particles: 0, floater: true });
     logEvent("stability_damage", `${reason} Stability -${adjusted}.`);
     renderAllUi();
     if (game.run.stability <= 0) endRun(false, reason);
@@ -1518,6 +1603,15 @@
 
   function setHitStop(seconds) {
     hitFreezeTimer = Math.max(hitFreezeTimer, seconds);
+  }
+
+  // Tier-2 feel telemetry (fun-tuneup-protocol.md): a capped ring buffer of impact
+  // events, read out via DepHell.debug.feel(). Push AFTER the juice calls fire so the
+  // recorded hitFreeze/shake reflect what the player will actually feel this frame.
+  function pushFeel(event) {
+    if (!game.feelLog) game.feelLog = [];
+    game.feelLog.push({ t: performance.now(), ...event });
+    if (game.feelLog.length > 512) game.feelLog.shift();
   }
 
   function spawnBurst(x, y, color, count) {
@@ -1597,6 +1691,11 @@
   function endRun(victory, cause) {
     if (game.run.ended) return;
     game.run.ended = true;
+    // Drop any held controls the instant the run ends so an in-flight strike/dash/move
+    // doesn't carry into the end screen (it also stops the frozen player from "buffering").
+    keys.clear();
+    mouse.down = false;
+    runEndedAt = performance.now();
     logEvent(victory ? "run_won" : "run_failed", cause);
     renderReport(victory, cause);
     ui.reportOverlay.classList.remove("hidden");
@@ -1758,6 +1857,9 @@
     ui.observabilityValue.textContent = `${run.observability}/5`;
     ui.debtBar.style.width = `${Math.min(100, run.techDebt)}%`;
     ui.debtValue.textContent = String(run.techDebt);
+    // Surface build identity DURING the run (it was previously only shown post-mortem),
+    // so the player feels the architecture they're assembling actually taking shape.
+    if (ui.buildIdentity) ui.buildIdentity.textContent = run.installedPackages.length ? `▸ becoming ${buildIdentity(run)}` : "";
     ui.eventLog.innerHTML = run.eventLog.slice(-9).map((event) => `<li>${event.text}</li>`).join("");
     syncAudioState();
     renderGraph();
@@ -1915,6 +2017,7 @@
     drawParticles();
     drawFloaters();
     ctx.restore();
+    drawDangerVignette();
     drawRoomTitle(room);
     drawBossHud();
     drawRoomBanner(room);
@@ -1923,6 +2026,25 @@
     // Time-based decay so the shake rings out over the same wall-clock duration on
     // 60Hz and 144Hz displays (the exponent normalizes to a 60fps step).
     shakeMag = shakeMag > 0.3 ? shakeMag * Math.pow(0.86, dt * 60) : 0;
+  }
+
+  // Critical-Stability tension: a red screen-edge vignette that breathes faster and
+  // brighter as Stability approaches zero — the "lean forward" cue PT1 said was missing.
+  function drawDangerVignette() {
+    if (game.run.ended || isOverlayOpen()) return;
+    const s = game.run.stability;
+    if (s <= 0 || s >= CRITICAL_STABILITY) return;
+    const severity = 1 - s / CRITICAL_STABILITY; // 0 at the threshold -> 1 near death
+    const period = 260 - 120 * severity; // heartbeat quickens as it gets worse
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / period);
+    const alpha = (0.12 + 0.3 * severity) * (0.55 + 0.45 * pulse);
+    ctx.save();
+    const g = ctx.createRadialGradient(480, 270, 200, 480, 270, 620);
+    g.addColorStop(0, "rgba(255,40,60,0)");
+    g.addColorStop(1, `rgba(255,40,60,${alpha.toFixed(3)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
   }
 
   function drawHazards() {
@@ -2008,9 +2130,8 @@
       ctx.strokeRect(92, 136, 818, 216);
       ctx.setLineDash([]);
     }
-    ctx.fillStyle = "#7ccfc4";
-    ctx.font = "14px Courier New";
-    ctx.fillText(room.subtitle, 236, 94);
+    // Room name + subtitle are shown only in the fading intro banner now (drawRoomBanner),
+    // so neither sits permanently across the top behind the HUD and build log.
   }
 
   function drawArchitectureBlocks() {
@@ -2132,34 +2253,68 @@
     const invulnFlash = p.invulnTimer > 0 && Math.floor(p.invulnTimer * 22) % 2 === 0;
     ctx.scale(p.facing, 1);
     const swingT = p.swingTimer > 0 ? 1 - p.swingTimer / (p.swingDur || 0.14) : -1;
-    drawResolverSprite(invulnFlash ? "#dfffee" : "#20f7ee", 1, swingT, p.swingDir || 1);
+    const moving = Math.abs(p.vx) > 5 && p.y >= FLOOR_Y;
+    const airborne = p.y < FLOOR_Y - 1;
+    drawResolverSprite(invulnFlash ? "#dfffee" : "#20f7ee", 1, swingT, p.swingDir || 1, p.walkPhase || 0, moving, airborne);
     ctx.restore();
   }
 
-  function drawResolverSprite(color, alpha, swingT = -1, swingDir = 1) {
+  function drawResolverSprite(color, alpha, swingT = -1, swingDir = 1, phase = 0, moving = false, airborne = false) {
     ctx.save();
     ctx.globalAlpha *= alpha;
-    ctx.fillStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 16;
 
-    // Head and visor.
-    ctx.fillRect(-9, -49, 18, 14);
-    ctx.fillRect(-5, -53, 14, 4);
-    ctx.fillStyle = "#dfffee";
-    ctx.fillRect(2, -45, 5, 3);
+    // Legs swing from fixed hips: a walk cycle while grounded and moving, a leaping
+    // stagger in the air, a relaxed stance at rest.
+    let legA;
+    let legB;
+    if (airborne) { legA = -0.4; legB = 0.55; }
+    else if (moving) { legA = Math.sin(phase) * 0.5; legB = Math.sin(phase + Math.PI) * 0.5; }
+    else { legA = 0.06; legB = -0.06; }
+    drawResolverLeg(color, -4, legA);
+    drawResolverLeg(color, 5, legB);
 
-    // Compact humanoid body with separated limbs.
+    // Head/torso/arms bob gently over each step.
+    const bob = moving && !airborne ? Math.abs(Math.sin(phase)) * -1.6 : 0;
+    ctx.save();
+    ctx.translate(0, bob);
+
     ctx.fillStyle = color;
-    ctx.fillRect(-7, -34, 15, 22);
-    ctx.fillRect(-13, -30, 6, 16);
-    ctx.fillRect(8, -30, 7, 16);
-    ctx.fillRect(-10, -12, 7, 16);
-    ctx.fillRect(3, -12, 7, 16);
-    ctx.fillRect(-12, 2, 10, 5);
-    ctx.fillRect(2, 2, 11, 5);
+    ctx.fillRect(-9, -49, 18, 14); // head
+    ctx.fillRect(-5, -53, 14, 4);  // crest
+    ctx.fillStyle = "#dfffee";
+    ctx.fillRect(2, -45, 5, 3);    // visor
+    ctx.fillStyle = color;
+    ctx.fillRect(-7, -34, 15, 22); // torso
 
+    // Free arm swings opposite its leg; the weapon arm holds the blade.
+    const armA = airborne ? -0.6 : moving ? -legA * 0.9 : -0.12;
+    drawResolverArm(color, -10, -31, armA);
+    ctx.fillStyle = color;
+    ctx.fillRect(8, -31, 7, 14); // weapon shoulder
     drawPatchBlade(swingT, swingDir);
+
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawResolverLeg(color, px, angle) {
+    ctx.save();
+    ctx.translate(px, -12);
+    ctx.rotate(angle);
+    ctx.fillStyle = color;
+    ctx.fillRect(-3.5, 0, 7, 15); // shin
+    ctx.fillRect(-4, 13, 10, 5);  // foot
+    ctx.restore();
+  }
+
+  function drawResolverArm(color, px, py, angle) {
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+    ctx.fillStyle = color;
+    ctx.fillRect(-3, 0, 6, 17);
     ctx.restore();
   }
 
@@ -2623,40 +2778,88 @@
   }
 
   function drawRoomTitle(room) {
-    ctx.fillStyle = "#dfffee";
-    ctx.font = "22px Courier New";
-    ctx.fillText(room.name.toUpperCase(), 236, 66);
+    // The room NAME now lives only in the fading intro banner (drawRoomBanner), so it no
+    // longer sits permanently behind the top-left HUD. Only live combat status stays here,
+    // centered up top and dropped below the boss bar when one is present — clear of the HUD.
+    void room;
+    ctx.save();
+    ctx.textAlign = "center";
+    let y = game.boss ? 84 : 34;
     if (game.run.incident) {
       ctx.fillStyle = "#ff4265";
       ctx.font = "16px Courier New";
-      ctx.fillText(`INCIDENT: ${game.run.incident.name}`, 236, 122);
+      ctx.fillText(`INCIDENT: ${game.run.incident.name}`, 480, y);
+      y += 22;
     }
     if (featureFlagActive()) {
       ctx.fillStyle = "#46ff83";
       ctx.font = "16px Courier New";
-      ctx.fillText(`FLAGGED OFF: ${Math.ceil(game.featureFlagTimer)}s`, 236, game.run.incident ? 144 : 122);
+      ctx.fillText(`FLAGGED OFF: ${Math.ceil(game.featureFlagTimer)}s`, 480, y);
     }
+    ctx.restore();
+  }
+
+  // Word-wrap `text` to fit `maxWidth` at the ctx's current font. Used for banner copy.
+  function wrapText(text, maxWidth) {
+    const words = String(text).split(" ");
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(test).width > maxWidth) { lines.push(line); line = word; }
+      else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  // Describe how the installed build changes the FIGHT, in felt terms, listing only the
+  // combat stats that differ from the base loadout (base values mirror run-state.js).
+  // This is what PT1 Q4 was missing: the player could see their identity but not name one
+  // way the package changed combat.
+  function combatLoadoutText(run) {
+    const s = run.stats;
+    const parts = [];
+    if (s.damage !== 10) parts.push(`hits ${s.damage > 10 ? "harder" : "softer"} (${s.damage})`);
+    if (s.fireRate !== 0.25) parts.push(`swings ${s.fireRate < 0.25 ? "faster" : "slower"} (${(0.25 / s.fireRate).toFixed(2)}×)`);
+    if (s.speed !== 250) parts.push(s.speed > 250 ? "faster feet" : "heavier feet");
+    if (s.dashCooldown !== 0.55) parts.push(s.dashCooldown < 0.55 ? "quicker dash" : "slower dash");
+    return parts.join(" · ");
   }
 
   function drawRoomBanner(room) {
     if (game.roomIntroTimer <= 0) return;
-    const alpha = clamp(game.roomIntroTimer / ROOM_INTRO_SECONDS, 0, 1);
+    // Hold fully readable, then fade out over the last ~40% of the intro so the announcement
+    // is legible AND has cleared the combat area by the time input unlocks (which is exactly
+    // when roomIntroTimer hits 0 — see update()). No lingering box over the fight.
+    const t = clamp(game.roomIntroTimer / ROOM_INTRO_SECONDS, 0, 1);
+    const bx = 246, by = 136, bw = 468, tx = bx + 28;
     ctx.save();
-    ctx.globalAlpha = Math.min(1, alpha + 0.12);
+    ctx.globalAlpha = t > 0.4 ? 1 : t / 0.4;
+    ctx.font = "14px Courier New";
+    const subLines = wrapText(room.subtitle, bw - 56); // keep the subtitle inside the box
+    const loadout = combatLoadoutText(game.run);
+    const loadLines = loadout ? wrapText(`LOADOUT — ${loadout}`, bw - 56) : [];
+    const bh = 74 + subLines.length * 18 + (loadLines.length ? 10 + loadLines.length * 18 : 0);
     ctx.fillStyle = "rgba(3, 14, 17, 0.86)";
     ctx.strokeStyle = "rgba(93, 255, 235, 0.72)";
     ctx.lineWidth = 2;
-    ctx.fillRect(246, 136, 468, 104);
-    ctx.strokeRect(246, 136, 468, 104);
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeRect(bx, by, bw, bh);
     ctx.fillStyle = "#20f7ee";
     ctx.font = "14px Courier New";
-    ctx.fillText(`LOCUS ${game.run.roomsVisited.length}`, 274, 168);
+    ctx.fillText(`LOCUS ${game.run.roomsVisited.length}`, tx, by + 32);
     ctx.fillStyle = "#dfffee";
     ctx.font = "28px Courier New";
-    ctx.fillText(room.name.toUpperCase(), 274, 200);
+    ctx.fillText(room.name.toUpperCase(), tx, by + 62);
     ctx.fillStyle = "#7ccfc4";
     ctx.font = "14px Courier New";
-    ctx.fillText(room.subtitle, 274, 224);
+    subLines.forEach((line, i) => ctx.fillText(line, tx, by + 86 + i * 18));
+    if (loadLines.length) {
+      const ly = by + 86 + subLines.length * 18 + 10;
+      ctx.fillStyle = "#9be7a0"; // green, matching the build/reward cues
+      loadLines.forEach((line, i) => ctx.fillText(line, tx, ly + i * 18));
+    }
     ctx.restore();
   }
 
@@ -2687,7 +2890,8 @@
       return pressed && !(padPrev.buttons && padPrev.buttons[n]);
     };
     if (reporting) {
-      if (edge(0)) resetGame();                                      // Cross = new run
+      // Same restart-lock as the keyboard so a held/reflexive button can't skip the report.
+      if (edge(0) && performance.now() - runEndedAt > RESTART_LOCK_MS) resetGame(); // Cross = new run
       padPrev.buttons = pad.buttons.map((b) => b.pressed);
       return;
     }
@@ -2874,9 +3078,27 @@ function startSideErrorRail() {
       if (key === "i" || key === "arrowup") { toggleInspect(); return; }
       if ((key === "escape" || key === "backspace") && packageInspecting) { toggleInspect(); return; }
     }
-    // Report screen: Enter ships the next candidate (mouse can still answer the feel check).
-    if (!ui.reportOverlay.classList.contains("hidden") && (key === "enter" || key === " ")) {
-      resetGame();
+    // Route (locus) selection — keyboard parity with the carousel so the mouse is never
+    // required (which was also silently waking combat mouse-aim). Cards stack vertically.
+    if (!ui.routeOverlay.classList.contains("hidden")) {
+      if (event.repeat) return;
+      if (["arrowup", "arrowleft", "w", "a"].includes(key)) { setRouteFocus(routeFocus - 1); return; }
+      if (["arrowdown", "arrowright", "s", "d"].includes(key)) { setRouteFocus(routeFocus + 1); return; }
+      if (key === "enter" || key === " ") { const route = pendingRoutes[routeFocus]; if (route) selectRoute(route); return; }
+    }
+    // Incident triage — same keyboard model.
+    if (ui.incidentOverlay && !ui.incidentOverlay.classList.contains("hidden")) {
+      if (event.repeat) return;
+      if (["arrowup", "arrowleft", "w", "a"].includes(key)) { setIncidentFocus(incidentFocus - 1); return; }
+      if (["arrowdown", "arrowright", "s", "d"].includes(key)) { setIncidentFocus(incidentFocus + 1); return; }
+      if (key === "enter" || key === " ") { const res = incidentResolutions[incidentFocus]; if (res) resolveIncident(res); return; }
+    }
+    // End screen: consume ALL gameplay keys so a reflexive strike/movement — or a swing the
+    // hand finishes a beat after death — can't bleed through. Only Enter restarts, and only
+    // after a short lock, so the player actually reads the report/questions first. The mouse
+    // still answers the feel check and the NEW RUN button.
+    if (!ui.reportOverlay.classList.contains("hidden")) {
+      if (key === "enter" && performance.now() - runEndedAt > RESTART_LOCK_MS) resetGame();
       return;
     }
     if (key === "m") {
@@ -2919,8 +3141,10 @@ function startSideErrorRail() {
     mouse.x = event.clientX;
     mouse.y = event.clientY;
     // Wake mouse control on deliberate movement (threshold filters trackpad jitter),
-    // unless the player has taken explicit control via the right-click toggle.
-    if (!mouseActive && !mouseManual) {
+    // unless the player has taken explicit control via the right-click toggle. Never wake
+    // while an overlay is up: moving the mouse to (reluctantly) read a menu must not flip
+    // combat into mouse-aim and swap the hidden cursor for a crosshair.
+    if (!mouseActive && !mouseManual && !isOverlayOpen()) {
       mouseMoveAccum += Math.abs(event.movementX || 0) + Math.abs(event.movementY || 0);
       if (mouseMoveAccum > 8) mouseActive = true;
     }
@@ -2980,7 +3204,34 @@ function startSideErrorRail() {
         player: { x: game.player.x, y: game.player.y },
         enemies: game.enemies.filter((e) => e.alive).map((e) => ({ type: e.type, x: e.x, hp: e.hp, telegraph: e.telegraph, boss: !!e.boss, armored: !!e.armored })),
         canvasWidth: canvas.width,
+        mouseActive,
+        overlayOpen: isOverlayOpen(),
+        // ms since the run ended (report opened); null while a run is live. Lets tooling
+        // reason about the restart input-lock deterministically.
+        sinceEnd: game.run.ended ? Math.round(performance.now() - runEndedAt) : null,
       };
+    },
+    // Tier-2 feel telemetry (fun-tuneup-protocol.md): the impact-event ring buffer, for
+    // headless/scripted measurement of impact-per-kill, dead-air, and player-hit cadence.
+    feel() {
+      return (game.feelLog || []).slice();
+    },
+    // Live feel-knob tuning (see FEEL near the top of this file). Merge a patch and read
+    // back the result, so the audit's "needs a human run" experiments can be auditioned
+    // mid-run without a rebuild, e.g. DepHell.debug.tune({ swingCommit: 0.55 }).
+    tune(patch) {
+      if (patch && typeof patch === "object") Object.assign(FEEL, patch);
+      return { ...FEEL };
+    },
+    // Scripted-input channel (fun-tuneup-protocol.md) so an automated proxy tester can
+    // COMMIT to movement/attack/dash — not just observe — and drive deterministic runs.
+    // Drives the same `keys` set the real keyboard fills, so it exercises the true loop.
+    input: {
+      hold(key) { keys.add(String(key).toLowerCase()); },
+      release(key) { keys.delete(String(key).toLowerCase()); },
+      set(list) { keys.clear(); (list || []).forEach((k) => keys.add(String(k).toLowerCase())); },
+      clear() { keys.clear(); mouse.down = false; },
+      attack(on) { if (on === false) keys.delete(" "); else keys.add(" "); },
     },
   };
 

@@ -8,7 +8,7 @@
       stability: 100,
       observability: 2,
       techDebt: 0,
-      stats: { fireRate: 0.16, damage: 12, speed: 250, dashCooldown: 0.55 },
+      stats: { fireRate: 0.25, damage: 10, speed: 250, dashCooldown: 0.55 },
       installedPackages: [],
       tools: [],
       activeFlag: null,

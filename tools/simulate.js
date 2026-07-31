@@ -147,12 +147,61 @@ console.log(`  Technical Debt: avg ${avg(stats.debt)}, max ${maxOf(stats.debt)}`
 console.log(`  Observability : avg ${avg(stats.observability)} of 5`);
 console.log(`  Rollback installed: ${pct(stats.installedRollback)}; would be upgrade-locked: ${pct(stats.rollbackLocked)}`);
 
+// --- Build reach (fun-tuneup-protocol.md Tier-1: build-invariance + build-cadence) ---
+// Does the assembled build actually reach the player's hands? Enumerate single-package
+// builds and measure how far the four combat scalars (fireRate/damage/speed/dashCooldown)
+// diverge. This models no movement in the run loop above, so it cannot perturb the
+// balance numbers — it is a pure static read of the effect engine, kept advisory.
+const COMBAT_STATS = ["fireRate", "damage", "speed", "dashCooldown"];
+
+function statsForBuild(pkgId) {
+  const run = makeInitialRunState();
+  if (pkgId) {
+    const pkg = packages.find((p) => p.id === pkgId);
+    if (pkg) applyPackageEffects(run, pkg, noop);
+  }
+  return run.stats;
+}
+
+const buildRows = [null, ...POOL].map((id) => {
+  const s = statsForBuild(id);
+  return { id: id || "(base)", ...s, dps: s.damage / s.fireRate };
+});
+
+function span(field) {
+  const vals = buildRows.map((r) => r[field]);
+  return { min: Math.min(...vals), max: Math.max(...vals) };
+}
+
+const speedSpan = span("speed");
+const dashSpan = span("dashCooldown");
+const dpsSpan = span("dps");
+const speedDiv = speedSpan.max - speedSpan.min;
+const dashDiv = dashSpan.max - dashSpan.min;
+const dpsSwing = dpsSpan.min > 0 ? (dpsSpan.max - dpsSpan.min) / dpsSpan.min : 0;
+// Build-cadence proxy: how many offered packages move at least one combat scalar
+// (the protocol wants >= 3 build-affecting choices available so a run can express one).
+const base = statsForBuild(null);
+const buildAffecting = POOL.filter((id) => {
+  const s = statsForBuild(id);
+  return COMBAT_STATS.some((k) => s[k] !== base[k]);
+});
+
+console.log("\nBuild reach (does the ledger write back to the fight?):");
+console.log(`  speed divergence   : ${speedDiv.toFixed(0)} px/s (${speedSpan.min}-${speedSpan.max})`);
+console.log(`  dashCooldown diverg.: ${dashDiv.toFixed(2)} s (${dashSpan.min.toFixed(2)}-${dashSpan.max.toFixed(2)})`);
+console.log(`  effective-DPS swing : ${(dpsSwing * 100).toFixed(0)}% (${dpsSpan.min.toFixed(0)}-${dpsSpan.max.toFixed(0)})`);
+console.log(`  build-affecting picks: ${buildAffecting.length} of ${POOL.length} (${buildAffecting.join(", ")})`);
+
 // Pathology gate.
 const bossSpread = Object.keys(stats.boss).length;
 const problems = [];
 if (dominant) problems.push(`Package '${dominant}' is picked >80% when offered (dominant).`);
 if (bossSpread < 2) problems.push("Only one boss is ever selected — boss adaptivity is not exercised.");
 if (Number(avg(stats.debt)) > 60) problems.push("Average Technical Debt is very high (>60).");
+if (speedDiv === 0 && dashDiv === 0) problems.push("Build-invariance: nothing moves speed or dashCooldown — every build pilots identically on movement/dodge.");
+if (dpsSwing < 0.15) problems.push(`Build-invariance: effective-DPS swing is only ${(dpsSwing * 100).toFixed(0)}% across builds (<15%).`);
+if (buildAffecting.length < 3) problems.push(`Build-cadence: only ${buildAffecting.length} offered packages affect a combat stat (<3 build-defining choices).`);
 
 console.log("");
 if (problems.length) {

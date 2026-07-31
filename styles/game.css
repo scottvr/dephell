@@ -321,6 +321,22 @@ button:focus-visible {
   background: var(--amber);
 }
 
+/* Mid-run build identity — a quiet status line under the meters that names the
+   architecture the player is assembling. Collapses entirely until a package is in. */
+.build-identity {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--cyan);
+  opacity: 0.82;
+  font-style: italic;
+  letter-spacing: 0.2px;
+}
+
+.build-identity:empty {
+  display: none;
+}
+
 .hud-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -828,7 +844,8 @@ button:focus-visible {
 }
 
 .route-card:hover,
-.route-card:focus-visible {
+.route-card:focus-visible,
+.route-card.focused {
   border-color: var(--amber);
   box-shadow: 0 0 22px rgba(255, 207, 102, 0.22);
 }
@@ -842,7 +859,8 @@ button:focus-visible {
 }
 
 .incident-card:hover,
-.incident-card:focus-visible {
+.incident-card:focus-visible,
+.incident-card.focused {
   border-color: var(--red);
   box-shadow: 0 0 22px rgba(255, 66, 101, 0.22);
 }
@@ -1228,13 +1246,14 @@ button:focus-visible {
 .carousel-stage { position: relative; height: 300px; overflow: hidden; }
 .c-arrow {
   position: absolute; top: 50%; transform: translateY(-50%); z-index: 4;
-  min-height: 0; padding: 0 6px; border: none; background: none; box-shadow: none;
-  color: var(--ink); font-size: 28px; cursor: pointer;
-  text-shadow: 0 0 10px rgba(223, 255, 238, 0.5); transition: opacity 0.15s;
+  min-height: 0; padding: 0 4px; border: none; background: none; box-shadow: none;
+  color: var(--cyan); font-size: 44px; line-height: 1; cursor: pointer;
+  text-shadow: 0 0 12px rgba(32, 247, 238, 0.55); transition: opacity 0.15s;
 }
-.c-arrow.l { left: 0; }
-.c-arrow.r { right: 0; }
-.c-arrow.dim { opacity: 0.16; cursor: default; text-shadow: none; }
+.c-arrow.l { left: -2px; }
+.c-arrow.r { right: -2px; }
+/* End-stop: dim only (same size), so the pointer still reads as "press this way." */
+.c-arrow.dim { opacity: 0.2; cursor: default; text-shadow: none; }
 
 /* the track: cards become absolutely-positioned, transform-driven */
 #packageChoices { position: absolute; inset: 0; display: block; margin: 0; grid-template-columns: none; }
@@ -1264,8 +1283,14 @@ button:focus-visible {
 }
 @keyframes caret-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 
-/* neighbors: desaturated spines — header only, count legible but never rivaling the hero */
-#packageChoices .package-card:not(.hero) { filter: grayscale(0.55) brightness(0.72); border-color: rgba(223, 255, 238, 0.2); cursor: pointer; }
+/* neighbors: darkened but still cyan-tinted spines — clearly present cards you can
+   bring to the front, header only, count legible but never rivaling the hero */
+#packageChoices .package-card:not(.hero) {
+  filter: brightness(0.62) saturate(1.05);
+  border-color: rgba(32, 247, 238, 0.4);
+  box-shadow: inset 0 0 22px rgba(2, 8, 10, 0.65), 0 0 10px rgba(32, 247, 238, 0.12);
+  cursor: pointer;
+}
 #packageChoices .package-card:not(.hero) p,
 #packageChoices .package-card:not(.hero) .effect-row,
 #packageChoices .package-card:not(.hero) .tag-row { display: none; }
