@@ -93,6 +93,32 @@
     }
   }
 
+  // Reverse a package's effects (Slice 2 refactor-remove). Nodes/edges the package
+  // created carry createdBy === pkg.id, so those come out cleanly along with any
+  // edges dangling to a removed node. Scalars/lists are inverted best-effort;
+  // reveals (revealEdges/revealNode) are intentionally NOT undone — once the player
+  // has seen a relation, they've seen it.
+  function removePackageEffects(run, pkg, logEvent) {
+    const addedNodeIds = new Set(pkg.effects.filter((e) => e.op === "addNode").map((e) => e.id));
+    run.graph.edges = run.graph.edges.filter((e) => !(e.createdBy === pkg.id || addedNodeIds.has(e.source) || addedNodeIds.has(e.target)));
+    run.graph.nodes = run.graph.nodes.filter((n) => !addedNodeIds.has(n.id));
+    const dropOne = (list, val) => { if (Array.isArray(list)) { const i = list.indexOf(val); if (i >= 0) list.splice(i, 1); } };
+    for (const eff of pkg.effects) {
+      if (eff.op === "modifyStat") run.stats[eff.stat] = Math.max(0.08, (run.stats[eff.stat] ?? 0) - eff.amount);
+      else if (eff.op === "modifyResource") run[eff.resource] = Math.max(0, Math.min(5, (run[eff.resource] ?? 0) - eff.amount));
+      else if (eff.op === "increaseDebt") { run.techDebt = Math.max(0, run.techDebt - eff.amount); dropOne(run.debtTags, eff.tag); }
+      else if (eff.op === "addApproval") run.approvals = run.approvals.filter((a) => a.id !== eff.id);
+      else if (eff.op === "addTag") dropOne(run[eff.list], eff.tag);
+      else if (eff.op === "addTool") run.tools = run.tools.filter((t) => t !== eff.tool);
+      else if (eff.op === "addBossScore") { if (run.bossScores[eff.boss] != null) run.bossScores[eff.boss] = Math.max(0, run.bossScores[eff.boss] - eff.amount); }
+      else if (eff.op === "registerRisk") run.risks = run.risks.filter((r) => r.id !== eff.id);
+      else if (eff.op === "pinNode") dropOne(run.pins, eff.id);
+      else if (eff.op === "addEnemyModifier") run.enemyModifiers = run.enemyModifiers.filter((m) => !(m.source === pkg.id && m.stat === eff.stat && m.amount === eff.amount));
+      else if (eff.op === "addProcessDecision") { run.processDecisions = run.processDecisions.filter((d) => d.id !== eff.id); if (eff.tag) dropOne(run.debtTags, eff.tag); }
+    }
+    if (logEvent) logEvent("package_removed", `Refactor removed ${pkg.name}; its nodes, edges, and modifiers were reversed.`, { package: pkg.id });
+  }
+
   function packagePreviewText(pkg) {
     const parts = [];
     let debt = 0;
@@ -144,5 +170,5 @@
     return names[boss] || boss;
   }
 
-  namespace.effects = { applyPackageEffects, applyEffect, applyEffectList, packagePreviewText };
+  namespace.effects = { applyPackageEffects, applyEffect, applyEffectList, removePackageEffects, packagePreviewText };
 })(window.DepHell = window.DepHell || {});

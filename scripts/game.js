@@ -9,7 +9,7 @@
     renderReleaseReport,
     renderFailureReport,
   } = namespace.reports;
-  const { applyPackageEffects, packagePreviewText } = namespace.effects;
+  const { applyPackageEffects, removePackageEffects, packagePreviewText } = namespace.effects;
   const {
     getPreviewGraph,
     graphCaption,
@@ -119,6 +119,9 @@
   let activePreviewPackage = null;
   let focusedIndex = 0;
   let offeredList = [];
+  let installOffer = [];   // the package offer, preserved while in refactor mode
+  let refactorMode = false; // choice screen toggled to "remove an installed package"
+  const REFACTOR_COST = 2;  // Commits to refactor (remove) one installed package
   let packageInspecting = false;
   let committingPackage = false;
   const padPrev = { buttons: [] };
@@ -642,29 +645,45 @@
       logEvent("package_skipped", "No new package on offer here.");
       return;
     }
+    installOffer = offered;
+    refactorMode = false;
     offeredList = offered;
     focusedIndex = 0;
     packageInspecting = false;
     committingPackage = false;
     ui.choiceStage.classList.remove("inspecting");
+    renderChoiceCards();
+    ui.choiceOverlay.classList.remove("hidden");
+    audio.setState({ interstitial: true });
+  }
+
+  // (Re)build the carousel cards from offeredList, styled for the current mode:
+  // install (offer, priced) or refactor (installed packages, removable for Commits).
+  function renderChoiceCards() {
     ui.packageChoices.innerHTML = "";
-    offered.forEach((pkg, index) => {
+    offeredList.forEach((pkg, index) => {
       const button = document.createElement("button");
-      button.className = "package-card";
+      button.className = `package-card${refactorMode ? " refactor" : ""}`;
       button.type = "button";
       button.dataset.packageId = pkg.id;
       button.dataset.index = String(index);
       button.setAttribute("role", "option");
+      const priceBlock = refactorMode
+        ? `<div class="package-price refactor-price" aria-label="Refactor cost">
+             <span class="price-cash ${game.run.commits >= REFACTOR_COST ? "" : "unaffordable"}">REMOVE − ${REFACTOR_COST} ⇿</span>
+             <span class="price-credit">reverses its edges, mods & debt</span>
+           </div>`
+        : `<div class="package-price" aria-label="Install cost">
+             <span class="price-cash ${game.run.commits >= packageCost(pkg) ? "" : "unaffordable"}">${packageCost(pkg)} ⇿ Commits</span>
+             <span class="price-credit">or credit: +${packageCost(pkg) * DEBT_PER_COMMIT} TDR</span>
+           </div>`;
       button.innerHTML = `
         <span class="package-icon" aria-hidden="true">${packageIcon(pkg)}</span>
         <span class="package-copy">
           <span class="package-name">${pkg.name}</span>
-          <span class="package-kind">${packageKind(pkg)}</span>
+          <span class="package-kind">${refactorMode ? "INSTALLED" : packageKind(pkg)}</span>
         </span>
-        <div class="package-price" aria-label="Install cost">
-          <span class="price-cash ${game.run.commits >= packageCost(pkg) ? "" : "unaffordable"}">${packageCost(pkg)} ⇿ Commits</span>
-          <span class="price-credit">or credit: +${packageCost(pkg) * DEBT_PER_COMMIT} TDR</span>
-        </div>
+        ${priceBlock}
         <p><b>Benefit:</b> ${pkg.benefit}</p>
         <p><b>Risk:</b> ${visibleRiskText(pkg)}</p>
         <div class="effect-row" aria-label="Graph mutation preview">${packageEffectBadges(pkg)}</div>
@@ -677,10 +696,40 @@
       });
       ui.packageChoices.appendChild(button);
     });
-    setPackageFocus(0, 0, true);
-    if (ui.choicePrompt) ui.choicePrompt.textContent = `You have ${game.run.commits} Commits. Install with Commits (Enter / ✕), or on credit (C / □) to defer the cost as Technical Debt.`;
-    ui.choiceOverlay.classList.remove("hidden");
-    audio.setState({ interstitial: true });
+    focusedIndex = Math.min(focusedIndex, Math.max(0, offeredList.length - 1));
+    setPackageFocus(focusedIndex, 0, true);
+    updateChoicePrompt();
+  }
+
+  function updateChoicePrompt() {
+    if (!ui.choicePrompt) return;
+    ui.choicePrompt.textContent = refactorMode
+      ? `Refactor: spend ${REFACTOR_COST} Commits to remove an installed package (reverses its graph edges, stat mods & debt). Enter / ✕ to remove · R to go back. You have ${game.run.commits} Commits.`
+      : `You have ${game.run.commits} Commits. Install with Commits (Enter / ✕), or on credit (C / □). Press R to refactor (remove an installed package).`;
+  }
+
+  // Toggle the choice screen between installing the offer and refactoring (removing)
+  // one of the player's installed packages.
+  function toggleRefactor() {
+    if (ui.choiceOverlay.classList.contains("hidden") || committingPackage) return;
+    if (!refactorMode) {
+      const installed = game.run.installedPackages.map((id) => packages.find((p) => p.id === id)).filter(Boolean);
+      if (!installed.length) {
+        if (ui.choicePrompt) ui.choicePrompt.textContent = "Nothing to refactor yet — you haven't installed any packages.";
+        sfx("uiInvalid");
+        return;
+      }
+      refactorMode = true;
+      offeredList = installed;
+    } else {
+      refactorMode = false;
+      offeredList = installOffer;
+    }
+    focusedIndex = 0;
+    packageInspecting = false;
+    ui.choiceStage.classList.remove("inspecting");
+    sfx("uiMove");
+    renderChoiceCards();
   }
 
   function packageCards() {
@@ -752,6 +801,7 @@
     if (!offeredList.length || committingPackage) return;
     const pkg = offeredList[focusedIndex];
     if (!pkg) return;
+    if (refactorMode) { doRefactor(pkg); return; }
     const cost = packageCost(pkg);
     if (mode === "cash" && game.run.commits < cost) {
       // Can't afford cash — nudge, and point the player at the credit option.
@@ -766,6 +816,46 @@
     if (card) card.classList.add("punch", "installed");
     sfx("uiConfirm");
     window.setTimeout(() => applyPackage(pkg, mode), 260);
+  }
+
+  function doRefactor(pkg) {
+    if (game.run.commits < REFACTOR_COST) {
+      const cur = packageCards()[focusedIndex];
+      if (cur) { cur.classList.remove("nudge"); void cur.offsetWidth; cur.classList.add("nudge"); }
+      sfx("uiInvalid");
+      if (ui.choicePrompt) ui.choicePrompt.textContent = `Not enough Commits to refactor (${game.run.commits}/${REFACTOR_COST}).`;
+      return;
+    }
+    committingPackage = true;
+    const card = packageCards()[focusedIndex];
+    if (card) card.classList.add("punch");
+    sfx("uiConfirm");
+    window.setTimeout(() => applyRefactor(pkg), 220);
+  }
+
+  // Removing a package IS the room's action (grow vs. prune) — it ends the package
+  // room just like installing does.
+  function applyRefactor(pkg) {
+    const run = game.run;
+    run.commits = Math.max(0, run.commits - REFACTOR_COST);
+    run.commitsSpent += REFACTOR_COST;
+    removePackageEffects(run, pkg, logEvent);
+    run.installedPackages = run.installedPackages.filter((id) => id !== pkg.id);
+    logEvent("package_refactored", `Refactored out ${pkg.name} for ${REFACTOR_COST} Commits — coupling reduced.`, { package: pkg.id });
+    const p = game.player;
+    spawnFloater(p.x + p.w / 2, p.y - 46, `REFACTORED −${pkg.name}`, "#9be7a0");
+    sfx("reveal");
+    activePreviewPackage = null;
+    offeredList = [];
+    refactorMode = false;
+    committingPackage = false;
+    packageInspecting = false;
+    ui.choiceStage.classList.remove("inspecting");
+    renderAllUi();
+    ui.choiceOverlay.classList.add("hidden");
+    audio.setState({ interstitial: false });
+    if (!ui.graphOverlay.classList.contains("hidden")) closeGraphOverlay();
+    choiceShown = true;
   }
 
   function renderChoiceGraph() {
@@ -3342,7 +3432,8 @@ function startSideErrorRail() {
       if (key === "arrowleft" || key === "a") { setPackageFocus(focusedIndex - 1, -1); return; }
       if (key === "arrowright" || key === "d") { setPackageFocus(focusedIndex + 1, 1); return; }
       if (key === "enter" || key === " ") { commitPackage("cash"); return; }
-      if (key === "c") { commitPackage("credit"); return; }
+      if (key === "c" && !refactorMode) { commitPackage("credit"); return; }
+      if (key === "r") { toggleRefactor(); return; }
       if (key === "i" || key === "arrowup") { toggleInspect(); return; }
       if ((key === "escape" || key === "backspace") && packageInspecting) { toggleInspect(); return; }
     }

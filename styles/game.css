@@ -1132,6 +1132,19 @@ button:focus-visible {
   opacity: 0.85;
 }
 
+/* Refactor mode: the carousel shows installed packages to remove. */
+.package-card.refactor {
+  border-color: rgba(155, 231, 160, 0.6);
+}
+
+.refactor-price .price-cash {
+  color: #9be7a0;
+}
+
+.refactor-price .price-cash.unaffordable {
+  color: var(--red);
+}
+
 .report-body {
   display: grid;
   gap: 12px;
