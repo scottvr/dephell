@@ -1,5 +1,5 @@
 (function bootstrapGame(namespace) {
-  const { ARENA, FLOOR_Y, GROUND_TOP, ROOM_INTRO_SECONDS } = namespace.constants;
+  const { ARENA, GRAPH_POSITIONS, FLOOR_Y, GROUND_TOP, ROOM_INTRO_SECONDS } = namespace.constants;
   const { packages, incidents, rooms, enemyDefs } = namespace.content;
   const { makeInitialRunState } = namespace.runState;
   const { rectsOverlap, clamp } = namespace.utils;
@@ -1644,14 +1644,62 @@
     enterDoorsPhase(routes);
   }
 
+  // The graph node a route travels TO from the current locus: the far endpoint of
+  // the route's edge, or the destination room's own locus node as a fallback.
+  function routeTargetNode(route, curNode) {
+    const edge = route.edge && game.run.graph.edges.find((e) => e.id === route.edge);
+    if (edge) {
+      if (edge.source === curNode) return edge.target;
+      if (edge.target === curNode) return edge.source;
+      return edge.target || edge.source;
+    }
+    const room = roomById.get(route.to);
+    if (room) {
+      if (room.mapNode) return room.mapNode;
+      if (room.mapEdge) {
+        const me = game.run.graph.edges.find((e) => e.id === room.mapEdge);
+        return me ? me.source : null;
+      }
+    }
+    return null;
+  }
+
+  // Which wall a route's door belongs on = the compass direction from the current
+  // graph node to the route's target node on the orthogonal map layout. This is the
+  // core of "the map is the world": exit the north door -> the map's north neighbor.
+  function routeSide(route, curNode, curPos) {
+    const target = routeTargetNode(route, curNode);
+    const tPos = target && GRAPH_POSITIONS[target];
+    if (!curPos || !tPos) return null; // caller falls back to a spare wall
+    const dx = tPos[0] - curPos[0];
+    const dy = tPos[1] - curPos[1]; // graph y grows downward, same as screen
+    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
+    return dy >= 0 ? "bottom" : "top";
+  }
+
   // --- Hybrid doors: spatial exits mapped to graph routes ------------------
-  // Lay one glowing door per route onto the arena walls (N/E/S/W, spreading if a
-  // side gets more than one). Walking into a door opens that route's detail popup.
+  // Lay one glowing door per route onto the arena walls, each on the wall that
+  // matches its neighbour's direction on the graph map (spreading if a side gets
+  // more than one). Walking into a door opens that route's detail popup.
   function enterDoorsPhase(routes) {
     game.doorsPhase = true;
     const DW = 88, DTH = 20; // door gap length / wall thickness
+    const curNode = resolveLocationNode();
+    const curPos = GRAPH_POSITIONS[curNode];
     const sideOrder = ["top", "right", "bottom", "left"];
-    game.doors = routes.map((route, i) => ({ route, side: sideOrder[i % 4] }));
+    // Assign each door its geographic wall; routes that can't resolve a direction
+    // fall back to the first free wall in sideOrder so every route still gets a door.
+    const used = new Set();
+    game.doors = routes.map((route) => {
+      const side = routeSide(route, curNode, curPos);
+      if (side) used.add(side);
+      return { route, side, node: routeTargetNode(route, curNode) };
+    });
+    for (const d of game.doors) {
+      if (d.side) continue;
+      d.side = sideOrder.find((s) => !used.has(s)) || "bottom";
+      used.add(d.side);
+    }
     const countBySide = {}; const placed = {};
     for (const d of game.doors) countBySide[d.side] = (countBySide[d.side] || 0) + 1;
     for (const d of game.doors) {
@@ -3341,7 +3389,8 @@ function startSideErrorRail() {
         mouseActive,
         overlayOpen: isOverlayOpen(),
         doorsPhase: !!game.doorsPhase,
-        doors: (game.doors || []).map((d) => ({ label: d.route.label, side: d.side, x: d.x, y: d.y })),
+        doors: (game.doors || []).map((d) => ({ label: d.route.label, side: d.side, node: d.node, x: d.x, y: d.y })),
+        locusNode: game.doorsPhase ? resolveLocationNode() : undefined,
         // ms since the run ended (report opened); null while a run is live. Lets tooling
         // reason about the restart input-lock deterministically.
         sinceEnd: game.run.ended ? Math.round(performance.now() - runEndedAt) : null,
