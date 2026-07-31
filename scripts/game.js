@@ -200,6 +200,7 @@
       pendingSpawns: [],
       doors: [],
       doorsPhase: false,
+      chosenRoute: null,
       boss: null,
       bossIntroTimer: 0,
       vcReconciled: false,
@@ -257,9 +258,12 @@
     game.boss = null;
     game.bossIntroTimer = 0;
     game.vcReconciled = false;
-    game.doors = [];
     game.doorsPhase = false;
     game.doorReopenBlock = false;
+    game.chosenRoute = null;
+    // Build the room's exits now so the doors are VISIBLE during combat (idle),
+    // then light up and become walkable once the room is cleared.
+    buildDoors(availableRoutes(room));
     game.enemies = room.enemies.map((spawn, idx, arr) => makeEnemy(placeSpawn(spawn, idx, arr.length), idx));
     if (room.bossRoom) prepareBossRoom(room);
     game.roomIntroTimer = ROOM_INTRO_SECONDS;
@@ -934,7 +938,7 @@
 
       button.append(title, description, tradeoff);
       const index = routes.indexOf(route);
-      button.addEventListener("click", () => selectRoute(route));
+      button.addEventListener("click", () => planRoute(route));
       button.addEventListener("mouseenter", () => setRouteFocus(index, true));
       ui.routeChoices.appendChild(button);
     }
@@ -1782,12 +1786,8 @@
       endRun(true, "Release candidate shipped with documented concerns.");
       return;
     }
-    // A single onward edge is a corridor, not a decision — travel it directly so
-    // linear segments don't force dead walking. Real forks become doors.
-    if (routes.length === 1) {
-      selectRoute(routes[0]);
-      return;
-    }
+    // Every exit is a door you walk through. A single exit auto-plans (no screen);
+    // a fork opens the locus screen to plan which door lights up.
     enterDoorsPhase(routes);
   }
 
@@ -1824,32 +1824,30 @@
     return dy >= 0 ? "bottom" : "top";
   }
 
-  // --- Hybrid doors: spatial exits mapped to graph routes ------------------
-  // Lay one glowing door per route onto the arena walls, each on the wall that
+  // --- Doors as the room's exits (always drawn) ----------------------------
+  // Lay one door per available route onto the arena walls, each on the wall that
   // matches its neighbour's direction on the graph map (spreading if a side gets
-  // more than one). Walking into a door opens that route's detail popup.
-  function enterDoorsPhase(routes) {
-    game.doorsPhase = true;
+  // more than one). Built at room load so exits are VISIBLE during combat too;
+  // rebuilt on clear in case an installed package changed the available routes.
+  function buildDoors(routes) {
     const DW = 88, DTH = 20; // door gap length / wall thickness
     const curNode = resolveLocationNode();
     const curPos = GRAPH_POSITIONS[curNode];
     const sideOrder = ["top", "right", "bottom", "left"];
-    // Assign each door its geographic wall; routes that can't resolve a direction
-    // fall back to the first free wall in sideOrder so every route still gets a door.
     const used = new Set();
-    game.doors = routes.map((route) => {
+    const doors = routes.map((route) => {
       const side = routeSide(route, curNode, curPos);
       if (side) used.add(side);
       return { route, side, node: routeTargetNode(route, curNode) };
     });
-    for (const d of game.doors) {
+    for (const d of doors) {
       if (d.side) continue;
       d.side = sideOrder.find((s) => !used.has(s)) || "bottom";
       used.add(d.side);
     }
     const countBySide = {}; const placed = {};
-    for (const d of game.doors) countBySide[d.side] = (countBySide[d.side] || 0) + 1;
-    for (const d of game.doors) {
+    for (const d of doors) countBySide[d.side] = (countBySide[d.side] || 0) + 1;
+    for (const d of doors) {
       const n = countBySide[d.side];
       const k = (placed[d.side] = (placed[d.side] || 0), placed[d.side]++);
       const frac = (k + 1) / (n + 1);
@@ -1863,26 +1861,59 @@
         d.w = DTH; d.h = DW;
       }
     }
-    // Annotate each door with live graph state at its target node, so the exits
-    // themselves carry the consequences of how the player has reshaped the graph:
-    // a conflicted neighbour warns red, a risky one cautions amber, and a path only
-    // opened because of an installed package is flagged NEW.
-    for (const d of game.doors) {
+    // Live graph state at each door's target node — conflicted neighbour warns red,
+    // risky one cautions amber, a package-unlocked path is flagged NEW.
+    for (const d of doors) {
       const node = game.run.graph.nodes.find((n) => n.id === d.node);
       d.risk = !!node?.tags?.some((t) => ["legacy", "debt", "security_risk", "unstable"].includes(t));
       d.conflict = game.run.graph.edges.some((e) => e.relation === "conflicts" && e.active && (e.source === d.node || e.target === d.node) && e.visibility !== "hidden");
       d.newpath = !!(d.route.requiresPackage && game.run.installedPackages.includes(d.route.requiresPackage));
     }
-    const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2;
-    spawnFloater(cx, cy - 30, "EXITS OPEN", "#9be7ff");
-    sfx("reveal");
-    logEvent("routes_open", `${game.currentRoom.name} cleared. ${routes.length} exits opened — pick one, or walk to a door.`, { room: game.currentRoom.id });
+    game.doors = doors;
+    return doors;
+  }
+
+  // Room cleared: light the exits and PLAN one. Multi-exit rooms open the locus
+  // screen (pick to highlight the chosen door); a single exit auto-plans itself.
+  // Selecting never travels — the player then walks THROUGH the highlighted door.
+  function enterDoorsPhase(routes) {
+    game.doorsPhase = true;
+    buildDoors(routes);
+    game.doorReopenBlock = false;
     for (const d of game.doors.filter((x) => x.newpath)) {
       logEvent("route_unlocked", `A new corridor opened toward ${d.node} — an installed package added that path.`, { room: game.currentRoom.id });
     }
-    // Auto-open the locus screen listing ALL exits on clear (the doors stay lit on
-    // the walls as a spatial shortcut for players who close the screen to walk).
-    showRouteChoice(routes);
+    const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2;
+    sfx("reveal");
+    if (routes.length === 1) {
+      game.chosenRoute = routes[0]; // one way out — auto-planned; just walk to it
+      spawnFloater(cx, cy - 30, "WALK TO THE EXIT →", "#7cff9e");
+      logEvent("routes_open", `${game.currentRoom.name} cleared. One exit lit — walk to the door.`, { room: game.currentRoom.id });
+    } else {
+      game.chosenRoute = null;
+      spawnFloater(cx, cy - 30, "PLAN YOUR EXIT", "#9be7ff");
+      logEvent("routes_open", `${game.currentRoom.name} cleared. ${routes.length} exits lit — plan one, then walk to it.`, { room: game.currentRoom.id });
+      showRouteChoice(routes);
+    }
+  }
+
+  // Choosing on the locus screen PLANS the exit (highlights its door) and returns
+  // the player to the cleared room — it does not travel. Walking through the lit
+  // door is what actually moves to the next room (see updateDoors -> selectRoute).
+  function planRoute(route) {
+    game.chosenRoute = route;
+    ui.routeOverlay.classList.add("hidden");
+    audio.setState({ interstitial: false });
+    pendingRoutes = [];
+    activeRouteChoice = null;
+    game.doorReopenBlock = true; // must step off a door before it triggers
+    game.floaters.length = 0; // clear the "PLAN YOUR EXIT" prompt so only the go-cue shows
+    const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2;
+    spawnFloater(cx, cy - 30, `→ ${route.label.toUpperCase()} — WALK TO THE LIT DOOR`, "#7cff9e");
+    logEvent("route_planned", `Planned exit: ${route.label}. Walk to the highlighted door to travel.`, { route: route.id });
+    sfx("uiConfirm");
+    if (!ui.graphOverlay.classList.contains("hidden")) closeGraphOverlay();
+    renderAllUi();
   }
 
   function updateDoors() {
@@ -1890,13 +1921,16 @@
     const p = game.player;
     const touched = game.doors.find((d) => rectsOverlap(p.x, p.y - p.h, p.w, p.h, d.x - d.w / 2, d.y - d.h / 2, d.w, d.h));
     if (!touched) { game.doorReopenBlock = false; return; } // stepped off — re-arm
-    if (game.doorReopenBlock) return; // just backed out of this door; wait until they leave
-    // Open the full locus screen (all exits), focused on the door walked into, so the
-    // spatial pick and the compare-all screen stay one and the same UI.
+    if (game.doorReopenBlock) return; // just planned / just backed out — wait until they leave
+    if (game.chosenRoute && touched.route === game.chosenRoute) {
+      selectRoute(touched.route); // walk THROUGH the chosen door -> travel
+      return;
+    }
+    // Walked into a different door — reopen the plan focused on it so they can switch.
     showRouteChoice(game.doors.map((d) => d.route), game.doors.indexOf(touched));
   }
 
-  // Back out of a single door's detail without travelling, staying in the doors phase.
+  // Back out of the locus/plan screen without planning; stay in the cleared room.
   function closeRoutePreview() {
     ui.routeOverlay.classList.add("hidden");
     audio.setState({ interstitial: false });
@@ -2550,21 +2584,28 @@
 
   // Glowing route-doors carved into the walls during the doors phase, each labelled
   // with its graph route. Walk into one to open its detail (see updateDoors).
+  // Doors are always drawn: idle/dim while the room is contested, lit once cleared,
+  // and the PLANNED exit gets a bright green highlight + "EXIT" marker so the player
+  // knows which door to walk through.
   function drawDoors() {
-    if (!game.doorsPhase || !game.doors.length) return;
+    if (!game.doors || !game.doors.length) return;
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 240);
+    const lit = game.doorsPhase; // exits "open" (walkable) after clear
     for (const d of game.doors) {
-      // Door hue reflects the live graph state of the neighbour it leads to.
-      const glow = d.conflict ? "#ff2d55" : d.risk ? "#ffa62b" : "#20f7ee";
-      const edge = d.conflict ? "rgba(255,120,150," : d.risk ? "rgba(255,207,102," : "rgba(155,231,255,";
-      const fill = d.conflict ? "rgba(255,45,85," : d.risk ? "rgba(255,166,43," : "rgba(32,247,238,";
+      const chosen = !!(game.chosenRoute && d.route === game.chosenRoute);
+      const glow = chosen ? "#7cff9e" : d.conflict ? "#ff2d55" : d.risk ? "#ffa62b" : "#20f7ee";
+      // Overall intensity: idle during combat, lit after clear, brightest when chosen.
+      const strokeA = chosen ? 0.6 + 0.35 * pulse : lit ? 0.55 + 0.25 * pulse : 0.34;
+      const fillA = chosen ? 0.18 + 0.12 * pulse : lit ? 0.12 + 0.1 * pulse : 0.05;
       ctx.save();
       ctx.shadowColor = glow;
-      ctx.shadowBlur = 14 + pulse * 8;
-      ctx.fillStyle = `${fill}${(0.14 + 0.12 * pulse).toFixed(3)})`;
+      ctx.shadowBlur = chosen ? 18 + pulse * 12 : lit ? 12 + pulse * 8 : 3;
+      ctx.globalAlpha = fillA;
+      ctx.fillStyle = glow;
       ctx.fillRect(d.x - d.w / 2, d.y - d.h / 2, d.w, d.h);
-      ctx.strokeStyle = `${edge}${(0.7 + 0.3 * pulse).toFixed(3)})`;
-      ctx.lineWidth = 3;
+      ctx.globalAlpha = strokeA;
+      ctx.strokeStyle = glow;
+      ctx.lineWidth = chosen ? 4 : 3;
       ctx.strokeRect(d.x - d.w / 2, d.y - d.h / 2, d.w, d.h);
       // Outward chevron cueing "exit this way".
       ctx.beginPath();
@@ -2574,21 +2615,22 @@
       else if (d.side === "left") { ctx.moveTo(d.x + 2, d.y - a); ctx.lineTo(d.x - 12, d.y); ctx.lineTo(d.x + 2, d.y + a); }
       else { ctx.moveTo(d.x - 2, d.y - a); ctx.lineTo(d.x + 12, d.y); ctx.lineTo(d.x - 2, d.y + a); }
       ctx.stroke();
-      // Route label + graph-state tag, placed just inside the arena from the door.
+      // Labels: dim during combat, full once lit. Placed just inside the arena.
       ctx.shadowBlur = 0;
+      ctx.globalAlpha = lit ? 1 : 0.45;
       ctx.font = "12px 'Courier New', monospace";
       let lx = d.x, ly = d.y;
       if (d.side === "top") { ly = d.y + 24; ctx.textAlign = "center"; }
       else if (d.side === "bottom") { ly = d.y - 18; ctx.textAlign = "center"; }
       else if (d.side === "left") { lx = d.x + 16; ly = d.y + 4; ctx.textAlign = "left"; }
       else { lx = d.x - 16; ly = d.y + 4; ctx.textAlign = "right"; }
-      ctx.fillStyle = "#dffbff";
+      ctx.fillStyle = chosen ? "#dfffe8" : "#dffbff";
       ctx.fillText(d.route.label, lx, ly);
-      // Live graph-state tag under the label: NEW path / conflict / risk.
-      const tag = d.newpath ? "◆ NEW PATH" : d.conflict ? "⚠ CONFLICT" : d.risk ? "△ RISKY" : "";
-      if (tag) {
+      // Second line: chosen -> "▶ EXIT", else the live graph-state tag.
+      const tag = chosen ? "▶ EXIT — WALK THROUGH" : d.newpath ? "◆ NEW PATH" : d.conflict ? "⚠ CONFLICT" : d.risk ? "△ RISKY" : "";
+      if (tag && (lit || chosen)) {
         ctx.font = "9px 'Courier New', monospace";
-        ctx.fillStyle = d.newpath ? "#9be7a0" : d.conflict ? "#ff8098" : "#ffcf66";
+        ctx.fillStyle = chosen ? "#7cff9e" : d.newpath ? "#9be7a0" : d.conflict ? "#ff8098" : "#ffcf66";
         const ty = d.side === "bottom" ? ly - 12 : ly + 12;
         ctx.fillText(tag, lx, ty);
       }
@@ -3446,7 +3488,7 @@ function startSideErrorRail() {
       if (key === "escape" && game.doorsPhase) { closeRoutePreview(); return; }
       if (["arrowup", "arrowleft", "w", "a"].includes(key)) { setRouteFocus(routeFocus - 1); return; }
       if (["arrowdown", "arrowright", "s", "d"].includes(key)) { setRouteFocus(routeFocus + 1); return; }
-      if (key === "enter" || key === " ") { const route = pendingRoutes[routeFocus]; if (route) selectRoute(route); return; }
+      if (key === "enter" || key === " ") { const route = pendingRoutes[routeFocus]; if (route) planRoute(route); return; }
     }
     // Incident triage — same keyboard model.
     if (ui.incidentOverlay && !ui.incidentOverlay.classList.contains("hidden")) {
@@ -3574,8 +3616,9 @@ function startSideErrorRail() {
         mouseActive,
         overlayOpen: isOverlayOpen(),
         doorsPhase: !!game.doorsPhase,
-        doors: (game.doors || []).map((d) => ({ label: d.route.label, side: d.side, node: d.node, x: d.x, y: d.y, newpath: !!d.newpath, conflict: !!d.conflict, risk: !!d.risk })),
-        locusNode: game.doorsPhase ? resolveLocationNode() : undefined,
+        doors: (game.doors || []).map((d) => ({ label: d.route.label, side: d.side, node: d.node, x: d.x, y: d.y, newpath: !!d.newpath, conflict: !!d.conflict, risk: !!d.risk, chosen: !!(game.chosenRoute && d.route === game.chosenRoute) })),
+        chosenRoute: game.chosenRoute ? game.chosenRoute.id : null,
+        locusNode: resolveLocationNode(),
         graph: { nodes: game.run.graph.nodes.length, edges: game.run.graph.edges.length },
         // ms since the run ended (report opened); null while a run is live. Lets tooling
         // reason about the restart input-lock deterministically.
