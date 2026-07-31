@@ -187,6 +187,8 @@
       enemies: [],
       hazards: [],
       pendingSpawns: [],
+      doors: [],
+      doorsPhase: false,
       boss: null,
       bossIntroTimer: 0,
       vcReconciled: false,
@@ -244,7 +246,10 @@
     game.boss = null;
     game.bossIntroTimer = 0;
     game.vcReconciled = false;
-    game.enemies = room.enemies.map((spawn, idx) => makeEnemy(spawn, idx));
+    game.doors = [];
+    game.doorsPhase = false;
+    game.doorReopenBlock = false;
+    game.enemies = room.enemies.map((spawn, idx, arr) => makeEnemy(placeSpawn(spawn, idx, arr.length), idx));
     if (room.bossRoom) prepareBossRoom(room);
     game.roomIntroTimer = ROOM_INTRO_SECONDS;
     roomClearTimer = 0;
@@ -309,6 +314,18 @@
       run.debtTags.push("shim_smoke_test");
       logEvent("branch_resolved", "Compatibility Shim passed verification quickly, then filed a debt-shaped receipt. TDR +6.", { room: roomId, package: installed });
     }
+  }
+
+  // Resolve a content spawn into a 2-D arena position. Content may author an
+  // explicit {type, x, y}; legacy entries carry only x (y === FLOOR_Y sentinel),
+  // which we scatter vertically across the arena by index so a room's enemies
+  // don't line up on a single band. Keeps old content loading unchanged.
+  function placeSpawn(spawn, i, n) {
+    if (spawn.y != null && spawn.y !== FLOOR_Y) return spawn; // explicit 2-D placement
+    const x = clamp(spawn.x ?? (ARENA.x0 + ARENA.x1) / 2, ARENA.x0 + 30, ARENA.x1 - 30);
+    const span = ARENA.y1 - ARENA.y0 - 90;
+    const y = ARENA.y0 + 45 + (n > 1 ? (i / (n - 1)) * span : span / 2);
+    return { ...spawn, x, y };
   }
 
   function makeEnemy(spawn, idx) {
@@ -1575,7 +1592,11 @@
 
     if (!roomClearedLogged) completeRoom(room);
     if (roomClearTimer <= 1.2) return;
-    advanceFromRoom(room);
+    // Hybrid exits: once cleared, doors light up on the walls (one per graph
+    // route). The player walks into a door to open that route's detail; here we
+    // just keep the doors phase alive and watch for a door touch.
+    if (!game.doorsPhase) advanceFromRoom(room);
+    else updateDoors();
   }
 
   function completeRoom(room) {
@@ -1614,11 +1635,63 @@
       endRun(true, "Release candidate shipped with documented concerns.");
       return;
     }
+    // A single onward edge is a corridor, not a decision — travel it directly so
+    // linear segments don't force dead walking. Real forks become doors.
     if (routes.length === 1) {
       selectRoute(routes[0]);
       return;
     }
-    showRouteChoice(routes);
+    enterDoorsPhase(routes);
+  }
+
+  // --- Hybrid doors: spatial exits mapped to graph routes ------------------
+  // Lay one glowing door per route onto the arena walls (N/E/S/W, spreading if a
+  // side gets more than one). Walking into a door opens that route's detail popup.
+  function enterDoorsPhase(routes) {
+    game.doorsPhase = true;
+    const DW = 88, DTH = 20; // door gap length / wall thickness
+    const sideOrder = ["top", "right", "bottom", "left"];
+    game.doors = routes.map((route, i) => ({ route, side: sideOrder[i % 4] }));
+    const countBySide = {}; const placed = {};
+    for (const d of game.doors) countBySide[d.side] = (countBySide[d.side] || 0) + 1;
+    for (const d of game.doors) {
+      const n = countBySide[d.side];
+      const k = (placed[d.side] = (placed[d.side] || 0), placed[d.side]++);
+      const frac = (k + 1) / (n + 1);
+      if (d.side === "top" || d.side === "bottom") {
+        d.x = ARENA.x0 + (ARENA.x1 - ARENA.x0) * frac;
+        d.y = d.side === "top" ? ARENA.y0 : ARENA.y1;
+        d.w = DW; d.h = DTH;
+      } else {
+        d.y = ARENA.y0 + (ARENA.y1 - ARENA.y0) * frac;
+        d.x = d.side === "left" ? ARENA.x0 : ARENA.x1;
+        d.w = DTH; d.h = DW;
+      }
+    }
+    const cx = (ARENA.x0 + ARENA.x1) / 2, cy = (ARENA.y0 + ARENA.y1) / 2;
+    spawnFloater(cx, cy - 30, "WALK TO A DOOR", "#9be7ff");
+    sfx("reveal");
+    logEvent("routes_open", `${game.currentRoom.name} cleared. ${routes.length} exits opened — walk to a door.`, { room: game.currentRoom.id });
+  }
+
+  function updateDoors() {
+    if (isOverlayOpen()) return;
+    const p = game.player;
+    const touched = game.doors.find((d) => rectsOverlap(p.x, p.y - p.h, p.w, p.h, d.x - d.w / 2, d.y - d.h / 2, d.w, d.h));
+    if (!touched) { game.doorReopenBlock = false; return; } // stepped off — re-arm
+    if (game.doorReopenBlock) return; // just backed out of this door; wait until they leave
+    // Open this route's detail; confirming travels, Escape returns to the doors.
+    showRouteChoice([touched.route]);
+  }
+
+  // Back out of a single door's detail without travelling, staying in the doors phase.
+  function closeRoutePreview() {
+    ui.routeOverlay.classList.add("hidden");
+    audio.setState({ interstitial: false });
+    pendingRoutes = [];
+    activeRouteChoice = null;
+    game.doorReopenBlock = true; // don't reopen until the player steps off the door
+    sfx("uiMove");
   }
 
   function availableRoutes(room) {
@@ -2065,6 +2138,7 @@
     }
     drawBackdrop(room);
     drawPlatforms();
+    drawDoors();
     drawHazards();
     drawAttacks();
     drawEnemies();
@@ -2258,6 +2332,43 @@
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // Glowing route-doors carved into the walls during the doors phase, each labelled
+  // with its graph route. Walk into one to open its detail (see updateDoors).
+  function drawDoors() {
+    if (!game.doorsPhase || !game.doors.length) return;
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 240);
+    for (const d of game.doors) {
+      ctx.save();
+      // Bright gap in the wall.
+      ctx.shadowColor = "#20f7ee";
+      ctx.shadowBlur = 14 + pulse * 8;
+      ctx.fillStyle = `rgba(32, 247, 238, ${0.14 + 0.12 * pulse})`;
+      ctx.fillRect(d.x - d.w / 2, d.y - d.h / 2, d.w, d.h);
+      ctx.strokeStyle = `rgba(155, 231, 255, ${0.7 + 0.3 * pulse})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(d.x - d.w / 2, d.y - d.h / 2, d.w, d.h);
+      // Outward chevron cueing "exit this way".
+      ctx.beginPath();
+      const a = 8;
+      if (d.side === "top") { ctx.moveTo(d.x - a, d.y - 2); ctx.lineTo(d.x, d.y - 12); ctx.lineTo(d.x + a, d.y - 2); }
+      else if (d.side === "bottom") { ctx.moveTo(d.x - a, d.y + 2); ctx.lineTo(d.x, d.y + 12); ctx.lineTo(d.x + a, d.y + 2); }
+      else if (d.side === "left") { ctx.moveTo(d.x + 2, d.y - a); ctx.lineTo(d.x - 12, d.y); ctx.lineTo(d.x + 2, d.y + a); }
+      else { ctx.moveTo(d.x - 2, d.y - a); ctx.lineTo(d.x + 12, d.y); ctx.lineTo(d.x - 2, d.y + a); }
+      ctx.stroke();
+      // Route label, placed just inside the arena from the door.
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#dffbff";
+      ctx.font = "12px 'Courier New', monospace";
+      let lx = d.x, ly = d.y;
+      if (d.side === "top") { ly = d.y + 24; ctx.textAlign = "center"; }
+      else if (d.side === "bottom") { ly = d.y - 18; ctx.textAlign = "center"; }
+      else if (d.side === "left") { lx = d.x + 16; ly = d.y + 4; ctx.textAlign = "left"; }
+      else { lx = d.x - 16; ly = d.y + 4; ctx.textAlign = "right"; }
+      ctx.fillText(d.route.label, lx, ly);
+      ctx.restore();
+    }
   }
 
   function drawPlayer() {
@@ -3102,6 +3213,9 @@ function startSideErrorRail() {
     // required (which was also silently waking combat mouse-aim). Cards stack vertically.
     if (!ui.routeOverlay.classList.contains("hidden")) {
       if (event.repeat) return;
+      // During the doors phase a single door's detail is showing — Escape backs out
+      // to the arena so the player can walk to a different door.
+      if (key === "escape" && game.doorsPhase) { closeRoutePreview(); return; }
       if (["arrowup", "arrowleft", "w", "a"].includes(key)) { setRouteFocus(routeFocus - 1); return; }
       if (["arrowdown", "arrowright", "s", "d"].includes(key)) { setRouteFocus(routeFocus + 1); return; }
       if (key === "enter" || key === " ") { const route = pendingRoutes[routeFocus]; if (route) selectRoute(route); return; }
@@ -3226,6 +3340,8 @@ function startSideErrorRail() {
         canvasWidth: canvas.width,
         mouseActive,
         overlayOpen: isOverlayOpen(),
+        doorsPhase: !!game.doorsPhase,
+        doors: (game.doors || []).map((d) => ({ label: d.route.label, side: d.side, x: d.x, y: d.y })),
         // ms since the run ended (report opened); null while a run is live. Lets tooling
         // reason about the restart input-lock deterministically.
         sinceEnd: game.run.ended ? Math.round(performance.now() - runEndedAt) : null,
