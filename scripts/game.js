@@ -1,5 +1,5 @@
 (function bootstrapGame(namespace) {
-  const { FLOOR_Y, GROUND_TOP, ROOM_INTRO_SECONDS } = namespace.constants;
+  const { ARENA, FLOOR_Y, GROUND_TOP, ROOM_INTRO_SECONDS } = namespace.constants;
   const { packages, incidents, rooms, enemyDefs } = namespace.content;
   const { makeInitialRunState } = namespace.runState;
   const { rectsOverlap, clamp } = namespace.utils;
@@ -176,7 +176,7 @@
     mouse.down = false;
     game = {
       run: makeInitialRunState(),
-      player: { x: 170, y: FLOOR_Y, w: 24, h: 42, vx: 0, vy: 0, facing: 1, attackTimer: 0, dashTimer: 0, invulnTimer: 0, swingTimer: 0, swingDir: 1, walkPhase: 0 },
+      player: { x: 170, y: 300, w: 24, h: 42, vx: 0, vy: 0, facing: 1, aim: 0, attackTimer: 0, dashTimer: 0, invulnTimer: 0, swingTimer: 0, swingDir: 1, walkPhase: 0 },
       slashes: [],
       enemyShots: [],
       hitSparks: [],
@@ -236,7 +236,7 @@
       ? { type: "edge", id: room.mapEdge, arrivedFrom: route?.edge ?? game.run.location?.id ?? null }
       : { type: "node", id: room.mapNode || "app", arrivedFrom: route?.edge ?? game.run.location?.id ?? null };
     game.player.x = 240;
-    game.player.y = FLOOR_Y;
+    game.player.y = 300;
     game.slashes.length = 0;
     game.enemyShots.length = 0;
     game.hazards.length = 0;
@@ -862,39 +862,56 @@
     }
   }
 
+  // Body center of the player in world space. The position anchor is still the
+  // box's left edge (x) and its bottom (y); center is what aim/attacks point from.
+  function playerCenter(p) {
+    return { cx: p.x + p.w / 2, cy: p.y - p.h / 2 };
+  }
+
   function updatePlayer(dt) {
     const p = game.player;
     const left = keys.has("a") || keys.has("arrowleft");
     const right = keys.has("d") || keys.has("arrowright");
-    const jump = keys.has("w") || keys.has("arrowup");
+    const up = keys.has("w") || keys.has("arrowup");
     const down = keys.has("s") || keys.has("arrowdown");
-    const axis = (right ? 1 : 0) - (left ? 1 : 0);
+    // Top-down two-axis movement. Normalize the input vector so a diagonal moves
+    // at the same speed as a cardinal (no sqrt(2) speed boost).
+    const inx = (right ? 1 : 0) - (left ? 1 : 0);
+    const iny = (down ? 1 : 0) - (up ? 1 : 0);
+    const ilen = Math.hypot(inx, iny) || 1;
     // swingCommit (default 1.0 = no change) optionally roots movement during the
     // brief swing so the core verb rewards spacing over hold-to-win. Experimental knob.
-    p.vx = axis * game.run.stats.speed * (p.swingTimer > 0 ? FEEL.swingCommit : 1);
-    // Facing: when the mouse is live it aims (body faces the cursor, Quake-style);
-    // otherwise facing is movement-driven and persists until a direction key is pressed.
+    const speed = game.run.stats.speed * (p.swingTimer > 0 ? FEEL.swingCommit : 1);
+    p.vx = (inx / ilen) * speed;
+    p.vy = (iny / ilen) * speed;
+    // Aim: when the mouse is live the body aims at the cursor (Quake-style);
+    // otherwise aim follows the movement vector and persists while still.
+    const { cx, cy } = playerCenter(p);
     if (mouseActive) {
       const aim = worldMouse();
-      p.facing = aim.x >= p.x + p.w / 2 ? 1 : -1;
-    } else if (axis) {
-      p.facing = axis;
+      p.aim = Math.atan2(aim.y - cy, aim.x - cx);
+    } else if (inx || iny) {
+      p.aim = Math.atan2(iny, inx);
     }
-    if (jump && p.y >= FLOOR_Y) p.vy = -410;
-    if (down && p.y < FLOOR_Y) p.vy += 780 * dt;
+    // facingX shim: 2-dir facing still drives some render/dash-ghost code until
+    // the top-down sprite pass (Phase 3) rotates the whole body to p.aim.
+    p.facing = Math.cos(p.aim) >= 0 ? 1 : -1;
+    // Dash lunges along the aim direction (was: horizontal facing only).
     if ((keys.has("shift") || keys.has("shiftleft")) && p.dashTimer <= 0) {
-      game.dashGhosts.push({ x: p.x, y: p.y, facing: p.facing, life: 0.18, maxLife: 0.18 });
-      p.x += p.facing * 112;
+      game.dashGhosts.push({ x: p.x, y: p.y, aim: p.aim, facing: p.facing, life: 0.18, maxLife: 0.18 });
+      p.x += Math.cos(p.aim) * 112;
+      p.y += Math.sin(p.aim) * 112;
       p.dashTimer = game.run.stats.dashCooldown;
       p.invulnTimer = Math.max(p.invulnTimer, 0.32); // dash i-frames: dodge through attacks
       sfx("dash");
     }
-    p.vy += 920 * dt;
-    p.x = clamp(p.x + p.vx * dt, 92, 900);
-    p.y = Math.min(FLOOR_Y, p.y + p.vy * dt);
-    if (p.y >= FLOOR_Y) p.vy = 0;
-    // Advance the walk-cycle phase while grounded and moving (speed-scaled cadence).
-    if (Math.abs(p.vx) > 5 && p.y >= FLOOR_Y) p.walkPhase += dt * (9 + Math.abs(p.vx) * 0.02);
+    // Integrate and clamp to the arena rect on both axes. x is the box left edge,
+    // y is the box bottom, so the full 24x42 body stays inside the walls.
+    p.x = clamp(p.x + p.vx * dt, ARENA.x0, ARENA.x1 - p.w);
+    p.y = clamp(p.y + p.vy * dt, ARENA.y0 + p.h, ARENA.y1);
+    // Advance the walk-cycle phase while moving (speed-scaled cadence).
+    const moveSpeed = Math.hypot(p.vx, p.vy);
+    if (moveSpeed > 5) p.walkPhase += dt * (9 + moveSpeed * 0.02);
     p.attackTimer -= dt;
     p.dashTimer -= dt;
     p.invulnTimer -= dt;
@@ -950,9 +967,9 @@
     // Dormant mouse (and keyboard-only players): strike issues in the facing direction,
     // which changes only on a movement key, so attacking never flips you. The 100-degree
     // arc still covers the near-diagonals. Once the mouse is live, it aims the strike.
-    const angle = mouseActive
-      ? (() => { const aim = worldMouse(); return Math.atan2(aim.y - (p.y - 18), aim.x - (p.x + p.w / 2)); })()
-      : (p.facing >= 0 ? 0 : Math.PI);
+    // Strike along the current aim (mouse or movement-driven). p.aim is kept live
+    // in updatePlayer, so this covers all 360 degrees in both input modes.
+    const angle = p.aim;
     game.slashes.push({
       x: p.x + p.w / 2,
       y: p.y - 18,
@@ -1476,7 +1493,7 @@
   function updateDuck(dt) {
     if (!game.run.tools.includes("rubber_duck")) return;
     const p = game.player;
-    const still = Math.abs(p.vx) < 1 && p.y >= FLOOR_Y && game.roomIntroTimer <= 0;
+    const still = Math.abs(p.vx) < 1 && Math.abs(p.vy) < 1 && game.roomIntroTimer <= 0;
     if (!still) { game.duckHoldTimer = 0; return; }
     game.duckHoldTimer += dt;
     if (game.duckHoldTimer >= 1.6) {
@@ -3201,7 +3218,7 @@ function startSideErrorRail() {
         room: game.currentRoom?.id,
         stability: Math.round(game.run.stability),
         ended: game.run.ended,
-        player: { x: game.player.x, y: game.player.y },
+        player: { x: game.player.x, y: game.player.y, aim: game.player.aim },
         enemies: game.enemies.filter((e) => e.alive).map((e) => ({ type: e.type, x: e.x, hp: e.hp, telegraph: e.telegraph, boss: !!e.boss, armored: !!e.armored })),
         canvasWidth: canvas.width,
         mouseActive,

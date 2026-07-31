@@ -1,5 +1,13 @@
 (function bootstrapConstants(namespace) {
   namespace.constants = {
+    // --- Top-down arena bounds (walls) ---------------------------------------
+    // The playable rect for the overhead combat view. Player and enemies clamp
+    // to this on BOTH axes. Inset from the 960x540 canvas for wall thickness and
+    // to keep actors clear of the screen-anchored HUD overlays.
+    ARENA: { x0: 88, y0: 88, x1: 872, y1: 452 },
+    // FLOOR_Y / GROUND_TOP are legacy side-view constants. Gameplay no longer
+    // pins to a floor line; the render layer still references them until the
+    // top-down floor lands (see roadmap: top-down overhaul, Phase 3).
     FLOOR_Y: 326,
     GROUND_TOP: 334,
     ROOM_INTRO_SECONDS: 1.2,
