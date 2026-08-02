@@ -11,40 +11,46 @@
     // top-down floor lands (see roadmap: top-down overhaul, Phase 3).
     FLOOR_Y: 326,
     GROUND_TOP: 334,
-    ROOM_INTRO_SECONDS: 1.2,
-    // Node positions in the 280x190 graph viewBox, laid out as a HIERARCHICAL GRID
-    // (top-down overhaul: the map is the dungeon). Rows are dependency layers with
-    // the release goal at the top and leaf deps at the bottom; columns keep edges
-    // short and mostly vertical. Edges are routed orthogonally (see graph.js), so
-    // the minimap reads as a circuit/subway map that shares the arena's orientation.
-    // Rows: R0 y=26 (goal) · R1 y=62 · R2 y=98 · R3 y=134 · R4 y=168 (installed pkgs).
+    ROOM_INTRO_SECONDS: 3.6,
+    // Node positions in the 280x190 graph viewBox, laid out as a LEFT-TO-RIGHT
+    // DELIVERY PIPELINE (the "journey"/release-train orientation). The delivery flow
+    // runs opposite the `requires` arrows: source/leaf code on the LEFT, then CI, then
+    // staging, with the Release goal on the RIGHT — the destination you travel toward.
+    // The room progression (app -> libglitch -> ci -> staging -> release) rides this
+    // spine rightward, so its exit doors fall on the east walls. Edges route
+    // orthogonally (see graph.js), horizontal-first for the pipeline spine.
+    // Columns (x): C0 x=26 deep source · C1 x=74 local build · C2 x=140 CI ·
+    // C3 x=200 staging · C4 x=258 release. Installed package/tool nodes sit on a
+    // bottom shelf (y=162) spread by the stage they attach to.
     GRAPH_POSITIONS: {
-      // R0 — the goal
-      release: [140, 26],
-      // R1 — top-level consumers
-      app: [86, 62],
-      staging: [196, 62],
-      rollback: [250, 62],
-      // R2 — mid layer
-      runtime: [44, 98],
-      libglitch: [110, 98],
-      ci: [176, 98],
-      di_container: [238, 98],
-      circuit_breaker: [250, 98],
-      // R3 — deeper deps
-      stdlib: [44, 134],
-      telemetry: [90, 134],
-      modern_crypto: [140, 134],
-      legacy_auth: [196, 134],
-      feature_flag: [238, 134],
-      // R4 — installed package/tool nodes
-      test_suite: [40, 168],
-      logging: [76, 168],
-      rubber_duck: [108, 168],
-      inline_util: [140, 168],
-      shim: [172, 168],
-      container: [204, 168],
-      security_scanner: [236, 168],
+      // --- Pipeline spine (core traversal loci), left -> right -------------------
+      // C0 — deep source roots
+      stdlib: [26, 132],
+      telemetry: [26, 74],
+      // C1 — local build layer
+      runtime: [74, 132],
+      app: [74, 88],
+      libglitch: [74, 42],
+      // C2 — CI / verification
+      ci: [140, 90],
+      modern_crypto: [140, 42],
+      // C3 — staging / integration
+      staging: [200, 96],
+      di_container: [200, 44],
+      // C4 — the release goal (release train destination)
+      release: [258, 88],
+      // --- Installed package/tool nodes — bottom shelf, spread by attach stage ---
+      legacy_auth: [30, 162],
+      test_suite: [52, 162],
+      rubber_duck: [76, 162],
+      logging: [100, 162],
+      inline_util: [122, 162],
+      shim: [144, 162],
+      security_scanner: [168, 162],
+      container: [192, 162],
+      circuit_breaker: [214, 162],
+      feature_flag: [236, 162],
+      rollback: [258, 162],
     },
   };
 })(window.DepHell = window.DepHell || {});

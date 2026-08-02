@@ -64,10 +64,16 @@
   }
 
   // Orthogonal (Manhattan) edge routing: aligned nodes get a straight segment;
-  // cross-layer edges get a Z-route (down to the mid-row, across, then down) so the
-  // graph reads as a circuit/subway map instead of a diagonal cat's-cradle.
+  // cross-stage edges get a Z-route so the graph reads as a circuit/subway map
+  // instead of a diagonal cat's-cradle. The elbow turns on the DOMINANT axis: the
+  // horizontal pipeline spine (release train tracks) routes across-then-over; a
+  // vertical coupling drop routes down-then-across.
   function orthPoints(a, b) {
     if (a[0] === b[0] || a[1] === b[1]) return `${a[0]},${a[1]} ${b[0]},${b[1]}`;
+    if (Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1])) {
+      const mx = Math.round((a[0] + b[0]) / 2);
+      return `${a[0]},${a[1]} ${mx},${a[1]} ${mx},${b[1]} ${b[0]},${b[1]}`;
+    }
     const my = Math.round((a[1] + b[1]) / 2);
     return `${a[0]},${a[1]} ${a[0]},${my} ${b[0]},${my} ${b[0]},${b[1]}`;
   }
