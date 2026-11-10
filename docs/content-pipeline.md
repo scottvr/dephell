@@ -11,9 +11,10 @@ Nothing here runs inside the game. The game stays zero-build and opens from disk
 are written offline, by a person or by a model in an authoring session, and what passes is
 committed to `js/content.js` like any other change.
 
-Status: gates 4 and 5 can be run by hand today with the existing tools. Gates 1 to 3 and the
-candidate format are to be built. Powers must first become data (`fx` lists, see the content
-model), since a function body cannot be linted or compared.
+Status: gates 1, 3 and 4 have tools (`tools/content-lint.js`, `tools/bot-run.js --with` /
+`--each`). Powers are data (`fx` lists). Gate 5 is done by hand with `tools/shots.js`. The
+candidate file format and the rejection writer are still to build; until then a candidate is
+added to `js/content.js` on a branch and the tools are run against it.
 
 ## The gates
 
@@ -31,7 +32,7 @@ admitted
 Gates are ordered cheapest first. A candidate that fails gets a structured rejection and may be
 revised and resubmitted up to three times; after that it is dropped.
 
-### 1. Lint (`tools/content-lint.js`, to build)
+### 1. Lint (`tools/content-lint.js`)
 
 Mechanical, no judgement.
 
@@ -43,7 +44,7 @@ Mechanical, no judgement.
 - Power text, tagline and blurb fit their UI slots (character limits taken from the registry
   card and sidebar widths).
 - A plain-language sentence is present and contains no word from the jargon list without the
-  rule also being stated in plain terms.
+  rule also being stated in plain terms. (Not checked yet: the field does not exist.)
 - Tree size between 0 and 6 nodes; total debt on install within bounds.
 
 ### 2. Rubric
@@ -54,7 +55,7 @@ Felt 0 rejects. Total under 9 rejects unless the candidate names the gap it fill
 The scores are claims, and the later gates check them: gate 5 checks Felt, gate 4 checks
 Agency and Counterplay as far as a bot can.
 
-### 3. Similarity (`tools/content-lint.js --similar`, to build)
+### 3. Similarity (`tools/content-lint.js`, same run)
 
 Cheap checks first:
 
@@ -69,7 +70,7 @@ means it adds a room and no decision. Reject.
 
 Different words for the same idea get through these. Gate 6 catches the rest.
 
-### 4. Simulation (`tools/bot-run.js`, extend with `--with=<id>`)
+### 4. Simulation (`tools/bot-run.js --with=<id>`, or `--each` for the whole pool)
 
 Run the bot over a fixed seed set twice: once on the current pool, once with the candidate
 forced into the first registry offer.
@@ -80,6 +81,10 @@ forced into the first registry offer.
 - Estimated damage per second with the candidate alone stays within 0.8× to 1.7× of base.
 - With the candidate in the pool unforced, it is offered and picked at a plausible rate.
 - Every way it can hurt the player appears in the event log, and the report can cite it.
+
+Runs are deterministic: the same seed and policy replay exactly, so a before/after difference
+is the change and not noise between runs. Across seeds there is still sampling noise; at 30
+seeds a swing under about 10 points means little, so use 100 or more before acting on one.
 
 The bot aims perfectly and plans badly. It finds deadlocks, runaway numbers and dead content.
 It has no opinion on whether anything is enjoyable.
@@ -126,10 +131,9 @@ Sorted by how safe it is to generate many and keep few.
 
 ## Order of work
 
-1. Convert `apply` functions to `fx` data. Behaviour identical; bot results unchanged.
-2. Build the lint and similarity checks; run them over the existing 18 packages and 40
-   dependencies and fix what they find.
-3. Add `--with` to the bot runner and per-candidate shots.
+1. Done: powers are `fx` data; bot results identical before and after.
+2. Done: lint and similarity checks pass on the existing content with two warnings.
+3. Done: `--with` and `--each`. Per-candidate shots still to add.
 4. First batch: dependencies and trees only, to widen the cost layer under existing powers.
 5. Second batch: packages on unused primitive and ecology pairs.
 6. Then new primitives and tags, a few at a time, each followed by a batch that uses them.

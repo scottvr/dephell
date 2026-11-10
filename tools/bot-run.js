@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Headless playtests: runs the real simulation with the autoplayer and reports outcomes.
-//   node tools/bot-run.js [runs=40] [--report] [--seed=N] [--novet]
+//   node tools/bot-run.js [runs=40] [--report] [--seed=N] [--novet] [--with=<package id>] [--each]
+//   --with forces a package to be the first install; --each runs that for every package and tabulates.
 const path = require('path');
 globalThis.window = globalThis;
 for (const f of ['rng', 'content', 'graph', 'sim', 'reports', 'bot']) {
@@ -10,7 +11,27 @@ const DH = globalThis.DH;
 const args = process.argv.slice(2);
 const runs = parseInt(args.find((a) => /^\d+$/.test(a)) || '40', 10);
 const seedArg = args.find((a) => a.startsWith('--seed='));
-const policy = { vet: !args.includes('--novet') };
+const withArg = args.find((a) => a.startsWith('--with='));
+const policy = { vet: !args.includes('--novet'), force: withArg ? withArg.split('=')[1] : null };
+if (policy.force && !DH.content.PACKAGES[policy.force]) { console.error('unknown package: ' + policy.force); process.exit(1); }
+
+if (args.includes('--each')) {
+  // Gate 4 overview: the same seeds with each package forced first. Flags anything far from baseline.
+  const play = (force) => {
+    let won = 0, stuck = 0, dmg = 0, t = 0;
+    for (let i = 0; i < runs; i++) {
+      const r = DH.Bot.play(1000 + i * 7919, { vet: policy.vet, force }).run;
+      if (r.phase === 'won') won++; else if (r.phase !== 'lost') stuck++;
+      dmg += r.stats.dmgTaken; t += r.time;
+    }
+    return { won, stuck, dmg: dmg / runs, min: t / runs / 60 };
+  };
+  const base = play(null);
+  const row = (name, r) => console.log(`${name.padEnd(18)} won ${String(r.won).padStart(3)}/${runs}  ${((r.won - base.won) / runs * 100 >= 0 ? '+' : '') + ((r.won - base.won) / runs * 100).toFixed(0).padStart(3)} pts  dmg ${r.dmg.toFixed(0).padStart(4)}  ${r.min.toFixed(1)} min${r.stuck ? '  STUCK ' + r.stuck : ''}${Math.abs(r.won - base.won) / runs > 0.1 ? '  <-- outside band' : ''}`);
+  row('(baseline)', base);
+  for (const id of Object.keys(DH.content.PACKAGES)) row(id, play(id));
+  process.exit(0);
+}
 
 const out = { won: 0, lost: 0, stuck: 0 };
 const deaths = {}, bosses = {}, killers = {};
@@ -35,7 +56,7 @@ for (let i = 0; i < runs; i++) {
   pkgs += DH.Graph.packages(run.graph).length;
 }
 const avg = (v) => (v / runs).toFixed(1);
-console.log(`runs ${runs}  won ${out.won}  lost ${out.lost}  stuck ${out.stuck}  (policy: ${policy.vet ? 'vet everything' : 'ship fast'})`);
+console.log(`runs ${runs}  won ${out.won}  lost ${out.lost}  stuck ${out.stuck}  (policy: ${policy.vet ? 'vet everything' : 'ship fast'}${policy.force ? ', forced ' + policy.force : ''})`);
 console.log(`avg: ${avg(time / 60)} min, ${avg(rooms)} rooms, ${avg(incidents)} incidents, ${avg(pkgs)} packages; avg stability on win ${(stab / Math.max(1, out.won)).toFixed(0)}`);
 console.log(`boss reached ${bossN}/${runs}; pre-boss ${(preBoss / Math.max(1, bossN) / 60).toFixed(1)} min; boss fight ${(bossTime / Math.max(1, bossN)).toFixed(0)}s; damage taken/run ${avg(dmg)}`);
 console.log('deaths by point:', Object.keys(deaths).sort().map((k) => `${k}:${deaths[k]}`).join('  '));

@@ -94,10 +94,9 @@ Combination comes from stacking rules, with no rule written per pair:
 A new primitive should say which of these it follows. If it needs a special case against an
 existing primitive, that is a sign it is two primitives.
 
-### Powers as data (planned)
+### Powers as data (today)
 
-Each package currently carries an `apply(s, h)` function. To let content be linted, compared
-and generated, powers move to a declarative list:
+Each package declares its power as a list, and `apply(s, h)` is generated from it:
 
 ```js
 fx: [
@@ -106,8 +105,9 @@ fx: [
 ]
 ```
 
-with `op` one of `add`, `mul`, `max`, `set`. Anything that cannot be written this way is a
-missing primitive, to be added under rule 4.
+`op` is one of `add`, `mul`, `max`, `set`. `hard` replaces `v` once the package is hardened; an
+entry with only `hard` switches on at hardening. The first entry is the headline primitive.
+Anything that cannot be written this way is a missing primitive, to be added under rule 4.
 
 ### Named synergies (planned)
 

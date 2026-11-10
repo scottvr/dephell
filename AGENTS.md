@@ -28,9 +28,12 @@ an earlier prototype and is not current.
 node tools/bot-run.js 40     # no "stuck" runs; win rate in a sane band
 node tools/selftest.js       # all PASS
 node tools/shots.js          # look at shots/*.png
+node tools/content-lint.js    # 0 errors, when content changed (--stats for coverage)
 ```
 
-There is no unit-test framework; these three are the gate.
+There is no unit-test framework; these are the gate. Bot runs are deterministic per seed, so
+keep gameplay randomness on `run.rng` (registry, pager) or `run.crng` (combat), never `Math.random`.
+New content follows `docs/content-model.md` and `docs/content-pipeline.md`.
 
 ## Git
 

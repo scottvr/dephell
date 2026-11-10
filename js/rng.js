@@ -1,4 +1,5 @@
-// Seeded RNG. Everything that affects gameplay draws from run.rng so a seed replays.
+// Seeded RNG. Everything that affects gameplay draws from run.rng (registry, pager, rooms) or
+// run.crng (combat) so a seed replays.
 (function () {
   const DH = (window.DH = window.DH || {});
 

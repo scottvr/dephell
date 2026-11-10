@@ -84,117 +84,136 @@
   };
 
   // ---------------------------------------------------------------- packages
-  // apply(s, h): mutate the stat block. h = hardened (package + entire tree vetted).
+  // fx: the power as data. Each entry changes one stat: op is add | mul | max | set, v is the value,
+  // hard replaces v once the package is hardened (package + entire tree vetted). An entry with only
+  // `hard` applies when hardened and not before. The first entry is the headline primitive.
+  // See docs/content-model.md. apply(s, h) is generated from fx below.
   const PACKAGES = {
     'left-pad': {
       name: 'left-pad@1.3', eco: 'tiny', risk: 3, flag: 'unpublish', debt: 0, deps: [],
       tag: 'A small package with no dependencies. Surely harmless.',
       power: 'RAPID FIRE  +35% fire rate', hard: '+55% fire rate',
-      apply: (s, h) => { s.fireDelay *= h ? 0.64 : 0.74; },
+      fx: [{ stat: 'fireDelay', op: 'mul', v: 0.74, hard: 0.64 }],
     },
     lowdash: {
       name: 'lowdash@4.17', eco: 'tiny', risk: 1, debt: 0, deps: ['is-even', 'is-number'],
       tag: 'You needed one function. You got four hundred.',
       power: 'TRIPLE SHOT', hard: 'five-shot fan',
-      apply: (s, h) => { s.shots += h ? 4 : 2; s.damage *= 0.8; },
+      fx: [{ stat: 'shots', op: 'add', v: 2, hard: 4 }, { stat: 'damage', op: 'mul', v: 0.8 }],
     },
     'legacy-auth': {
       name: 'legacy-auth@0.9', eco: 'legacy', risk: 2, debt: 10, deps: ['crypto-core@1', 'ldap-bridge'],
       tag: 'It has always worked. Nobody knows why.',
       power: 'MASTER TOKEN  shots pierce 2', hard: 'pierce 5, old enemies hesitate',
-      apply: (s, h) => { s.pierce += h ? 5 : 2; if (h) s.legacySlow = 0.35; },
+      fx: [{ stat: 'pierce', op: 'add', v: 2, hard: 5 }, { stat: 'legacySlow', op: 'set', hard: 0.35 }],
     },
     'modern-crypto': {
       name: 'modern-crypto@4.2', eco: 'crypto', risk: 1, debt: 0, deps: ['crypto-core@4', 'bigint-polyfill'],
       tag: 'Marked stable by someone with confidence.',
       power: 'SIGNED PAYLOADS  +40% damage, 15% crits', hard: '+60% damage, 30% crits',
-      apply: (s, h) => { s.damage *= h ? 1.6 : 1.4; s.crit += h ? 0.3 : 0.15; },
+      fx: [{ stat: 'damage', op: 'mul', v: 1.4, hard: 1.6 }, { stat: 'crit', op: 'add', v: 0.15, hard: 0.3 }],
     },
     logjam: {
       name: 'logjam@2.14', eco: 'legacy', risk: 1, debt: 4, deps: ['string-format', 'jndi-lookup'],
       tag: 'Adds observability. Also reveals how bad things are.',
       power: 'OBSERVABILITY +2  see forecasts; +15% damage', hard: 'observability +3; +30% damage',
-      apply: (s, h) => { s.obs += h ? 3 : 2; s.dmgMult *= h ? 1.3 : 1.15; },
+      fx: [{ stat: 'obs', op: 'add', v: 2, hard: 3 }, { stat: 'dmgMult', op: 'mul', v: 1.15, hard: 1.3 }],
     },
     kubernot: {
       name: 'kubernot@1.28', eco: 'yaml', risk: 2, debt: 8, deps: ['etc-d', 'helm-chart', 'ingress-ctl'],
       tag: 'Solves problems you did not have until you installed it.',
       power: 'REPLICA  a drone fires alongside you', hard: 'two replicas, self-healing',
-      apply: (s, h) => { s.drones += h ? 2 : 1; if (h) s.regen += 1; },
+      fx: [{ stat: 'drones', op: 'add', v: 1, hard: 2 }, { stat: 'regen', op: 'add', hard: 1 }],
     },
     memcashed: {
       name: 'memcashed@1.6', eco: 'memory', risk: 1, debt: 0, deps: ['lru-cache', 'hash-ring'],
       tag: 'There are two hard problems. This is one of them.',
       power: 'CACHE HIT  every 4th volley fires twice', hard: 'every 2nd volley fires twice',
-      apply: (s, h) => { s.cache = h ? 2 : 4; },
+      fx: [{ stat: 'cache', op: 'set', v: 4, hard: 2 }],
     },
     'rabbit-hole': {
       name: 'rabbit-hole-mq@3', eco: 'async', risk: 1, debt: 0, deps: ['amqp-lib', 'retry-lib'],
       tag: 'Your message will be delivered. Possibly to you.',
       power: 'FAN-OUT  hits arc to 2 more enemies', hard: 'arcs to 4 more enemies',
-      apply: (s, h) => { s.chain += h ? 4 : 2; },
+      fx: [{ stat: 'chain', op: 'add', v: 2, hard: 4 }],
     },
     sequelizer: {
       name: 'sequelizer@6', eco: 'memory', risk: 1, debt: 0, deps: ['db-driver', 'query-builder'],
       tag: 'One query becomes many. This is called N+1.',
       power: 'N+1  hits spray 2 shard bolts', hard: 'hits spray 4 shard bolts',
-      apply: (s, h) => { s.split += h ? 4 : 2; },
+      fx: [{ stat: 'split', op: 'add', v: 2, hard: 4 }],
     },
     'launch-dorkly': {
       name: 'launch-dorkly@5', eco: 'yaml', risk: 1, debt: 0, deps: ['config-loader'],
       tag: 'Ship it dark. Forget the flag exists. Repeat.',
       power: 'FEATURE FLAG [Q]  freeze the room, erase bullets', hard: 'recharges almost twice as fast',
-      apply: (s, h) => { s.flag = 1; s.flagCd = h ? 8 : 14; },
+      fx: [{ stat: 'flag', op: 'set', v: 1 }, { stat: 'flagCd', op: 'set', v: 14, hard: 8 }],
     },
     're-doom': {
       name: 're-doom@2', eco: 'async', risk: 1, debt: 0, deps: ['backtrack-engine'],
       tag: 'Now you have two problems.',
       power: 'BACKTRACK  shots bounce twice', hard: 'bounce 4 times',
-      apply: (s, h) => { s.bounce += h ? 4 : 2; },
+      fx: [{ stat: 'bounce', op: 'add', v: 2, hard: 4 }],
     },
     'enterprise-bus': {
       name: 'enterprise-bus@11', eco: 'enterprise', risk: 2, debt: 15, deps: ['xml-parser', 'soap-client', 'license-server'],
       tag: 'Connects everything to everything. On purpose.',
       power: 'BLAST RADIUS  shots explode', hard: 'much bigger blast',
-      apply: (s, h) => { s.explode = Math.max(s.explode, h ? 26 : 17); },
+      fx: [{ stat: 'explode', op: 'max', v: 17, hard: 26 }],
     },
     'micro-everything': {
       name: 'micro-everything@0.1', eco: 'net', risk: 2, debt: 5, deps: ['service-mesh', 'grpc-lib', 'tracing-sdk'],
       tag: 'One problem, tastefully distributed across twelve services.',
       power: 'SIDECARS  2 orbitals block bullets and bite', hard: '4 orbitals',
-      apply: (s, h) => { s.orbitals += h ? 4 : 2; },
+      fx: [{ stat: 'orbitals', op: 'add', v: 2, hard: 4 }],
     },
     'typo-script': {
       name: 'typo-script@5', eco: 'script', risk: 1, debt: 0, deps: ['source-map', 'build-step'],
       tag: 'Catches the bug at compile time. A different bug.',
       power: 'TYPE CHECK  shield absorbs 1 hit per room', hard: 'absorbs 2 hits per room',
-      apply: (s, h) => { s.shield += h ? 2 : 1; },
+      fx: [{ stat: 'shield', op: 'add', v: 1, hard: 2 }],
     },
     'vibe-coder': {
       name: 'vibe-coder@0.0.1', eco: 'ai', risk: 2, debt: 6, deps: ['tokenizer', 'gpu-driver', 'telemetry-sdk'],
       tag: 'Confidently autocompletes your aim.',
       power: 'AUTOCOMPLETE  shots home; 1 in 8 hallucinates', hard: 'stronger homing, no hallucinations',
-      apply: (s, h) => { s.homing = Math.max(s.homing, h ? 5.5 : 3.6); s.hallucinate = h ? 0 : 0.125; },
+      fx: [{ stat: 'homing', op: 'max', v: 3.6, hard: 5.5 }, { stat: 'hallucinate', op: 'set', v: 0.125, hard: 0 }],
     },
     'rubber-duck': {
       name: 'rubber-duck@1.0', eco: 'script', risk: 0, debt: 0, deps: [],
       tag: 'Explain the problem to the duck. The duck knows.',
       power: 'EXPLAIN IT  stand still: next volley x3', hard: 'next volley x4.5',
-      apply: (s, h) => { s.duck = h ? 4.5 : 3; },
+      fx: [{ stat: 'duck', op: 'set', v: 3, hard: 4.5 }],
     },
     'do-not-delete': {
       name: 'do-not-delete.sh', eco: 'script', risk: 2, flag: 'abandoned', debt: 20, deps: [],
       tag: 'A cron job from 2011. Author unknown. Purpose unknown.',
       power: 'CRON  a ring of bolts every 5 seconds', hard: 'every 3 seconds',
-      apply: (s, h) => { s.cron = h ? 3 : 5; },
+      fx: [{ stat: 'cron', op: 'set', v: 5, hard: 3 }],
     },
     'oauth-everything': {
       name: 'oauth-everything@2', eco: 'net', risk: 1, debt: 0, deps: ['http-client', 'jwt-lib', 'json-parse'],
       tag: 'Redirects you somewhere else to prove who you are.',
       power: 'REDIRECT  fast dash that damages on contact', hard: 'faster, harder-hitting dash',
-      apply: (s, h) => { s.dashCd *= h ? 0.45 : 0.6; s.dashDamage += h ? 60 : 30; },
+      fx: [{ stat: 'dashCd', op: 'mul', v: 0.6, hard: 0.45 }, { stat: 'dashDamage', op: 'add', v: 30, hard: 60 }],
     },
   };
+
+  const FX_OPS = {
+    add: (a, b) => a + b,
+    mul: (a, b) => a * b,
+    max: (a, b) => Math.max(a, b),
+    set: (a, b) => b,
+  };
+  for (const id in PACKAGES) {
+    const fx = PACKAGES[id].fx;
+    PACKAGES[id].apply = (s, h) => {
+      for (const e of fx) {
+        const v = h && e.hard !== undefined ? e.hard : e.v;
+        if (v !== undefined) s[e.stat] = FX_OPS[e.op](s[e.stat], v);
+      }
+    };
+  }
 
   // ---------------------------------------------------------------- enemies
   const ENEMIES = {
@@ -258,5 +277,5 @@
     friday: { name: 'THE FRIDAY DEPLOY', color: '#ffc24a', why: 'It is 4:58 PM.' },
   };
 
-  DH.content = { TUNE, BASE_STATS, DEPS, PACKAGES, ENEMIES, ECO, TOOLS, INCIDENT_TEXT, BOSSES };
+  DH.content = { TUNE, BASE_STATS, DEPS, PACKAGES, FX_OPS, ENEMIES, ECO, TOOLS, INCIDENT_TEXT, BOSSES };
 })();

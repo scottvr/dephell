@@ -13,6 +13,9 @@
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   // ------------------------------------------------------------------ plumbing
+  // Combat randomness (enemy timers, spread, boss patterns) has its own seeded stream so a fight
+  // never shifts the registry/pager rolls. Particles stay on Math.random: they are cosmetic.
+  const rnd = (game) => game.run.crng.next();
   const emit = (game, type, data) => { game.events.push(Object.assign({ type }, data || {})); };
   const sfx = (game, name) => emit(game, 'sfx', { name });
   const banner = (game, text, sub, kind) => emit(game, 'banner', { text, sub: sub || '', kind: kind || 'info' });
@@ -62,7 +65,7 @@
 
   S.newGame = function (seed) {
     const run = {
-      seed: seed >>> 0, rng: DH.makeRng(seed), tick: 0, ticksLeft: TUNE.ticksTotal, time: 0,
+      seed: seed >>> 0, rng: DH.makeRng(seed), crng: DH.makeRng((seed ^ 0x9e3779b9) >>> 0), tick: 0, ticksLeft: TUNE.ticksTotal, time: 0,
       stability: TUNE.stability, maxStability: TUNE.stability, commits: 3, debt: 0, obsBase: 1,
       graph: Graph.make(), cur: 'app', offers: [], offerTaken: false, restockIn: TUNE.restockEvery,
       pager: { in: TUNE.pagerEvery, target: null }, tools: { pin: 0, container: 0, rollback: 0 },
@@ -637,8 +640,8 @@
     const e = Object.assign({
       id: game.nextId++, type, name: def.name, x, y, r: def.r, spd: def.spd, dmg: def.dmg,
       hp: def.hp * scale, maxHp: def.hp * scale, t: 0, st: 'seek', stT: 0, flash: 0, kx: 0, ky: 0, elite: !!elite,
-      seed: Math.random() * TAU, fireT: 1 + Math.random(), orbCd: 0, dormant: false, phased: false,
-      disguised: false, shielded: false, gen: 0, ang: Math.random() * TAU, face: 1,
+      seed: rnd(game) * TAU, fireT: 1 + rnd(game), orbCd: 0, dormant: false, phased: false,
+      disguised: false, shielded: false, gen: 0, ang: rnd(game) * TAU, face: 1,
     }, extra || {});
     if (elite) { e.hp *= 1.7; e.maxHp = e.hp; e.spd *= 1.15; e.dmg += 3; }
     if (collides(game.room, e.x, e.y, e.r * 0.8)) {
@@ -648,9 +651,9 @@
         if (!collides(game.room, nx, ny, e.r)) { e.x = nx; e.y = ny; break search; }
       }
     }
-    if (type === 'breaking') e.stT = 0.8 + Math.random() * 0.8;
+    if (type === 'breaking') e.stT = 0.8 + rnd(game) * 0.8;
     if (type === 'imposter') e.disguised = true;
-    if (type === 'race') { e.st = 'phase'; e.phased = true; e.stT = 0.6 + Math.random(); }
+    if (type === 'race') { e.st = 'phase'; e.phased = true; e.stT = 0.6 + rnd(game); }
     if (type === 'vconflict') { e.st = 'vuln'; e.stT = 2.6; }
     if (type === 'cycle') {
       const mate = game.enemies.find((o) => o.type === 'cycle' && o.mate == null);
@@ -781,7 +784,7 @@
 
   function dropCommits(game, x, y, n) {
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * TAU, v = 30 + Math.random() * 60;
+      const a = rnd(game) * TAU, v = 30 + rnd(game) * 60;
       game.pickups.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, type: 'commit', t: 0 });
     }
   }
@@ -1027,7 +1030,7 @@
           if (s.chain) chain(game, e, b);
           if (s.split) {
             const base = Math.atan2(b.vy, b.vx);
-            for (let i = 0; i < s.split; i++) spawnBullet(game, b.x, b.y, base + (Math.random() - 0.5) * 2.6, b.dmg * 0.35, { shard: true, life: 0.45, skip: e.id });
+            for (let i = 0; i < s.split; i++) spawnBullet(game, b.x, b.y, base + (rnd(game) - 0.5) * 2.6, b.dmg * 0.35, { shard: true, life: 0.45, skip: e.id });
           }
           if (s.explode) explode(game, b, e);
         }
@@ -1129,14 +1132,14 @@
         break;
       case 'nullptr': {
         e.stT -= dt;
-        if (e.stT <= 0) { e.stT = 1.5 + Math.random(); e.strafe = Math.random() < 0.5 ? 1 : -1; }
+        if (e.stT <= 0) { e.stT = 1.5 + rnd(game); e.strafe = rnd(game) < 0.5 ? 1 : -1; }
         if (d < 56) chase(game, e, -ux, -uy, spd, dt, 0, true);
         else if (d > 96) chase(game, e, ux, uy, spd, dt, 0);
         else chase(game, e, -uy * (e.strafe || 1), ux * (e.strafe || 1), spd * 0.8, dt, 0, true);
         e.fireT -= dt;
         e.charging = e.fireT < 0.35;
         if (e.fireT <= 0) {
-          e.fireT = 1.7 + Math.random() * 0.4;
+          e.fireT = 1.7 + rnd(game) * 0.4;
           ebullet(game, e.x, e.y, Math.atan2(dy, dx), 82, e.dmg, e.name);
           sfx(game, 'eshoot');
         }
@@ -1186,7 +1189,7 @@
             e.st = 'stun'; e.stT = 0.95;
             if (hit) { game.shake = Math.max(game.shake, 2); burst(game, e.x, e.y, '#ff9a3d', 8, 80); sfx(game, 'thud'); }
           }
-        } else if (e.stT <= 0) { e.st = 'seek'; e.stT = 0.9 + Math.random() * 0.8; }
+        } else if (e.stT <= 0) { e.st = 'seek'; e.stT = 0.9 + rnd(game) * 0.8; }
         break;
       case 'cycle': {
         const mate = game.enemies.find((o) => o.id === e.mate && !o.dead);
@@ -1295,7 +1298,7 @@
       case 'ring2': {
         const count = 10 + phase * 2;
         if (a.n === 0 || (a.name === 'ring2' && a.n === 1 && a.t > 0.45)) {
-          const off = a.n * (TAU / count / 2) + Math.random();
+          const off = a.n * (TAU / count / 2) + rnd(game);
           for (let i = 0; i < count; i++) ebullet(game, e.x, e.y, off + (i / count) * TAU, 54, e.dmg - 5, e.name, 7);
           sfx(game, 'eshoot');
           a.n++;
@@ -1316,7 +1319,7 @@
           ebullet(game, e.x, e.y, ang, 62, e.dmg - 5, e.name, 6);
           ebullet(game, e.x, e.y, ang + Math.PI, 62, e.dmg - 5, e.name, 6);
           if (a.n % 4 === 0) sfx(game, 'eshoot');
-          if (++a.n >= 28) { e.spinOff = Math.random() * TAU; done(1.3); }
+          if (++a.n >= 28) { e.spinOff = rnd(game) * TAU; done(1.3); }
         }
         break;
       case 'adds': {
@@ -1361,7 +1364,7 @@
     switch (e.variant) {
       case 'rewrite':
         for (let i = 0; i < 5; i++) {
-          const ang = Math.random() * TAU, rr = Math.random() * 50;
+          const ang = rnd(game) * TAU, rr = rnd(game) * 50;
           game.puddles.push({ x: clamp(p.x + Math.cos(ang) * rr, 30, W - 30), y: clamp(p.y + Math.sin(ang) * rr, 30, H - 30), r: 13, life: 6, warn: 0.9, tick: 0, src: e.name });
         }
         floater(game, e.x, e.y - 30, 'REWRITING...', '#b06bff');
@@ -1383,7 +1386,7 @@
         e.telegraph = a.t < 0.5;
         if (a.t < 0.5) e.aimA = toP;
         else if (a.t > 0.5 + a.n * 0.12) {
-          ebullet(game, e.x, e.y, e.aimA + (Math.random() - 0.5) * 0.12, 150, e.dmg - 2, e.name, 3);
+          ebullet(game, e.x, e.y, e.aimA + (rnd(game) - 0.5) * 0.12, 150, e.dmg - 2, e.name, 3);
           sfx(game, 'eshoot');
           if (++a.n >= 7) { e.telegraph = false; done(1.3); }
         }
@@ -1391,7 +1394,7 @@
       case 'unknown':
         if (a.n === 0) { e.fade = 1.4; a.n = 1; }
         if (a.t > 1.3) {
-          const ang = Math.random() * TAU;
+          const ang = rnd(game) * TAU;
           e.x = clamp(p.x + Math.cos(ang) * 64, 40, W - 40);
           e.y = clamp(p.y + Math.sin(ang) * 64, 40, H - 40);
           for (let i = 0; i < 12; i++) ebullet(game, e.x, e.y, (i / 12) * TAU, 60, e.dmg - 5, e.name, 6);
@@ -1403,7 +1406,7 @@
         break;
       default: // friday: confetti
         if (a.t > a.n * 0.05) {
-          ebullet(game, e.x, e.y, Math.random() * TAU, 38 + Math.random() * 52, e.dmg - 6, e.name, 6);
+          ebullet(game, e.x, e.y, rnd(game) * TAU, 38 + rnd(game) * 52, e.dmg - 6, e.name, 6);
           if (++a.n >= 30) done(1.5);
         }
     }

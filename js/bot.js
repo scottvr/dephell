@@ -16,6 +16,13 @@
     if (run.cur === 'app') {
       if (!run.offerTaken && run.offers.length && !run.freeze) {
         const want = G.packages(g).length < (policy.maxPkgs || 4);
+        // policy.force: a package id that must be the first install (content gate 4: test a candidate).
+        if (want && policy.force && !run._forced && DH.content.PACKAGES[policy.force]) {
+          run._forced = true;
+          if (!run.offers.includes(policy.force)) run.offers[0] = policy.force;
+          S.install(game, run.offers.indexOf(policy.force));
+          return true;
+        }
         if (want) { S.install(game, policy.pick != null ? policy.pick % run.offers.length : run.rng.int(run.offers.length)); return true; }
       }
       if (run.stability < 55 && run.commits >= 4 && S.buyTool(game, 'drink')) return true;
