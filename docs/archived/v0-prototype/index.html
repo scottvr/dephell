@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dependency Hell — Playtester Build</title>
+    <link rel="stylesheet" href="./styles/game.css">
+  </head>
+  <body>
+    <!-- The CRT "safe_mode" error rail is shelved for a future corrupted/glitch
+         level. Its CSS (.side-error-*) and JS (startSideErrorRail, guarded on the
+         element's absence) remain in place; re-add this <aside> to bring it back. -->
+    <main class="shell" aria-label="Dependency Hell first playable slice">
+      <section class="stage">
+        <canvas id="game" width="960" height="540" aria-label="Top-down combat room"></canvas>
+        <div class="scanlines" aria-hidden="true"></div>
+
+        <aside class="log-panel" aria-label="Run event log">
+          <div class="panel-title">BUILD LOG</div>
+          <ol id="eventLog"></ol>
+        </aside>
+
+        <section class="hud" aria-label="Run state">
+          <div class="meter">
+            <span title="Stability">STB</span>
+            <div class="track"><i id="stabilityBar"></i></div>
+            <b id="stabilityValue">100%</b>
+          </div>
+          <div class="meter info">
+            <span title="Observability">OBS</span>
+            <div class="track"><i id="observabilityBar"></i></div>
+            <b id="observabilityValue">2</b>
+          </div>
+          <div class="meter debt">
+            <span title="Technical Debt Ratio">TDR</span>
+            <div class="track"><i id="debtBar"></i></div>
+            <b id="debtValue">0</b>
+          </div>
+          <div class="meter commit">
+            <span title="Commits — the currency you spend on packages">CMT</span>
+            <div class="track"><i id="commitBar"></i></div>
+            <b id="commitValue">3</b>
+          </div>
+          <p id="buildIdentity" class="build-identity" aria-live="polite"></p>
+          <div class="hud-buttons">
+            <button id="restartButton" type="button" title="Start a new run">NEW RUN</button>
+            <button id="muteButton" type="button" title="Toggle sound (M)" aria-pressed="false">SOUND ON</button>
+          </div>
+        </section>
+
+        <aside class="graph-card" aria-label="Dependency graph">
+          <div class="panel-row">
+            <div class="panel-title">DEPENDENCY GRAPH</div>
+            <button id="graphInspectButton" type="button" title="Inspect graph">INSPECT</button>
+          </div>
+          <svg id="graphSvg" viewBox="0 0 280 190" role="img" aria-label="Current dependency graph"></svg>
+          <p id="graphCaption">app requires runtime. unknown edge suspected.</p>
+          <div class="graph-legend compact" aria-label="Graph visual key">
+            <span><i class="legend-node current"></i>locus</span>
+            <span><i class="legend-edge requires"></i>requires</span>
+            <span><i class="legend-edge suspected"></i>suspected</span>
+            <span><i class="legend-edge conflicts"></i>conflict</span>
+          </div>
+        </aside>
+
+        <section id="graphOverlay" class="overlay hidden" aria-label="Graph inspection">
+          <div class="graph-frame">
+            <header class="graph-header">
+              <div>
+                <p class="kicker">PAUSED GRAPH VIEW</p>
+                <h1>Graph Trace</h1>
+              </div>
+              <button id="graphCloseButton" type="button">CLOSE</button>
+            </header>
+            <div class="graph-legend" aria-label="Graph relation visual key">
+              <span><i class="legend-node current"></i>current locus</span>
+              <span><i class="legend-node risk"></i>risky node</span>
+              <span><i class="legend-node hazard"></i>incident node</span>
+              <span><i class="legend-edge requires"></i>requires</span>
+              <span><i class="legend-edge observes"></i>observes</span>
+              <span><i class="legend-edge patches"></i>patches</span>
+              <span><i class="legend-edge flags"></i>flags</span>
+              <span><i class="legend-edge pins"></i>pins</span>
+              <span><i class="legend-edge isolates"></i>isolates</span>
+              <span><i class="legend-edge infects"></i>infects</span>
+              <span><i class="legend-edge suspected"></i>suspected</span>
+              <span><i class="legend-edge hidden"></i>hidden</span>
+              <span><i class="legend-edge conflicts"></i>conflict</span>
+            </div>
+            <div class="graph-inspector">
+              <svg id="pauseGraphSvg" viewBox="0 0 280 190" role="img" aria-label="Inspectable dependency graph"></svg>
+              <aside id="graphDetails" class="graph-details" aria-live="polite">
+                <h2>Select a node or edge.</h2>
+                <p>Click graph entities to inspect relation, visibility, tags, and matching run-log facts.</p>
+              </aside>
+            </div>
+          </div>
+        </section>
+
+        <section id="routeOverlay" class="overlay hidden" aria-label="Route selection">
+          <div class="route-frame">
+            <header>
+              <p class="kicker">GRAPH ROUTE</p>
+              <h1>Select next locus.</h1>
+              <p id="routePrompt">Choose an exit through the dependency topology.</p>
+            </header>
+            <div class="route-layout">
+              <svg id="routeGraphSvg" viewBox="0 0 280 190" role="img" aria-label="Route map"></svg>
+              <div id="routeChoices" class="route-choices"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="incidentOverlay" class="overlay hidden" aria-label="Incident triage">
+          <div class="route-frame">
+            <header>
+              <p class="kicker">INCIDENT TRIAGE</p>
+              <h1 id="incidentTitle">Incident</h1>
+              <p id="incidentBlurb">A consequence arrived.</p>
+            </header>
+            <div id="incidentChoices" class="route-choices"></div>
+          </div>
+        </section>
+
+        <section id="choiceOverlay" class="overlay hidden" aria-label="Package selection">
+          <div class="choice-frame">
+            <div class="choice-titlebar">
+              <span class="ct-dot" aria-hidden="true"></span>
+              <span class="ct-path"><b>libglitch-v3</b> :: upgrade shell</span>
+              <span class="ct-pad" id="choicePad"><i aria-hidden="true"></i>PAD</span>
+            </div>
+            <div class="choice-header">
+              <p class="kicker">&gt; UPGRADE PATH</p>
+              <h1>Select one package to patch libglitch-v3.</h1>
+              <p id="choicePrompt">Cycle packages to preview each graph mutation. The graph keeps the receipt.</p>
+            </div>
+            <div class="choice-layout">
+              <aside class="choice-graph" aria-label="Package graph preview">
+                <div class="panel-title">MUTATION PREVIEW</div>
+                <svg id="choiceGraphSvg" viewBox="0 0 280 190" role="img" aria-label="Previewed package mutation"></svg>
+                <p id="choiceGraphCaption">Cycle a package to preview its graph mutation.</p>
+                <div class="graph-legend compact" aria-label="Preview visual key">
+                  <span><i class="legend-edge preview"></i>new relation</span>
+                  <span><i class="legend-node preview"></i>new node</span>
+                  <span><i class="legend-edge suspected"></i>suspected</span>
+                  <span><i class="legend-edge conflicts"></i>conflict</span>
+                </div>
+              </aside>
+              <div class="carousel-col">
+                <div class="rail-top">
+                  <span class="pill">
+                    <button class="chev" id="choiceChevL" type="button" aria-label="Previous package">&#9666;</button>
+                    <span><span class="cur" id="choicePillCur">01</span> / <span id="choicePillTot">04</span></span>
+                    <button class="chev" id="choiceChevR" type="button" aria-label="Next package">&#9656;</button>
+                    <span class="dots" id="choiceDots" aria-hidden="true"></span>
+                  </span>
+                </div>
+                <div class="carousel-stage" id="choiceStage">
+                  <button class="c-arrow l" id="choiceArrowL" type="button" aria-label="Previous">&#9666;</button>
+                  <button class="c-arrow r" id="choiceArrowR" type="button" aria-label="Next">&#9656;</button>
+                  <div id="packageChoices" class="choices" role="listbox" aria-label="Offered packages"></div>
+                </div>
+                <div class="choice-legend" aria-hidden="true">
+                  <span class="k g-x"><i class="glyph">&#10005;</i> INSTALL</span>
+                  <span class="k g-s"><i class="glyph">&#9633;</i> CREDIT</span>
+                  <span class="k g-t"><i class="glyph">&#9651;</i> READ</span>
+                  <span class="k"><i class="glyph">R</i> REFACTOR</span>
+                  <span class="k"><i class="glyph lr">L1/R1</i> CYCLE</span>
+                  <span class="keys">&#8592; &#8594; &nbsp;&middot;&nbsp; Enter &nbsp;&middot;&nbsp; C &nbsp;&middot;&nbsp; R &nbsp;&middot;&nbsp; I</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="reportOverlay" class="overlay hidden" aria-label="Mini postmortem">
+          <div class="report-frame">
+            <p class="kicker" id="reportKicker">MINI POSTMORTEM</p>
+            <h1 id="reportTitle">Build failed.</h1>
+            <div id="reportBody" class="report-body"></div>
+            <p class="report-hint" aria-hidden="true">&#9662; scroll to log the Tier-3 feel check</p>
+            <button id="reportRestartButton" type="button">ship the next candidate&nbsp;&nbsp;&nbsp;ENTER / &#10005;</button>
+          </div>
+        </section>
+      </section>
+
+      <footer class="controls">
+        <span class="pt-badge" id="ptBadge">PLAYTESTER BUILD</span>
+        <span>Move <b>WASD</b> or <b>Arrows</b></span>
+        <span>Aim <b>Mouse</b></span>
+        <span>Strike <b>LMB</b> or <b>Space</b></span>
+        <span>Dash <b>Shift</b></span>
+        <span>Flag <b>F</b></span>
+        <span>Rollback <b>R</b></span>
+        <span>Breaker <b>C</b></span>
+        <span>Graph <b>G</b></span>
+        <span>Sound <b>M</b></span>
+      </footer>
+    </main>
+    <script src="./scripts/constants.js"></script>
+    <script src="./scripts/content.js"></script>
+    <script src="./scripts/run-state.js"></script>
+    <script src="./scripts/utils.js"></script>
+    <script src="./scripts/reports.js"></script>
+    <script src="./scripts/effects.js"></script>
+    <script src="./scripts/graph.js"></script>
+    <script src="./scripts/audio.js"></script>
+    <script src="./scripts/game.js"></script>
+  </body>
+</html>
