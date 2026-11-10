@@ -34,4 +34,4 @@ There is no unit-test framework; these three are the gate.
 
 ## Git
 
-Commit freely. Never push.
+Commit freely. Push only when the owner asks; `main` is served by GitHub Pages, so a push to it is a public deploy.
