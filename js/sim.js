@@ -166,7 +166,7 @@
       log(game, 'incident', `INCIDENT: ${why}` + (names.length ? ` -> ${names.join(', ')} OFFLINE` : ''), { node: id, hit });
       banner(game, 'INCIDENT', why + (names.length ? ` — ${names.join(', ')} offline` : ' — nothing depends on it. Yet.'), 'bad');
       sfx(game, 'incident');
-      game.shake = Math.max(game.shake, 5);
+      game.shake = Math.max(game.shake, 3);
     } else if (n && (n.state === 'vetted' || n.pinned)) {
       run.stats.averted++;
       run.commits += n.pinned ? 0 : 3;
@@ -201,6 +201,16 @@
     }
   }
 
+  // Nothing left to vet and nothing on offer: the backlog refills rather than deadlocking the run.
+  function earlyRestock(game) {
+    const run = game.run, g = run.graph;
+    if (!run.offerTaken || run.freeze || Object.keys(g.nodes).some((id) => g.nodes[id].state !== 'vetted')) return;
+    rollOffers(game);
+    run.restockIn = TUNE.restockEvery;
+    log(game, 'restock', 'registry: everything is vetted, so the backlog refilled early');
+    emit(game, 'restock');
+  }
+
   // ------------------------------------------------------------------ meta actions (registry / map)
   const roomIdle = (game) => game.room.cleared && game.run.phase === 'run';
 
@@ -229,7 +239,8 @@
     refresh(game);
     emit(game, 'installed', { id, added });
     sfx(game, 'install');
-    game.shake = Math.max(game.shake, 3);
+    game.shake = Math.max(game.shake, 2);
+    run.fresh = { ids: added, until: game.t + 3 };
     return true;
   };
 
@@ -248,6 +259,7 @@
     log(game, 'uninstall', `uninstalled ${name}: -${removed.length} node${removed.length === 1 ? '' : 's'}`, { pkg: pkgId, removed });
     game.room.doors = buildDoors(g, run.cur);
     refresh(game);
+    earlyRestock(game);
     sfx(game, 'down');
     return true;
   };
@@ -327,7 +339,7 @@
   S.pin = function (game, id) {
     const run = game.run;
     const n = run.graph.nodes[id];
-    if (!n || run.tools.pin < 1 || n.state !== 'unvetted' || n.pinned || id === 'app') return false;
+    if (!n || run.phase !== 'run' || run.tools.pin < 1 || n.state !== 'unvetted' || n.pinned || id === 'app') return false;
     run.tools.pin--;
     n.pinned = true;
     log(game, 'pin', `pinned ${n.name}: the pager will skip it; prod will not`, { node: id });
@@ -339,7 +351,7 @@
   S.contain = function (game, id) {
     const run = game.run;
     const n = run.graph.nodes[id];
-    if (!n || run.tools.container < 1 || n.contained || id === 'app' || n.kind === 'pkg') return false;
+    if (!n || run.phase !== 'run' || run.tools.container < 1 || n.contained || id === 'app' || n.kind === 'pkg') return false;
     run.tools.container--;
     n.contained = true;
     log(game, 'contain', `containerized ${n.name}: its outages no longer cascade`, { node: id });
@@ -377,7 +389,7 @@
       .sort((a, b) => nodes[b].risk - nodes[a].risk || Graph.dependents(g, b).size - Graph.dependents(g, a).size)
       .slice(0, 6)
       .map((id) => ({ node: id, why: nodes[id].pinned ? 'forced major upgrade' : nodes[id].hotfixed ? 'hotfix peels off' : 'never vetted' }));
-    const shims = Object.keys(run.shims).map((lib) => ({ shim: lib, why: 'shim breaks under load' }));
+    const shims = Graph.conflicts(g, run.shims).filter((c) => c.shimmed && !c.resolved).map((c) => ({ shim: c.lib, why: 'shim breaks under load' }));
     const probes = ids.filter((id) => nodes[id].state === 'vetted' && nodes[id].risk >= 2).slice(0, 3).map((id) => ({ node: id, why: 'probe' }));
     const strikes = [];
     const real = weak.concat(shims);
@@ -397,7 +409,7 @@
       breach: cve * 2,
       major: pinsN * 2 + (pk.includes('legacy-auth') ? 1 : 0),
       monolith: ids.length / 8 + (pk.includes('micro-everything') ? 1 : 0) + (pk.includes('enterprise-bus') ? 1 : 0) - 1,
-      unknown: game.stats.obs === 0 ? 9 : 0,
+      unknown: game.stats.obs <= 1 ? 2 : 0,
       friday: 1.3,
     };
     const variant = Object.keys(score).sort((a, b) => score[b] - score[a])[0];
@@ -558,11 +570,11 @@
   function planWaves(game, node, rng, incident) {
     const run = game.run;
     const lvl = S.debtLevel(run);
-    let budget = 4 + node.depth * 1.5 + run.tick * 0.7 + lvl + (node.kind === 'pkg' ? 2 : 0) + (incident ? 3 : 0);
+    let budget = 4 + node.depth * 1.5 + run.tick * 0.7 + lvl + (node.kind === 'pkg' ? 2 : 0) + (incident ? 2 : 0);
     const table = ECO[node.eco] || ECO.core;
     const types = Object.keys(table);
     const list = [];
-    const eliteChance = Math.min(0.5, 0.1 * lvl) + (incident ? 0.25 : 0);
+    const eliteChance = Math.min(0.5, 0.1 * lvl) + (incident ? 0.15 : 0);
     let guard = 0;
     while (budget >= 1 && list.length < 14 && guard++ < 60) {
       const afford = types.filter((t) => ENEMIES[t].cost <= budget);
@@ -582,7 +594,7 @@
       if (list[i].type === 'cycle' && !list[i].pair) { waves[wi].push(list[++i]); }
       wi = (wi + 1) % nWaves;
     }
-    const conflict = node.lib && Graph.activeConflicts(run.graph, null).some((c) => c.lib === node.lib);
+    const conflict = node.lib && Graph.activeConflicts(run.graph, run.shims).some((c) => c.lib === node.lib);
     if (conflict) waves[waves.length - 1].push({ type: 'vconflict', elite: false });
     return waves.filter((w) => w.length);
   }
@@ -651,6 +663,7 @@
   function enterNode(game, id, fromId) {
     const run = game.run;
     const g = run.graph;
+    for (const k of game.pickups) if (k.type === 'commit') run.commits++; // never lose drops to a fast exit
     run.cur = id;
     g.nodes[id].visited = true;
     game.enemies = []; game.bullets = []; game.ebullets = []; game.pickups = []; game.puddles = [];
@@ -682,6 +695,7 @@
     sfx(game, 'door');
   }
   S.enterNode = enterNode;
+  S.spawn = spawnEnemy;
 
   function enterBoss(game) {
     const run = game.run;
@@ -694,6 +708,11 @@
     const p = game.player;
     p.x = W / 2; p.y = H - 34; p.vx = p.vy = 0; p.dashT = 0; p.doorGrace = 1;
     run.suppressed = {};
+    for (const c of Graph.activeConflicts(run.graph, run.shims)) {
+      const lose = run.rng.chance(0.5) ? c.pkgsA : c.pkgsB;
+      for (const pk of lose) run.suppressed[pk] = c.lib;
+      if (lose.length) log(game, 'suppressed', `${c.lib} conflict: ${lose.map((x) => run.graph.nodes[x].name).join(', ')} failed to load in production`, { lib: c.lib, pkgs: lose });
+    }
     refresh(game);
     p.shield = game.stats.shield;
     const s = game.stats;
@@ -725,7 +744,7 @@
     run.stats.dmgBy[source] = (run.stats.dmgBy[source] || 0) + dmg;
     p.inv = 0.8;
     p.hurtT = 0.25;
-    game.shake = Math.max(game.shake, 6);
+    game.shake = Math.max(game.shake, 3);
     game.hitstop = 0.07;
     floater(game, p.x, p.y - 12, '-' + Math.round(dmg), '#ff4d5e');
     burst(game, p.x, p.y, '#ff4d5e', 10, 110);
@@ -753,7 +772,8 @@
   function damageEnemy(game, e, dmg, dirx, diry, crit) {
     if (e.st === 'stun') dmg *= 1.5;
     e.hp -= dmg;
-    e.flash = 0.09;
+    if (e.type !== 'boss') e.flash = 0.09;
+    else if (!(e.flashCd > 0)) { e.flash = 0.05; e.flashCd = 0.22; }
     if (e.type !== 'boss' && e.type !== 'deprecated') { e.kx += (dirx || 0) * 60; e.ky += (diry || 0) * 60; }
     if (crit) floater(game, e.x, e.y - e.r - 4, Math.round(dmg) + '!', '#ffe14a');
     if (e.hp <= 0) killEnemy(game, e);
@@ -790,7 +810,7 @@
     const colors = { bug: '#ff4d5e', regression: '#b06bff', race: '#ffe14a', leak: '#4ab8ff', forkbomb: '#5bff8a', deprecated: '#8a8f98', breaking: '#ff9a3d', nullptr: '#ff5ad0', cycle: '#3ef0e0', imposter: '#5bff8a', vconflict: '#ff5ad0', boss: '#ffffff' };
     burst(game, e.x, e.y, colors[e.type] || '#fff', e.type === 'boss' ? 90 : 12 + e.r, e.type === 'boss' ? 220 : 110);
     game.rings.push({ x: e.x, y: e.y, r: 2, max: e.r * 2.4, life: 0.22, color: colors[e.type] || '#fff' });
-    game.shake = Math.max(game.shake, e.elite || e.r > 8 ? 3.5 : 1.8);
+    game.shake = Math.max(game.shake, e.elite || e.r > 8 ? 2 : 1);
     game.hitstop = Math.max(game.hitstop, 0.025);
     sfx(game, 'kill');
     if (e.type === 'forkbomb' && e.gen < 2) {
@@ -807,7 +827,7 @@
       emit(game, 'win');
       sfx(game, 'win');
       game.hitstop = 0.4;
-      game.shake = 12;
+      game.shake = 6;
       return;
     }
     const n = e.elite ? 3 : e.type === 'vconflict' ? 5 : run.rng.chance(e.gen ? 0.12 : 0.3) ? 1 : 0;
@@ -823,7 +843,7 @@
       x, y, vx: Math.cos(ang) * s.shotSpeed, vy: Math.sin(ang) * s.shotSpeed,
       dmg: dmg * (crit ? s.critMult : 1), crit, pierce: opts.shard ? 0 : s.pierce + (opts.pierce || 0),
       bounce: opts.shard ? 0 : s.bounce, homing: opts.shard || opts.wild ? 0 : s.homing,
-      life: opts.life || 1.5, hit: opts.skip ? [opts.skip] : [], shard: !!opts.shard, drone: !!opts.drone,
+      life: opts.life || 1.5, hit: opts.skip ? [opts.skip] : [], shard: !!opts.shard, drone: !!opts.drone, fresh: true,
     });
   }
 
@@ -836,7 +856,7 @@
       sfx(game, 'crit');
     }
     const n = s.shots;
-    const ox = p.x + Math.cos(p.aim) * 7, oy = p.y + Math.sin(p.aim) * 7;
+    const ox = p.x + Math.cos(p.aim) * 2, oy = p.y + Math.sin(p.aim) * 2;
     for (let i = 0; i < n; i++) {
       let ang = p.aim + (i - (n - 1) / 2) * 0.13;
       const wild = s.hallucinate > 0 && run.rng.chance(s.hallucinate);
@@ -974,7 +994,10 @@
           b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp;
         }
       }
-      const nx = b.x + b.vx * dt, ny = b.y + b.vy * dt;
+      // first frame: test where it spawned, so an enemy standing on the player can still be hit
+      const mv = b.fresh ? 0 : dt;
+      b.fresh = false;
+      const nx = b.x + b.vx * mv, ny = b.y + b.vy * mv;
       if (solidAt(room, Math.floor(nx / TS), Math.floor(ny / TS))) {
         if (b.bounce > 0) {
           b.bounce--;
@@ -1064,6 +1087,7 @@
     e.t += dt;
     if (e.flash > 0) e.flash -= dt;
     if (e.orbCd > 0) e.orbCd -= dt;
+    if (e.flashCd > 0) e.flashCd -= dt;
     if (Math.abs(e.kx) + Math.abs(e.ky) > 1) {
       moveCircle(room, e, e.kx * dt, e.ky * dt);
       e.kx *= 0.82; e.ky *= 0.82;
@@ -1099,7 +1123,7 @@
         e.stT += dt;
         if (e.stT >= 3.4) {
           e.stT = 0;
-          if (e.r < 15) { e.r += 1.5; e.hp += 10; e.maxHp += 10; }
+          if (e.r < 15 && !collides(room, e.x, e.y, (e.r + 1.5) * 0.8)) { e.r += 1.5; e.hp += 10; e.maxHp += 10; }
           game.puddles.push({ x: e.x, y: e.y, r: e.r + 7, life: 7, warn: 0.5, tick: 0, src: 'Memory Leak' });
         }
         break;
@@ -1160,7 +1184,7 @@
           const hit = moveCircle(room, e, Math.cos(e.aimA) * 225 * dt, Math.sin(e.aimA) * 225 * dt);
           if (hit || e.stT <= 0) {
             e.st = 'stun'; e.stT = 0.95;
-            if (hit) { game.shake = Math.max(game.shake, 3); burst(game, e.x, e.y, '#ff9a3d', 8, 80); sfx(game, 'thud'); }
+            if (hit) { game.shake = Math.max(game.shake, 2); burst(game, e.x, e.y, '#ff9a3d', 8, 80); sfx(game, 'thud'); }
           }
         } else if (e.stT <= 0) { e.st = 'seek'; e.stT = 0.9 + Math.random() * 0.8; }
         break;
@@ -1221,7 +1245,7 @@
     const phase = frac > 0.66 ? 1 : frac > 0.33 ? 2 : 3;
     if (phase !== e.phase) {
       e.phase = phase;
-      if (phase > 1) { banner(game, `${e.name}: PHASE ${phase}`, phase === 2 ? 'It has read your architecture diagram.' : 'It is now improvising.', 'bad'); sfx(game, 'boss'); game.shake = 8; }
+      if (phase > 1) { banner(game, `${e.name}: PHASE ${phase}`, phase === 2 ? 'It has read your architecture diagram.' : 'It is now improvising.', 'bad'); sfx(game, 'boss'); game.shake = 4; }
     }
     // dependency strikes: prod calls in every unvetted node
     const plan = run.boss;
@@ -1317,7 +1341,7 @@
         } else if (a.st === 'go') {
           const hit = moveCircle(room, e, Math.cos(e.aimA) * 215 * dt, Math.sin(e.aimA) * 215 * dt);
           if (hit || a.st_t <= 0) {
-            game.shake = Math.max(game.shake, 6);
+            game.shake = Math.max(game.shake, 3);
             sfx(game, 'thud');
             for (let i = 0; i < 8; i++) ebullet(game, e.x, e.y, (i / 8) * TAU, 66, e.dmg - 5, e.name, 5);
             if (++a.n >= reps) done(1.5); else { a.st = 'aim'; a.st_t = 0.55; }
@@ -1397,8 +1421,8 @@
         log(game, 'strike', `the ${st.shim} shim broke under load: ${lose.map((x) => g.nodes[x].name).join(', ')} offline`, { lib: st.shim });
         banner(game, 'SHIM BROKE', lose.map((x) => g.nodes[x].name).join(', ') + ' offline', 'bad');
       }
-      run.stats.strikesLanded++;
-      st.held = false;
+      if (c) run.stats.strikesLanded++;
+      st.held = !c;
       refresh(game);
       sfx(game, 'down');
       return;
@@ -1418,7 +1442,7 @@
     const names = hit.map((x) => g.nodes[x].name);
     log(game, 'strike', `prod took down ${n.name} (${st.why})` + (names.length ? ` -> ${names.join(', ')} OFFLINE` : ''), { node: st.node, hit });
     banner(game, n.name.toUpperCase() + ' IS DOWN', names.length ? names.join(', ') + ' offline' : st.why, 'bad');
-    game.shake = Math.max(game.shake, 6);
+    game.shake = Math.max(game.shake, 3);
     sfx(game, 'down');
   }
 
@@ -1432,6 +1456,8 @@
     room.cleared = true;
     node.state = 'vetted';
     node.hotfixed = false;
+    node.pinned = false;
+    for (const e of game.enemies) if (e.disguised) { e.dead = true; burst(game, e.x, e.y, '#5bff8a', 10, 80); floater(game, e.x, e.y - 8, 'IMPOSTER PURGED', '#5bff8a'); }
     run.stats.rooms++;
     run.stability = Math.min(run.maxStability, run.stability + TUNE.healOnClear);
     dropCommits(game, W / 2, H / 2, 2);
@@ -1454,13 +1480,7 @@
     run.suppressed = {};
     advanceTick(game);
     refresh(game);
-    // nothing left to vet and nothing on offer: the backlog refills rather than deadlocking the run
-    if (run.offerTaken && !run.freeze && !Object.keys(g.nodes).some((id) => g.nodes[id].state !== 'vetted')) {
-      rollOffers(game);
-      run.restockIn = TUNE.restockEvery;
-      log(game, 'restock', 'registry: everything is vetted, so the backlog refilled early');
-      emit(game, 'restock');
-    }
+    earlyRestock(game);
     room.doors = buildDoors(g, room.id);
     emit(game, 'clear', { id: room.id, wasDown });
     sfx(game, 'clear');
@@ -1552,7 +1572,7 @@
     game.rings = game.rings.filter((r) => r.life > 0);
     for (const m of game.marks) m.life -= dt;
     game.marks = game.marks.filter((m) => m.life > 0);
-    if (game.shake > 0) game.shake = Math.max(0, game.shake - dt * 28);
+    if (game.shake > 0) game.shake = Math.max(0, game.shake - dt * 16);
   }
 
   // ------------------------------------------------------------------ main step

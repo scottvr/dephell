@@ -4,7 +4,8 @@
   const DH = (window.DH = window.DH || {});
   const S = DH.Sim, G = DH.Graph, Rn = DH.Render;
   const { TUNE, PACKAGES, TOOLS } = DH.content;
-  const UI = { mode: null };
+  const UI = { mode: null, reportAt: 0 };
+  const TOOL_KEYS = ['Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus']; // never letters: WASD/E are in the player's hands
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   let game = null, hooks = null;
@@ -18,7 +19,7 @@
     hooks = h;
     $('minimap').addEventListener('click', () => { if (!UI.mode && game) UI.open('map'); });
     $('overlay').addEventListener('click', onOverlayClick);
-    $('full').addEventListener('click', () => { if (UI.mode === 'title' || UI.mode === 'report') hooks.newRun(); });
+    $('full').addEventListener('click', () => { if (UI.mode === 'title' || (UI.mode === 'report' && performance.now() - UI.reportAt > 700)) hooks.newRun(); });
   };
   UI.setGame = function (g) { game = g; cache = {}; seenCombat = false; mapSel = 'app'; $('log').innerHTML = ''; bannerQ = []; $('banner').className = ''; };
 
@@ -60,7 +61,8 @@
       const b = bannerQ.shift();
       $('banner').firstElementChild.textContent = b.text;
       $('banner').lastElementChild.textContent = b.sub;
-      $('banner').className = 'on ' + b.kind;
+      const busy = game.room.combat && !game.room.cleared && game.intro <= 0; // keep the arena clear mid-fight
+      $('banner').className = 'on ' + b.kind + (busy ? ' low' : '');
       bannerT = b.dur || 2.3;
     }
     if (t - lastMini > 0.2) {
@@ -76,6 +78,7 @@
 
     // top bar
     const node = g.nodes[run.cur];
+    setClass('room-name', (run.cur === 'prod' ? run.boss.name : node.name).length > 19 ? 'long' : '');
     if (run.cur === 'prod') { setText('room-name', run.boss.name); setText('room-sub', 'PRODUCTION · ' + run.boss.why); }
     else {
       setText('room-name', node.name);
@@ -106,10 +109,10 @@
     if (run.phase === 'boss') ptxt = `<div class="tgt">prod is auditing your architecture</div>`;
     else if (run.freeze) ptxt = `<div class="q">silenced for the deploy</div>`;
     else if (pg.target && st.obs >= 2) ptxt = `<div class="tgt">▶ ${esc(g.nodes[pg.target].name)}${riskGlyph(g.nodes[pg.target])} goes down next room</div><div class="q">vet it now, or pin it</div>`;
-    else if (pg.in === 1) ptxt = `<div class="tgt">something goes down next room</div><div class="q">target unknown (observability 2 shows it)</div>`;
+    else if (pg.in === 1 && pg.target) ptxt = `<div class="tgt">something goes down next room</div><div class="q">target unknown (observability 2 shows it)</div>`;
     else ptxt = `<div class="q">next incident in ${pg.in} rooms</div>`;
     setHTML('pager', `<h2>PAGER</h2>${ptxt}`);
-    setClass('pager', pg.in === 1 && run.phase === 'run' ? 'hot' : '');
+    setClass('pager', pg.in === 1 && pg.target && run.phase === 'run' ? 'hot' : '');
     // packages
     const rows = G.packages(g).map((p) => {
       const s = S.pkgStatus(game, p), n = g.nodes[p];
@@ -151,6 +154,7 @@
   UI.open = function (mode) {
     UI.mode = mode;
     confirmX = null;
+    if (mode === 'report') UI.reportAt = performance.now();
     const ov = $('overlay'), full = $('full');
     ov.classList.add('hidden'); full.classList.add('hidden');
     if (mode === 'title' || mode === 'report') { full.classList.remove('hidden'); full.innerHTML = mode === 'title' ? titleHTML() : reportHTML(); if (mode === 'report') drawReportGraph(); }
@@ -165,6 +169,7 @@
     DH.Audio.sfx('ui');
   };
   UI.close = function () {
+    if (UI.mode === 'deploy' && game) { game.player.doorGrace = 1.2; game.player.vx = 0; }
     UI.mode = null;
     $('overlay').classList.add('hidden');
     $('full').classList.add('hidden');
@@ -232,7 +237,7 @@
       if (tl.id === 'drink' && run.stability >= run.maxStability) no = true;
       if (tl.id === 'refactor' && run.debt <= 0) no = true;
       if (tl.id === 'reroll' && (run.offerTaken || run.freeze)) no = true;
-      return `<div class="tool${no ? ' no' : ''}" data-tool="${tl.id}"><b>[${String.fromCharCode(65 + i)}] ${esc(tl.name)}</b><i>${tl.cost}c</i><span>${esc(tl.desc)}</span></div>`;
+      return `<div class="tool${no ? ' no' : ''}" data-tool="${tl.id}"><b>[${'4567890-'[i]}] ${esc(tl.name)}</b><i>${tl.cost}c</i><span>${esc(tl.desc)}</span></div>`;
     }).join('');
     $('overlay').innerHTML = `<div class="ov"><span class="close"><kbd>Esc</kbd> close</span><h2>REGISTRY</h2>
       <div class="lede">Take one package per restock. You get its power now. Its dependency tree becomes rooms: vet them all and the package hardens; ignore them and the pager finds them. <b style="color:#eaffff">${run.commits} commits</b> to spend on tools.</div>
@@ -304,12 +309,14 @@
       else { ok = S.uninstall(game, mapSel); confirmX = null; if (ok) mapSel = 'app'; }
     }
     if (!ok) DH.Audio.sfx('denied');
+    drawBigMap(performance.now() / 1000);
     renderMapInfo();
   }
 
   function mapMove(dx, dy) {
     if (!mapPos) return;
     const cur = mapPos[mapSel];
+    if (!cur) return;
     let best = null, bs = 1e9;
     for (const id of Object.keys(mapPos)) {
       if (id === mapSel || id === 'prod') continue;
@@ -375,7 +382,7 @@
       <div class="pitch">Every package is a power. Every package is also a dungeon: its dependency tree becomes rooms you must clear before the pager finds them. Ship three features before the release train leaves. Production will audit whatever you built.</div>
       <div class="start">▶ PRESS ENTER TO START THE SPRINT</div>
       <div class="controls"><span><b>WASD</b> move</span><span><b>Mouse / Arrows</b> aim + fire</span><span><b>Space</b> dash</span><span><b>E</b> use</span>
-      <span><b>Tab</b> map</span><span><b>Q</b> feature flag</span><span><b>H</b> how to play</span><span><b>N</b> sound</span></div>
+      <span><b>Tab</b> map</span><span><b>Q</b> feature flag</span><span><b>H</b> help, in game</span><span><b>N</b> sound</span></div>
       <div class="meta">${m.runs ? `runs ${m.runs} · shipped ${m.wins} · best grade ${m.best || '—'}<br>` : ''}it is funny because it is true</div>`;
   }
 
@@ -432,7 +439,8 @@
   UI.key = function (code, e) {
     if (!UI.mode) return false;
     if (UI.mode === 'title' || UI.mode === 'report') {
-      if (code === 'Enter' || code === 'Space') hooks.newRun();
+      // the report only takes Enter, and not instantly: a dash-masher should still get to read it
+      if (UI.mode === 'title' ? code === 'Enter' || code === 'Space' : code === 'Enter' && performance.now() - UI.reportAt > 700) hooks.newRun();
       return true;
     }
     if (code === 'Escape') { UI.close(); return true; }
@@ -443,7 +451,7 @@
       else if (code === 'ArrowRight' && open) { regSel = (regSel + 1) % n; DH.Audio.sfx('ui'); renderRegistry(); }
       else if (/^Digit[1-3]$/.test(code) && open && +code[5] <= n) { regSel = +code[5] - 1; DH.Audio.sfx('ui'); renderRegistry(); }
       else if (code === 'Enter' && open) doInstall();
-      else if (/^Key[A-H]$/.test(code) && !e.repeat) buy(TOOLS[code.charCodeAt(3) - 65].id);
+      else if (TOOL_KEYS.indexOf(code) >= 0 && !e.repeat) buy(TOOLS[TOOL_KEYS.indexOf(code)].id);
       return true;
     }
     if (UI.mode === 'map') {

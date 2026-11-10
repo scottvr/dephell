@@ -7,7 +7,7 @@
   const params = new URLSearchParams(location.search);
   const stage = document.getElementById('stage');
   const canvas = document.getElementById('arena');
-  let game = null, acc = 0, last = 0, botWait = 0, frozen = false;
+  let game = null, acc = 0, last = 0, botWait = 0, frozen = false, seedUsed = false;
   const keys = new Set();
   const pressed = new Set();
   const mouse = { x: 160, y: 96, down: false, used: false, right: false };
@@ -33,7 +33,10 @@
   // ------------------------------------------------------------------ run lifecycle
   function newRun(seed) {
     Audio.init();
-    if (seed == null) seed = params.get('seed') && !game ? parseInt(params.get('seed'), 16) : (Math.random() * 0xffffffff) >>> 0;
+    if (seed == null) {
+      seed = params.get('seed') && !seedUsed ? parseInt(params.get('seed'), 16) : (Math.random() * 0xffffffff) >>> 0;
+      seedUsed = true;
+    }
     game = S.newGame(seed);
     window.DH.game = game;
     UI.setGame(game);
@@ -49,6 +52,7 @@
         case 'log': UI.log(ev.entry); break;
         case 'banner': UI.banner(ev); break;
         case 'bossintro': UI.bossIntro(ev.boss); break;
+        case 'enter': canvas.classList.remove('enter'); void canvas.offsetWidth; canvas.classList.add('enter'); break;
         case 'openRegistry': UI.open('registry'); break;
         case 'deployPrompt': UI.open('deploy'); break;
         case 'death': recordEnd(false); setTimeout(() => { if (game.run.phase === 'lost') UI.open('report'); }, 1500); break;
@@ -59,7 +63,7 @@
   }
 
   // ------------------------------------------------------------------ input
-  function readInput() {
+  function readInput(consume) {
     const inp = { mx: 0, my: 0, fire: false, dash: false, ability: false, interact: false, rollback: false };
     if (keys.has('KeyA')) inp.mx -= 1;
     if (keys.has('KeyD')) inp.mx += 1;
@@ -76,8 +80,7 @@
     inp.ability = pressed.has('KeyQ') || pressed.has('KeyF') || mouse.right;
     inp.interact = pressed.has('KeyE') || pressed.has('Enter');
     inp.rollback = pressed.has('KeyR');
-    mouse.right = false;
-    pressed.clear();
+    if (consume) { mouse.right = false; pressed.clear(); } // presses made during hitstop are kept for the next real step
     return inp;
   }
 
@@ -86,9 +89,9 @@
     const code = e.code;
     if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)) e.preventDefault();
     Audio.init();
+    if (code === 'KeyN' && !e.repeat) { Audio.toggleMute(); return; }
     if (UI.mode) { if (!e.repeat || code.startsWith('Arrow')) UI.key(code, e); return; }
-    if (e.repeat) return;
-    if (code === 'KeyN') { Audio.toggleMute(); return; }
+    if (e.repeat) { keys.add(code); return; } // a key held through an overlay still counts as held
     if (!game) return;
     if (code === 'Tab' || code === 'KeyM') { UI.open('map'); return; }
     if (code === 'KeyH' || code === 'Escape') { UI.open('help'); return; }
@@ -96,7 +99,11 @@
     pressed.add(code);
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
-  window.addEventListener('blur', () => { keys.clear(); mouse.down = false; });
+  window.addEventListener('blur', () => {
+    keys.clear(); mouse.down = false;
+    // losing focus pauses: the help screen doubles as the pause screen
+    if (game && !UI.mode && !botMode && (game.run.phase === 'run' || game.run.phase === 'boss')) UI.open('help');
+  });
   function mousePos(e) {
     const r = canvas.getBoundingClientRect();
     mouse.x = ((e.clientX - r.left) / r.width) * S.W;
@@ -146,7 +153,7 @@
             if (botWait > 0.9) { botWait = 0; Bot.meta(game); }
           } else inp = Bot.input(game);
           pressed.clear();
-        } else inp = readInput();
+        } else inp = readInput(!(game.hitstop > 0 || game.intro > 0));
         S.step(game, STEP, inp);
         drain();
         acc -= STEP;
@@ -210,6 +217,20 @@
         break;
       }
       case 'help': UI.open('help'); break;
+      case 'zoo': {
+        // one of everything, for checking sprites
+        S.install(game, 0);
+        S.travel(game, 'runtime');
+        game.enemies = []; game.room.queue = []; game.room.waves = []; game.marks = [];
+        const types = ['bug', 'regression', 'nullptr', 'race', 'deprecated', 'breaking', 'forkbomb', 'leak', 'cycle', 'cycle', 'imposter', 'vconflict'];
+        types.forEach((t, i) => { const e = S.spawn(game, t, 44 + (i % 6) * 46, 50 + Math.floor(i / 6) * 50, i === 0); e.hp *= 0.6; if (t === 'race') { e.phased = false; e.st = 'wind'; } });
+        game.stats.orbitals = 2; game.stats.duck = 3; game.stats.drones = 1; game.player.drones = [{ x: 150, y: 150 }]; game.player.shield = 1;
+        game.player.x = 160; game.player.y = 150; game.player.still = 1;
+        for (let i = 0; i < 5; i++) game.pickups.push({ x: 60 + i * 12, y: 160, vx: 0, vy: 0, type: i === 4 ? 'heal' : 'commit', t: 0 });
+        game.ebullets.push({ x: 230, y: 150, vx: 0, vy: 0, dmg: 1, r: 2.5, life: 9 }, { x: 245, y: 156, vx: 0, vy: 0, dmg: 1, r: 2.5, life: 9 });
+        game.puddles.push({ x: 270, y: 150, r: 12, life: 5, warn: 0, tick: 9, src: 'Memory Leak' });
+        break;
+      }
     }
     game.events.length = 0;
     frozen = true; // screenshots show the exact state the bot reached
@@ -254,7 +275,7 @@
       check('west door opens deploy prompt (not ready)', UI.mode === 'deploy' && !S.canDeploy(game));
       UI.key('Escape', {});
       UI.open('help'); check('help opens', UI.mode === 'help'); UI.key('Escape', {});
-      UI.open('registry'); UI.key('KeyB', {}); UI.key('Escape', {});
+      UI.open('registry'); UI.key('Digit5', {}); UI.key('Escape', {});
       check('registry tool purchase path ran', !UI.mode);
       // force the end states
       game.run.freeze = true; UI.open('deploy'); UI.key('Enter', {});
@@ -267,6 +288,8 @@
       UI.open('report');
       check('postmortem renders', !!document.querySelector('.report') && document.querySelector('.report h2').textContent === 'POSTMORTEM');
       UI.key('Enter', {});
+      check('report ignores an instant Enter', UI.mode === 'report');
+      UI.reportAt -= 1000; UI.key('Enter', {});
       check('enter starts a new run', game.run.phase === 'run' && game.run.tick === 0 && !UI.mode);
     } catch (e) { out.push('FAIL exception: ' + (e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e)); }
     const pre = document.createElement('pre');

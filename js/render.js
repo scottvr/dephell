@@ -451,7 +451,7 @@
 
     // boss bar lives in the top wall
     const boss = game.enemies.find((e) => e.type === 'boss');
-    if (boss && game.stats.obs > 0) {
+    if (boss && run.boss.variant !== 'unknown') {
       const bw = 200, bx = (W - bw) / 2;
       ctx.fillStyle = '#200a0e';
       ctx.fillRect(bx, 5, bw, 6);
@@ -566,6 +566,9 @@
         for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
           c.beginPath(); c.moveTo(p.x + sx * b, p.y + sy * (b - 4)); c.lineTo(p.x + sx * b, p.y + sy * b); c.lineTo(p.x + sx * (b - 4), p.y + sy * b); c.stroke();
         }
+      }
+      if (run.fresh && run.fresh.until > game.t && run.fresh.ids.includes(id) && Math.floor(t * 6) % 2) {
+        c.strokeStyle = COL.white; c.strokeRect(p.x - s - 3, p.y - s - 3, s * 2 + 6, s * 2 + 6);
       }
       if (o.sel === id) { c.strokeStyle = COL.cyan; c.lineWidth = 1; c.strokeRect(p.x - s - 8, p.y - s - 8, s * 2 + 16, s * 2 + 16); }
       if (o.pkgLabels && (n.kind === 'pkg' || id === 'app')) {

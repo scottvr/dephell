@@ -27,14 +27,14 @@ escape it.* This design makes that literal.
   each fight one side fails to load. Vetting both versions resolves it; a shim hides it.
 - **Technical debt.** From shortcuts: shims, hotfixes, pins, flags, some packages. Every 25
   points adds enemies and elites; 50+ speeds up the pager; all of it adds boss health.
-- **Observability.** 0–4. Gates enemy health bars, risk markers, how much of a tree the registry
+- **Observability.** 1–4 (you start at 1). Gates enemy health bars, risk markers, how much of a tree the registry
   shows, conflict warnings, pager forecasts, and whether you can even see the boss's health.
 
 ## Production
 
 The boss is built from the run. Its identity comes from what dominates the architecture (debt →
 The Rewrite, shipped CVEs → The Breach, pins/legacy → The Major Version Upgrade, sprawl → The
-Distributed Monolith, blindness → The Unknown Unknown, otherwise The Friday Deploy). Its health
+Distributed Monolith, low observability → The Unknown Unknown, whose health you cannot see, otherwise The Friday Deploy). Its health
 scales to the player's damage output at deploy time. As its health drops it strikes every
 unvetted node, breaks every shim and force-upgrades every pin — so each shortcut is called in
 mid-fight, as powers going dark. Vetted nodes visibly hold.

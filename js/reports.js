@@ -194,7 +194,7 @@
     }
     const d = run.death;
     return Object.assign(common, {
-      won: false, title: 'POSTMORTEM', sub: d.inBoss ? 'Production outage during release deployment.' : `Total outage at ${T(d)}, ${f.features}/${TUNE.featuresNeeded} features shipped.`,
+      won: false, title: 'POSTMORTEM', sub: d.inBoss ? 'Production outage during release deployment.' : `Total outage at ${T(d)}, ${Math.min(f.features, TUNE.featuresNeeded)}/${TUNE.featuresNeeded} features shipped.`,
       grade: 'F',
       fields: [['Root cause', rootCause(f)], ['Build identity', identity(f)], ['Final architecture', architecture(f)]],
       sections: [['CONTRIBUTING FACTORS', factors(f)], ['WHAT WENT WELL', wentWell(f)], ['ACTION ITEMS', actionItems(f, true)]],
