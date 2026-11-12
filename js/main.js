@@ -18,26 +18,33 @@
     get() { try { return JSON.parse(localStorage.getItem('dephell.meta') || '{}'); } catch (e) { return {}; } },
     set(m) { try { localStorage.setItem('dephell.meta', JSON.stringify(m)); } catch (e) { /* private mode */ } },
   };
-  const meta = () => Object.assign({ runs: 0, wins: 0, best: '' }, store.get());
+  const meta = () => Object.assign({ runs: 0, wins: 0, best: '', proj: {}, last: 'greenfield' }, store.get());
   function recordEnd(won) {
     const m = meta();
+    const pj = (m.proj[game.run.project] = Object.assign({ runs: 0, wins: 0, best: '' }, m.proj[game.run.project]));
     m.runs++;
+    pj.runs++;
     if (won) {
       m.wins++;
+      pj.wins++;
       const order = 'DCBAS', g = DH.Reports.build(game).grade;
       if (!m.best || order.indexOf(g) > order.indexOf(m.best)) m.best = g;
+      if (!pj.best || order.indexOf(g) > order.indexOf(pj.best)) pj.best = g;
     }
     store.set(m);
   }
 
   // ------------------------------------------------------------------ run lifecycle
-  function newRun(seed) {
+  function newRun(seed, project) {
     Audio.init();
+    if (!DH.content.PROJECTS[project]) project = UI.project;
+    const m = meta();
+    if (m.last !== project) { m.last = project; store.set(m); }
     if (seed == null) {
       seed = params.get('seed') && !seedUsed ? parseInt(params.get('seed'), 16) : (Math.random() * 0xffffffff) >>> 0;
       seedUsed = true;
     }
-    game = S.newGame(seed);
+    game = S.newGame(seed, project);
     window.DH.game = game;
     UI.setGame(game);
     UI.close();
@@ -188,7 +195,7 @@
 
   function shot(name) {
     const seed = parseInt(params.get('seed') || '2F', 16);
-    game = S.newGame(seed);
+    game = S.newGame(seed, params.get('project'));
     window.DH.game = game;
     UI.setGame(game);
     const fighting = (g) => g.room.combat && !g.room.cleared && g.enemies.length >= 3 && g.bullets.length > 2 && g.room.t > 2.5;
@@ -291,6 +298,19 @@
       check('report ignores an instant Enter', UI.mode === 'report');
       UI.reportAt -= 1000; UI.key('Enter', {});
       check('enter starts a new run', game.run.phase === 'run' && game.run.tick === 0 && !UI.mode);
+      UI.open('title');
+      check('title lists every project', document.querySelectorAll('.proj').length === Object.keys(DH.content.PROJECTS).length);
+      UI.key('Digit2', {}); UI.key('Enter', {});
+      const G = DH.Graph, g2 = game.run.graph;
+      check('monolith starts with two shipped features in debt', game.run.project === 'monolith' && S.features(game) === 2 && game.run.debt >= 25 && game.stats.pierce > 0);
+      check('monolith tree is unvetted', G.packages(g2).every((p) => !G.isHardened(g2, p)));
+      UI.open('title'); UI.key('Digit3', {}); UI.key('Enter', {});
+      check('template starts with its package unshipped and tools', game.run.project === 'template' && S.features(game) === 0 && Object.keys(game.run.graph.nodes).length >= 20 && game.run.tools.rollback === 1 && game.run.ticksLeft === 16);
+      check('starter package is never offered', !game.run.offers.includes('create-app'));
+      UI.open('title'); UI.key('Digit4', {}); UI.key('Enter', {});
+      check('weekend has a short clock', game.run.ticksLeft === 9 && game.run.commits === 12);
+      UI.open('title'); UI.key('Digit1', {}); UI.key('Enter', {});
+      check('greenfield starts empty', game.run.project === 'greenfield' && G.packages(game.run.graph).length === 0);
     } catch (e) { out.push('FAIL exception: ' + (e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e)); }
     const pre = document.createElement('pre');
     pre.id = 'selftest';
@@ -300,7 +320,8 @@
 
   // ------------------------------------------------------------------ boot
   Render.init(canvas);
-  UI.init({ newRun: () => newRun(), meta });
+  UI.init({ newRun: (project) => newRun(null, project), meta });
+  UI.project = DH.content.PROJECTS[params.get('project')] ? params.get('project') : DH.content.PROJECTS[meta().last] ? meta().last : 'greenfield';
   fit();
   if (params.get('selftest')) selftest();
   else if (params.get('shot')) shot(params.get('shot'));

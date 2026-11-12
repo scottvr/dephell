@@ -77,6 +77,11 @@
     'soap-client': D('soap-client', 1, 'enterprise', '<Envelope><Body><Help/></Body></Envelope>', { deps: ['crypto-core@1'] }),
     'license-server': D('license-server', 2, 'enterprise', 'Phones home. Home has moved.', { flag: 'license' }),
 
+    // only reachable through the starter-template project
+    webpacked: D('webpacked', 2, 'script', 'Bundles 4,000 files into one you cannot read.', { deps: ['source-map', 'build-step', 'json-parse'] }),
+    'polyfill-all': D('polyfill-all', 1, 'tiny', 'Teaches new tricks to browsers that died in 2016.', { deps: ['is-even', 'string-format', 'lru-cache'] }),
+    'dev-server': D('dev-server', 1, 'net', 'Works on localhost. Only on localhost.', { deps: ['http-client', 'config-loader', 'jwt-lib'] }),
+
     'build-step': D('build-step', 1, 'script', 'Adds forty seconds to everything.'),
     tokenizer: D('tokenizer', 1, 'ai', 'Counts things. You are charged per thing.'),
     'gpu-driver': D('gpu-driver', 3, 'ai', "Works on the maintainer's machine.", { flag: 'abandoned' }),
@@ -197,6 +202,13 @@
       power: 'REDIRECT  fast dash that damages on contact', hard: 'faster, harder-hitting dash',
       fx: [{ stat: 'dashCd', op: 'mul', v: 0.6, hard: 0.45 }, { stat: 'dashDamage', op: 'add', v: 30, hard: 60 }],
     },
+    // starter: never offered by the registry; arrives with a project (see PROJECTS).
+    'create-app': {
+      name: 'create-whatever-app', eco: 'script', risk: 1, debt: 0, starter: true, deps: ['webpacked', 'polyfill-all', 'dev-server'],
+      tag: 'One command. Seventeen dependencies. None of them yours.',
+      power: 'FAST REFRESH  shots fly 50% faster, +12% move speed', hard: 'shots 90% faster, you 20% faster',
+      fx: [{ stat: 'shotSpeed', op: 'mul', v: 1.5, hard: 1.9 }, { stat: 'speed', op: 'mul', v: 1.12, hard: 1.2 }],
+    },
   };
 
   const FX_OPS = {
@@ -277,5 +289,33 @@
     friday: { name: 'THE FRIDAY DEPLOY', color: '#ffc24a', why: 'It is 4:58 PM.' },
   };
 
-  DH.content = { TUNE, BASE_STATS, DEPS, PACKAGES, FX_OPS, ENEMIES, ECO, TOOLS, INCIDENT_TEXT, BOSSES };
+  // ---------------------------------------------------------------- projects
+  // What you start a run from. Anything omitted falls back to TUNE / the greenfield defaults.
+  //   start: packages already installed; shipped = already integrated (a feature), tree still unvetted
+  //   ticks: length of the release clock; restock: rooms between registry refreshes
+  //   commits, debt, tools: starting resources (tools = charges of pin | container | rollback)
+  const PROJECTS = {
+    greenfield: {
+      name: 'GREENFIELD', tag: 'An empty repo and a deadline.',
+      brief: 'Start with nothing installed. The standard sprint.',
+      start: [], level: 'STANDARD',
+    },
+    monolith: {
+      name: 'THE INHERITED MONOLITH', tag: 'The last team left. Their code did not.',
+      brief: 'Two features are already shipped, on top of five rooms nobody ever checked. You start in debt.',
+      start: [{ pkg: 'enterprise-bus', shipped: true }, { pkg: 'legacy-auth', shipped: true }], debt: 10, level: 'STRONG START, ROTTEN BASE',
+    },
+    template: {
+      name: 'THE STARTER TEMPLATE', tag: 'One command. What could it install?',
+      brief: 'One package with seventeen dependencies. Everything you add later leans on them. Comes with a rollback plan and a container.',
+      start: [{ pkg: 'create-app' }], ticks: 16, commits: 8, tools: { rollback: 1, container: 1 }, level: 'HARD',
+    },
+    weekend: {
+      name: 'THE WEEKEND REWRITE', tag: '"We can redo it by Monday."',
+      brief: 'Nine rooms on the clock, not fourteen. The registry refreshes faster and you have commits to spend.',
+      start: [], ticks: 9, commits: 12, restock: 2, level: 'SHORT',
+    },
+  };
+
+  DH.content = { TUNE, BASE_STATS, DEPS, PACKAGES, FX_OPS, PROJECTS, ENEMIES, ECO, TOOLS, INCIDENT_TEXT, BOSSES };
 })();

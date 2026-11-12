@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Screenshot harness: renders ?shot= states with headless Chrome into shots/.
-//   node tools/shots.js [name ...]      (default: all)      CHROME_PATH overrides the browser
+//   node tools/shots.js [name ...] [--seed=HEX] [--project=ID]   (default: all)   CHROME_PATH overrides the browser
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -10,12 +10,13 @@ const chrome = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Conte
 const all = ['title', 'hub', 'registry', 'registry2', 'combat', 'combat2', 'incident', 'hub2', 'map', 'deploy', 'boss', 'postmortem', 'release', 'help'];
 const names = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const seedArg = process.argv.find((a) => a.startsWith('--seed='));
+const projArg = process.argv.find((a) => a.startsWith('--project='));
 const outDir = path.join(root, 'shots');
 fs.mkdirSync(outDir, { recursive: true });
 
 for (const name of names.length ? names : all) {
-  const out = path.join(outDir, name + '.png');
-  const url = 'file://' + path.join(root, 'index.html') + '?shot=' + name + (seedArg ? '&seed=' + seedArg.split('=')[1] : '');
+  const out = path.join(outDir, name + (projArg ? '-' + projArg.split('=')[1] : '') + '.png');
+  const url = 'file://' + path.join(root, 'index.html') + '?shot=' + name + (seedArg ? '&seed=' + seedArg.split('=')[1] : '') + (projArg ? '&project=' + projArg.split('=')[1] : '');
   const r = spawnSync(chrome, [
     '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio', '--no-first-run',
     '--window-size=1280,720', '--virtual-time-budget=2500', '--enable-logging=stderr', '--v=0',

@@ -2,7 +2,7 @@
 // same code runs in the browser and under node (tools/bot-run.js) for headless playtests.
 (function () {
   const DH = (window.DH = window.DH || {});
-  const { TUNE, BASE_STATS, PACKAGES, ENEMIES, ECO, TOOLS, INCIDENT_TEXT, BOSSES } = DH.content;
+  const { TUNE, BASE_STATS, PACKAGES, PROJECTS, ENEMIES, ECO, TOOLS, INCIDENT_TEXT, BOSSES } = DH.content;
   const Graph = DH.Graph;
   const S = {};
 
@@ -63,11 +63,15 @@
     };
   }
 
-  S.newGame = function (seed) {
+  S.newGame = function (seed, projectId) {
+    const project = PROJECTS[projectId] ? projectId : 'greenfield';
+    const pj = PROJECTS[project];
+    const ticks = pj.ticks || TUNE.ticksTotal, restock = pj.restock || TUNE.restockEvery;
     const run = {
-      seed: seed >>> 0, rng: DH.makeRng(seed), crng: DH.makeRng((seed ^ 0x9e3779b9) >>> 0), tick: 0, ticksLeft: TUNE.ticksTotal, time: 0,
-      stability: TUNE.stability, maxStability: TUNE.stability, commits: 3, debt: 0, obsBase: 1,
-      graph: Graph.make(), cur: 'app', offers: [], offerTaken: false, restockIn: TUNE.restockEvery,
+      project, ticksTotal: ticks, restockEvery: restock,
+      seed: seed >>> 0, rng: DH.makeRng(seed), crng: DH.makeRng((seed ^ 0x9e3779b9) >>> 0), tick: 0, ticksLeft: ticks, time: 0,
+      stability: TUNE.stability, maxStability: TUNE.stability, commits: pj.commits != null ? pj.commits : 3, debt: 0, obsBase: 1,
+      graph: Graph.make(), cur: 'app', offers: [], offerTaken: false, restockIn: restock,
       pager: { in: TUNE.pagerEvery, target: null }, tools: { pin: 0, container: 0, rollback: 0 },
       shims: {}, log: [], suppressed: {}, degraded: {}, hardened: {}, freeze: false, phase: 'run',
       boss: null, death: null, everInstalled: [],
@@ -79,8 +83,19 @@
       ebullets: [], pickups: [], puddles: [], fx: [], floaters: [], beams: [], rings: [], marks: [],
       events: [], shake: 0, hitstop: 0, freezeT: 0, intro: 0, t: 0, flowT: 0, flow: null, dirty: true, nextId: 1, prompt: null,
     };
+    log(game, 'start', project === 'greenfield' ? 'run started: ship v1.0' : `run started: ${pj.name.toLowerCase()}, ship v1.0`);
+    // What the project hands you: packages already in the graph, some already shipped, none of it vetted.
+    for (const st of pj.start || []) {
+      const def = PACKAGES[st.pkg];
+      const added = Graph.addPackage(run.graph, st.pkg, 0);
+      run.everInstalled.push(st.pkg);
+      if (st.shipped) { run.graph.nodes[st.pkg].state = 'vetted'; run.graph.nodes[st.pkg].visited = true; }
+      if (def.debt) addDebt(game, def.debt, def.name);
+      log(game, 'install', `inherited ${def.name}: ${added.length - 1} unvetted dependenc${added.length === 2 ? 'y' : 'ies'}` + (st.shipped ? ', already shipped' : ''), { pkg: st.pkg, added, inherited: true });
+    }
+    if (pj.debt) addDebt(game, pj.debt, 'the previous team');
+    Object.assign(run.tools, pj.tools || {});
     rollOffers(game);
-    log(game, 'start', 'run started: ship v1.0');
     enterNode(game, 'app', null);
     return game;
   };
@@ -89,8 +104,9 @@
     const run = game.run;
     const have = new Set(Graph.packages(run.graph));
     const prev = new Set(run.offers);
-    let pool = Object.keys(PACKAGES).filter((p) => !have.has(p) && !prev.has(p));
-    if (pool.length < 3) pool = Object.keys(PACKAGES).filter((p) => !have.has(p));
+    const all = Object.keys(PACKAGES).filter((p) => !PACKAGES[p].starter);
+    let pool = all.filter((p) => !have.has(p) && !prev.has(p));
+    if (pool.length < 3) pool = all.filter((p) => !have.has(p));
     run.offers = run.rng.shuffle(pool).slice(0, 3);
     run.offerTaken = false;
   }
@@ -189,7 +205,7 @@
     if (pins) addDebt(game, pins * TUNE.pinDebtPerTick, 'pinned versions');
     if (--run.restockIn <= 0 && run.ticksLeft > 0) {
       rollOffers(game);
-      run.restockIn = TUNE.restockEvery;
+      run.restockIn = run.restockEvery;
       log(game, 'restock', 'registry: new packages available');
       emit(game, 'restock');
     }
@@ -209,7 +225,7 @@
     const run = game.run, g = run.graph;
     if (!run.offerTaken || run.freeze || Object.keys(g.nodes).some((id) => g.nodes[id].state !== 'vetted')) return;
     rollOffers(game);
-    run.restockIn = TUNE.restockEvery;
+    run.restockIn = run.restockEvery;
     log(game, 'restock', 'registry: everything is vetted, so the backlog refilled early');
     emit(game, 'restock');
   }
@@ -573,7 +589,7 @@
   function planWaves(game, node, rng, incident) {
     const run = game.run;
     const lvl = S.debtLevel(run);
-    let budget = 4 + node.depth * 1.5 + run.tick * 0.7 + lvl + (node.kind === 'pkg' ? 2 : 0) + (incident ? 2 : 0);
+    let budget = 4 + Math.min(node.depth, 3) * 1.5 + Math.min(run.tick, 14) * 0.7 + lvl + (node.kind === 'pkg' ? 2 : 0) + (incident ? 2 : 0);
     const table = ECO[node.eco] || ECO.core;
     const types = Object.keys(table);
     const list = [];
@@ -1372,7 +1388,7 @@
         break;
       case 'monolith': {
         const alive = game.enemies.filter((o) => o !== e && !o.dead).length;
-        if (alive < 5) {
+        if (alive < 3) { // one linked pair at a time: two beams plus the boss left no safe ground
           const pos = spawnPoint(game, run.rng, 66);
           for (const k of [0, 1]) {
             game.room.queue.push({ t: 0.7, spec: { type: 'cycle', elite: false }, x: clamp(pos.x + k * 22, 26, W - 26), y: pos.y });

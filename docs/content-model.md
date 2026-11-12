@@ -41,13 +41,14 @@ of the graph when the offer appears. Volume in either layer multiplies the other
 
 | Kind | Count | Lives in |
 | --- | --- | --- |
-| Packages | 18 | `PACKAGES` |
-| Dependencies | 40 | `DEPS` |
+| Packages | 18, plus 1 starter | `PACKAGES` |
+| Dependencies | 43 | `DEPS` |
 | Ecologies (enemy mixes) | 11 | `ECO` |
 | Enemy types | 11, plus the boss | `ENEMIES` |
 | Tools | 8 | `TOOLS` |
 | Incident flags | 5 | `INCIDENT_TEXT` |
 | Boss variants | 6 | `BOSSES` |
+| Projects (starting graphs) | 4 | `PROJECTS` |
 
 All in `js/content.js`.
 
@@ -275,6 +276,7 @@ dependencies, more dependencies, more packages on existing primitives, more prim
 | Enemy types | 11 | 20 | 30 |
 | Tags | 0 | 5 | 10 |
 | Boss variants | 6 | 8 | 12 |
+| Projects | 4 | 8 | 12 |
 
 No more than three packages may share a headline primitive until the pool passes 60, so a run's
 three offers rarely feel like the same choice.

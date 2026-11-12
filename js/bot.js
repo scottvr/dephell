@@ -114,7 +114,7 @@
   // Run a whole game headlessly. Returns a summary.
   Bot.play = function (seed, policy, maxSeconds) {
     const S = DH.Sim;
-    const game = S.newGame(seed);
+    const game = S.newGame(seed, policy && policy.project);
     const dt = 1 / 60;
     const limit = (maxSeconds || 1800) / dt;
     let steps = 0, idle = 0;

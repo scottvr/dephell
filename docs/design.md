@@ -14,6 +14,22 @@ escape it.* This design makes that literal.
    tree is vetted is **hardened**: a stronger version of its power.
 5. **Deploy.** With three features shipped you may walk into the deploy door. At T-0 you must.
 
+## Projects
+
+A run starts from a project, chosen on the title screen. A project is a starting graph plus a
+few numbers (`PROJECTS` in `js/content.js`); every rule after that is the same.
+
+| Project | What you start with | What it asks of you |
+| --- | --- | --- |
+| Greenfield | Nothing. 14 rooms on the clock. | The standard sprint. |
+| The Inherited Monolith | Two packages already shipped, sharing a risk-3 node with a CVE; five unvetted rooms; 35 debt. | You have power on day one and one feature to go. Decide how much of someone else's tree to clean up before prod audits it. |
+| The Starter Template | One unshipped package with a seventeen-node tree built from the dependencies other packages use; 16 rooms; a rollback plan and a container. | You cannot vet it all. New packages add few rooms because their tree is already there, and already fragile. Choose which hubs to protect. |
+| The Weekend Rewrite | Nothing, 9 rooms, 12 commits, registry restocks every 2 rooms. | Ship fast and buy your way out. |
+
+Inherited packages are logged as installs at T-0, so the reports can say that a node "came with
+the project and was never vetted". Starter packages (`starter: true`) never appear in the
+registry. Records are kept per project.
+
 ## Pressure
 
 - **The release train.** Every cleared room is one tick. There are 14. The registry restocks

@@ -3,7 +3,7 @@
 (function () {
   const DH = (window.DH = window.DH || {});
   const S = DH.Sim, G = DH.Graph, Rn = DH.Render;
-  const { TUNE, PACKAGES, TOOLS } = DH.content;
+  const { TUNE, PACKAGES, PROJECTS, TOOLS } = DH.content;
   const UI = { mode: null, reportAt: 0 };
   const TOOL_KEYS = ['Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus']; // never letters: WASD/E are in the player's hands
   const $ = (id) => document.getElementById(id);
@@ -19,7 +19,16 @@
     hooks = h;
     $('minimap').addEventListener('click', () => { if (!UI.mode && game) UI.open('map'); });
     $('overlay').addEventListener('click', onOverlayClick);
-    $('full').addEventListener('click', () => { if (UI.mode === 'title' || (UI.mode === 'report' && performance.now() - UI.reportAt > 700)) hooks.newRun(); });
+    $('full').addEventListener('click', (e) => {
+      if (UI.mode === 'title') {
+        // a project card selects on first click and starts on the second; anywhere else starts the selected one
+        const card = e.target.closest('[data-proj]');
+        if (card && card.dataset.proj !== UI.project) { pickProject(card.dataset.proj); return; }
+        hooks.newRun(UI.project);
+      } else if (UI.mode === 'report' && performance.now() - UI.reportAt > 700) {
+        if (e.target.closest('[data-act="projects"]')) UI.open('title'); else hooks.newRun(UI.project);
+      }
+    });
   };
   UI.setGame = function (g) { game = g; cache = {}; seenCombat = false; mapSel = 'app'; $('log').innerHTML = ''; bannerQ = []; $('banner').className = ''; };
 
@@ -96,7 +105,7 @@
     setText('obs', '●'.repeat(st.obs) + '○'.repeat(Math.max(0, 4 - st.obs)));
 
     // sidebar: release train
-    const used = TUNE.ticksTotal - run.ticksLeft;
+    const used = run.ticksTotal - run.ticksLeft;
     const feats = S.features(game);
     setHTML('train', `<h2>RELEASE TRAIN <b>${run.freeze ? 'CHANGE FREEZE' : 'T-' + run.ticksLeft + ' rooms'}</b></h2>` +
       `<div class="pips"><i>${'■'.repeat(used)}</i>${'■'.repeat(run.ticksLeft)}</div>` +
@@ -375,12 +384,19 @@
   }
 
   // ---- title + report
+  function pickProject(id) { UI.project = id; DH.Audio.sfx('ui'); $('full').innerHTML = titleHTML(); }
   function titleHTML() {
     const m = hooks.meta();
     return `<h1 id="title-logo">DEPENDENCY<br><span>HELL</span></h1>
       <div class="tagline">An action roguelite about surviving the software you installed.</div>
       <div class="pitch">Every package is a power. Every package is also a dungeon: its dependency tree becomes rooms you must clear before the pager finds them. Ship three features before the release train leaves. Production will audit whatever you built.</div>
-      <div class="start">▶ PRESS ENTER TO START THE SPRINT</div>
+      <div class="projects">${Object.keys(PROJECTS).map((id, i) => {
+        const pj = PROJECTS[id], rec = (m.proj || {})[id];
+        return `<div class="proj${id === UI.project ? ' sel' : ''}" data-proj="${id}"><div class="lv"><kbd>${i + 1}</kbd> ${esc(pj.level)}</div><h3>${esc(pj.name)}</h3>
+          <div class="tg">${esc(pj.tag)}</div><p>${esc(pj.brief)}</p>
+          <div class="rec">${rec && rec.runs ? `shipped ${rec.wins}/${rec.runs}${rec.best ? ' · best ' + rec.best : ''}` : 'not attempted'}</div></div>`;
+      }).join('')}</div>
+      <div class="start">▶ ENTER — START: ${esc(PROJECTS[UI.project].name)} <span>◀ ▶ choose a project</span></div>
       <div class="controls"><span><b>WASD</b> move</span><span><b>Mouse / Arrows</b> aim + fire</span><span><b>Space</b> dash</span><span><b>E</b> use</span>
       <span><b>Tab</b> map</span><span><b>Q</b> feature flag</span><span><b>H</b> help, in game</span><span><b>N</b> sound</span></div>
       <div class="meta">${m.runs ? `runs ${m.runs} · shipped ${m.wins} · best grade ${m.best || '—'}<br>` : ''}it is funny because it is true</div>`;
@@ -396,7 +412,7 @@
       <div class="stats">${r.stats.map(([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`).join('')}</div>
       <h4>TIMELINE</h4><div class="tl">${r.timeline.map((e) => `<div class="${e.bad ? 'bad' : e.good ? 'good' : ''}"><i>${e.t}</i> ${esc(e.text)}</div>`).join('')}</div></div>`;
     return `<div class="report${r.won ? ' won' : ''}">${left}${right}<div class="grade" style="color:${r.won ? '#5bff8a' : '#ff4d5e'}">${r.grade}</div>
-      <div class="again">▶ ENTER — NEXT SPRINT</div><div class="seed">run #${m.runs} · seed ${r.seed} · ${esc(r.identity)}</div></div>`;
+      <div class="again">▶ ENTER — NEXT SPRINT <span data-act="projects">ESC — change project</span></div><div class="seed">${esc(PROJECTS[game.run.project].name.toLowerCase())} · run #${m.runs} · seed ${r.seed} · ${esc(r.identity)}</div></div>`;
   }
   function drawReportGraph() {
     const cv = $('report-graph');
@@ -440,7 +456,16 @@
     if (!UI.mode) return false;
     if (UI.mode === 'title' || UI.mode === 'report') {
       // the report only takes Enter, and not instantly: a dash-masher should still get to read it
-      if (UI.mode === 'title' ? code === 'Enter' || code === 'Space' : code === 'Enter' && performance.now() - UI.reportAt > 700) hooks.newRun();
+      if (UI.mode === 'title') {
+        const ids = Object.keys(PROJECTS), i = ids.indexOf(UI.project);
+        if (code === 'Enter' || code === 'Space') hooks.newRun(UI.project);
+        else if (code === 'ArrowRight' || code === 'KeyD') pickProject(ids[(i + 1) % ids.length]);
+        else if (code === 'ArrowLeft' || code === 'KeyA') pickProject(ids[(i + ids.length - 1) % ids.length]);
+        else if (/^Digit[1-9]$/.test(code) && ids[+code.slice(5) - 1]) pickProject(ids[+code.slice(5) - 1]);
+      } else if (performance.now() - UI.reportAt > 700) {
+        if (code === 'Enter') hooks.newRun(UI.project);
+        else if (code === 'Escape') UI.open('title');
+      }
       return true;
     }
     if (code === 'Escape') { UI.close(); return true; }

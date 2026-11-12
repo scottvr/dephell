@@ -23,7 +23,7 @@ Open `index.html` in a browser. No build, no install, no server.
 | Feature flag / rollback (if owned) | `Q` / `R` |
 | Help / sound | `H` / `N` |
 
-URL options: `?seed=HEX` replays a seed, `?bot=1` lets the autoplayer play while you watch.
+URL options: `?seed=HEX` replays a seed, `?project=greenfield|monolith|template|weekend` preselects a starting project, `?bot=1` lets the autoplayer play while you watch.
 
 ## Layout
 

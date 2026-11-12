@@ -5,7 +5,7 @@
 const path = require('path');
 globalThis.window = globalThis;
 for (const f of ['rng', 'content', 'graph']) require(path.join(__dirname, '..', 'js', f + '.js'));
-const { BASE_STATS, DEPS, PACKAGES, ENEMIES, ECO, FX_OPS, INCIDENT_TEXT } = globalThis.DH.content;
+const { BASE_STATS, DEPS, PACKAGES, PROJECTS, ENEMIES, ECO, FX_OPS, INCIDENT_TEXT } = globalThis.DH.content;
 
 // Text has to fit its UI slot: registry card, sidebar line, room subtitle.
 const LIMITS = { pkgName: 24, depName: 18, tag: 64, power: 52, hard: 40, blurb: 60, powerTitle: 16 };
@@ -81,7 +81,7 @@ for (const [id, p] of Object.entries(PACKAGES)) {
   const tree = closure(p.deps);
   p._tree = tree;
   for (const d of tree) used.add(d);
-  if (tree.size > TREE_MAX) err(id, `tree adds ${tree.size} nodes (max ${TREE_MAX})`);
+  if (tree.size > TREE_MAX && !p.starter) err(id, `tree adds ${tree.size} nodes (max ${TREE_MAX})`);
 
   if (!Array.isArray(p.fx) || !p.fx.length) { err(id, 'missing fx'); continue; }
   for (const e of p.fx) {
@@ -98,6 +98,19 @@ for (const [id, p] of Object.entries(PACKAGES)) {
   names.push([id, p.name.replace(/@.*/, '')]);
 }
 for (const id in DEPS) if (!used.has(id) && id !== 'runtime' && id !== 'stdlib') warn(id, 'dependency is not in any package tree');
+
+// ---------------------------------------------------------------- projects
+for (const [id, pj] of Object.entries(PROJECTS)) {
+  tooLong('project ' + id, 'name', pj.name, 24);
+  tooLong('project ' + id, 'tag', pj.tag, 44);
+  tooLong('project ' + id, 'brief', pj.brief, 130);
+  tooLong('project ' + id, 'level', pj.level, 28);
+  for (const st of pj.start || []) if (!PACKAGES[st.pkg]) err('project ' + id, `starts with unknown package '${st.pkg}'`);
+  if (pj.ticks != null && !(pj.ticks >= 6 && pj.ticks <= 20)) err('project ' + id, `ticks ${pj.ticks} outside 6..20`);
+}
+for (const [id, p] of Object.entries(PACKAGES)) {
+  if (p.starter && !Object.values(PROJECTS).some((pj) => (pj.start || []).some((st) => st.pkg === id))) err(id, 'starter package is not used by any project');
+}
 
 // ---------------------------------------------------------------- similarity
 const ids = Object.keys(PACKAGES).filter((id) => Array.isArray(PACKAGES[id].fx) && PACKAGES[id].fx.length);
@@ -120,7 +133,7 @@ for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
   const a = PACKAGES[ids[i]], b = PACKAGES[ids[j]], pair = `${ids[j]} vs ${ids[i]}`;
   if (a.fx[0].stat === b.fx[0].stat && a.eco === b.eco) err(pair, `same headline '${a.fx[0].stat}' and same ecology '${a.eco}'`);
   if (shape(a) === shape(b)) err(pair, `identical fx shape (${shape(a)})`);
-  if (a._tree.size && b._tree.size) {
+  if (a._tree.size && b._tree.size && !a.starter && !b.starter) {
     const sub = (x, y) => [...x].every((d) => y.has(d));
     if (sub(a._tree, b._tree) || sub(b._tree, a._tree)) err(pair, 'one tree is contained in the other');
   }
