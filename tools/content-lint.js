@@ -78,6 +78,8 @@ for (const [id, p] of Object.entries(PACKAGES)) {
   if (!(p.debt >= 0 && p.debt <= DEBT_MAX)) err(id, `debt ${p.debt} outside 0..${DEBT_MAX}`);
   if (DEPS[id]) err(id, 'id is also a dependency id');
   for (const d of p.deps) if (!DEPS[d]) err(id, `depends on unknown '${d}'`);
+  for (const d of p.grows || []) if (!DEPS[d]) err(id, `grows into unknown '${d}'`);
+  for (const d of closure(p.grows || [])) used.add(d);
   const tree = closure(p.deps);
   p._tree = tree;
   for (const d of tree) used.add(d);
@@ -93,8 +95,9 @@ for (const [id, p] of Object.entries(PACKAGES)) {
   if (p.fx.every((e) => HIT_WEIGHT.has(e.stat))) warn(id, 'power is hit-weight only (damage/crit): weak on the "felt" test');
   else if (HIT_WEIGHT.has(p.fx[0].stat)) warn(id, `headline primitive '${p.fx[0].stat}' is hit-weight; lead with the visible effect`);
   if (!p.fx.some((e) => e.hard !== undefined)) err(id, 'nothing changes when hardened');
-  // Cost must live in the graph: a package with no tree needs risk or debt of its own.
-  if (!tree.size && p.risk < 2 && p.debt < 10) warn(id, 'no tree, low risk, low debt: a power with no cost');
+  // Cost must live in the graph. A package with no tree is vetted the moment it ships, so its own
+  // risk costs nothing unless the node stays pageable (unpublish); it needs debt, or to grow a tree.
+  if (!tree.size && !(p.grows || []).length && p.flag !== 'unpublish' && p.debt < 10) warn(id, 'no tree: vetted the moment it ships, so its risk costs nothing; needs debt, a tree, or to grow one');
   names.push([id, p.name.replace(/@.*/, '')]);
 }
 for (const id in DEPS) if (!used.has(id) && id !== 'runtime' && id !== 'stdlib') warn(id, 'dependency is not in any package tree');

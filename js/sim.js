@@ -201,6 +201,23 @@
     run.pager.in = run.debt >= 50 ? TUNE.pagerEveryInDebt : TUNE.pagerEvery;
   }
 
+  // Packages with `grows` (do-not-delete.sh) pick up one new dependency per restock, unvetted, so a
+  // hardened script stops being hardened until you go and read what it calls now.
+  function grow(game) {
+    const run = game.run, g = run.graph;
+    for (const pk of Graph.packages(g)) {
+      const pool = (PACKAGES[pk].grows || []).filter((d) => !g.nodes[pk].deps.includes(d));
+      if (!pool.length) continue;
+      const dep = pool[run.rng.int(pool.length)];
+      const added = Graph.addDep(g, pk, dep, run.tick);
+      const n = g.nodes[dep];
+      log(game, 'grew', `${g.nodes[pk].name} now also calls ${n.name}` + (added.length ? '' : ' (already in the graph: now shared)'), { pkg: pk, node: dep, added });
+      banner(game, g.nodes[pk].name.toUpperCase() + ' GREW', `it now also calls ${n.name}. Nobody knows why.`, 'warn');
+      refresh(game);
+    }
+  }
+  S.grow = grow; // for the self-test
+
   function advanceTick(game) {
     const run = game.run;
     run.tick++;
@@ -213,6 +230,7 @@
       run.restockIn = run.restockEvery;
       log(game, 'restock', 'registry: new packages available');
       emit(game, 'restock');
+      grow(game);
     }
     run.pager.in--;
     if (run.pager.in <= 0) fireIncident(game);

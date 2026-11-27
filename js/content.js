@@ -83,6 +83,7 @@
     'dev-server': D('dev-server', 1, 'net', 'Works on localhost. Only on localhost.', { deps: ['http-client', 'config-loader', 'jwt-lib'] }),
 
     'build-step': D('build-step', 1, 'script', 'Adds forty seconds to everything.'),
+    'so-answer': D('so-answer-2009', 2, 'script', 'Accepted answer, 2009. Nobody read the comments.'),
     tokenizer: D('tokenizer', 1, 'ai', 'Counts things. You are charged per thing.'),
     'gpu-driver': D('gpu-driver', 3, 'ai', "Works on the maintainer's machine.", { flag: 'abandoned' }),
     'telemetry-sdk': D('telemetry-sdk', 2, 'ai', "Collects 'anonymous' usage data.", { flag: 'license' }),
@@ -185,13 +186,15 @@
       fx: [{ stat: 'homing', op: 'max', v: 3.6, hard: 5.5 }, { stat: 'hallucinate', op: 'set', v: 0.125, hard: 0 }],
     },
     'rubber-duck': {
-      name: 'rubber-duck@1.0', eco: 'script', risk: 0, debt: 0, deps: [],
+      name: 'rubber-duck@1.0', eco: 'script', risk: 0, debt: 0, deps: ['so-answer'],
       tag: 'Explain the problem to the duck. The duck knows.',
       power: 'EXPLAIN IT  stand still: next volley x3', hard: 'next volley x4.5',
       fx: [{ stat: 'duck', op: 'set', v: 3, hard: 4.5 }],
     },
     'do-not-delete': {
-      name: 'do-not-delete.sh', eco: 'script', risk: 2, flag: 'abandoned', debt: 20, deps: [],
+      name: 'do-not-delete.sh', eco: 'script', risk: 2, flag: 'abandoned', debt: 5, deps: [],
+      // a cron job nobody understands: each registry restock it starts calling one more of these
+      grows: ['ldap-bridge', 'db-driver', 'xml-parser', 'license-server', 'crypto-core@1', 'yaml-parser@2'],
       tag: 'A cron job from 2011. Author unknown. Purpose unknown.',
       power: 'CRON  a ring of bolts every 5 seconds', hard: 'every 3 seconds',
       fx: [{ stat: 'cron', op: 'set', v: 5, hard: 3 }],

@@ -128,7 +128,10 @@ primitives, never on package names, so they keep working as the package pool gro
 | `lib` | Two nodes with the same `lib` are two majors of one library | Version conflict: one side fails to load each fight |
 | `deps` | Further nodes it drags in | More rooms |
 
-Package fields on this layer: `risk`, `flag`, `debt` (debt added on install), `deps`, `eco`.
+Package fields on this layer: `risk`, `flag`, `debt` (debt added on install), `deps`, `eco`, and
+`grows`: dependency ids the package starts calling, one per registry restock, unvetted (shared if
+already in the graph). Only do-not-delete.sh has it. A package with no tree is vetted the moment it
+ships, so its own `risk` is not a cost unless it stays pageable (`unpublish`).
 
 ### The principles a player can learn (today)
 

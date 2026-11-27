@@ -60,6 +60,14 @@
     return added;
   };
 
+  // A package picks up a new dependency mid-run (do-not-delete.sh's cron job). Shared if already present.
+  G.addDep = function (g, parentId, depId, tick) {
+    const added = [];
+    ensureDep(g, depId, parentId, tick, added);
+    G.layout(g);
+    return added;
+  };
+
   // Remove a package and garbage-collect every node only it was holding up.
   G.removePackage = function (g, pkgId) {
     const app = g.nodes.app;

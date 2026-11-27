@@ -43,6 +43,10 @@ registry. Records are kept per project.
   its code looks like, so vetting does not take it off the pager's list. A pin ("vendor a copy")
   does, at the usual pin debt per room. A one-room package would otherwise be hardened, and safe,
   the moment it ships.
+- **Growing packages** (`grows`, i.e. do-not-delete.sh). A cron job nobody understands: at each
+  registry restock it starts calling one more legacy dependency, unvetted, so it un-hardens until
+  you go and read it again. The other tree-less package, rubber-duck, simply has a tree now: the
+  duck's wisdom is a 2009 Stack Overflow answer.
 - **Version conflicts.** Two packages that pull different majors of one library conflict. In
   each fight one side fails to load. Vetting both versions resolves it; a shim hides it.
 - **Technical debt.** From shortcuts: shims, hotfixes, pins, flags, some packages. Every 25

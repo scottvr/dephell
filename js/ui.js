@@ -252,7 +252,7 @@
           <div class="pw"><b>${esc(pname)}</b> ${esc(pdesc || '')}</div><div class="hd">★ hardened: ${esc(def.hard)}</div>
           <pre>${treeHTML(pv, obs)}</pre>
           <div class="cost">+${pv.rooms} room${pv.rooms > 1 ? 's' : ''} to the dungeon${def.debt ? ` · <span style="color:#ffc24a">+${def.debt} debt</span>` : ''}${def.risk >= 2 && obs >= 1 ? ` · <span style="color:#ffc24a">risky itself${def.flag ? ' (' + flagText[def.flag] + ')' : ''}</span>` : ''}</div>
-          ${warn}${couple}${def.flag === 'unpublish' ? '<div class="warn">⚠ UNPUBLISHABLE: its author can pull it any time. Vetting will not stop the pager taking it down; a pin will.</div>' : ''}<div class="go">ENTER — npm install</div></div>`;
+          ${warn}${couple}${def.flag === 'unpublish' ? '<div class="warn">⚠ UNPUBLISHABLE: its author can pull it any time. Vetting will not stop the pager taking it down; a pin will.</div>' : ''}${def.grows ? '<div class="warn">⚠ GROWS: every registry restock it starts calling one more legacy dependency, unvetted.</div>' : ''}<div class="go">ENTER — npm install</div></div>`;
       }).join('') + '</div>';
     }
     const conflict = G.activeConflicts(g, run.shims).length;

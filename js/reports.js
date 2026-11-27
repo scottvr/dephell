@@ -35,9 +35,9 @@
   }
 
   function timeline(f, max) {
-    const keep = ['install', 'incident', 'conflict', 'hotfix', 'shim', 'pin', 'hardened', 'averted', 'freeze', 'deploy', 'strike', 'held', 'rollback', 'uninstall', 'resolved', 'death', 'win'];
+    const keep = ['install', 'incident', 'conflict', 'hotfix', 'shim', 'pin', 'hardened', 'averted', 'freeze', 'deploy', 'strike', 'held', 'rollback', 'uninstall', 'resolved', 'grew', 'death', 'win'];
     let ev = f.log.filter((e) => keep.includes(e.kind));
-    const bad = ['incident', 'conflict', 'strike', 'death', 'hotfix'];
+    const bad = ['incident', 'conflict', 'strike', 'death', 'hotfix', 'grew'];
     if (ev.length > max) {
       // keep the first install, every bad thing, and the ending
       const must = ev.filter((e, i) => bad.includes(e.kind) || i === 0 || i >= ev.length - 2 || e.kind === 'deploy');
