@@ -165,3 +165,4 @@ b { font-weight: 700; }
 #crt { position: absolute; inset: 0; pointer-events: none; background:
   repeating-linear-gradient(0deg, rgba(0, 0, 0, .2) 0 1px, transparent 1px 3px),
   radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, .5) 100%); }
+.swap { cursor: pointer; } .controls .swap { grid-column: 1 / -1; } .swap:hover, .swap:hover b { color: var(--cyan); }

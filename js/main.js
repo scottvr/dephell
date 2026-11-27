@@ -77,15 +77,12 @@
   // ------------------------------------------------------------------ input
   function readInput(consume) {
     const inp = { mx: 0, my: 0, fire: false, dash: false, ability: false, interact: false, rollback: false };
-    if (keys.has('KeyA')) inp.mx -= 1;
-    if (keys.has('KeyD')) inp.mx += 1;
-    if (keys.has('KeyW')) inp.my -= 1;
-    if (keys.has('KeyS')) inp.my += 1;
-    let ax = 0, ay = 0;
-    if (keys.has('ArrowLeft')) ax -= 1;
-    if (keys.has('ArrowRight')) ax += 1;
-    if (keys.has('ArrowUp')) ay -= 1;
-    if (keys.has('ArrowDown')) ay += 1;
+    // left, right, up, down; UI.swap (K on the title or help screen) moves with the arrows and aims with WASD
+    const wasd = ['KeyA', 'KeyD', 'KeyW', 'KeyS'], arrows = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+    const mv = (UI.swap ? arrows : wasd).map((k) => keys.has(k)), am = (UI.swap ? wasd : arrows).map((k) => keys.has(k));
+    inp.mx = mv[1] - mv[0];
+    inp.my = mv[3] - mv[2];
+    const ax = am[1] - am[0], ay = am[3] - am[2];
     if (ax || ay) { inp.aimDir = Math.atan2(ay, ax); inp.fire = true; }
     else if (mouse.used) { inp.aimX = mouse.x; inp.aimY = mouse.y; inp.fire = mouse.down; }
     inp.dash = pressed.has('Space') || pressed.has('ShiftLeft') || pressed.has('ShiftRight');
@@ -310,6 +307,16 @@
       const mig = meta().proj.greenfield;
       check('pre-project records carry over to greenfield', mig && mig.runs === 33 && mig.wins === 3 && mig.best === 'S');
       store.set(saved);
+      const swap0 = UI.swap;
+      keys.clear(); keys.add('KeyA'); keys.add('ArrowUp');
+      let inp = readInput(false);
+      check('default: WASD moves, arrows aim', inp.mx === -1 && inp.my === 0 && inp.fire && Math.abs(inp.aimDir + Math.PI / 2) < 1e-9);
+      UI.key('KeyK', {});
+      inp = readInput(false);
+      check('K on the title swaps: arrows move, WASD aims', UI.swap === !swap0 && !!meta().swap === UI.swap && inp.mx === 0 && inp.my === -1 && inp.fire && Math.abs(Math.abs(inp.aimDir) - Math.PI) < 1e-9 && document.querySelector('.controls').textContent.includes('Arrows move'));
+      UI.key('KeyK', {});
+      check('K again restores the default', UI.swap === swap0);
+      keys.clear();
       UI.key('Digit2', {}); UI.key('Enter', {});
       const G = DH.Graph, g2 = game.run.graph;
       check('monolith starts with two shipped features in debt', game.run.project === 'monolith' && S.features(game) === 2 && game.run.debt >= 25 && game.stats.pierce > 0);
@@ -330,7 +337,8 @@
 
   // ------------------------------------------------------------------ boot
   Render.init(canvas);
-  UI.init({ newRun: (project) => newRun(null, project), meta });
+  UI.init({ newRun: (project) => newRun(null, project), meta, setSwap: (v) => { const m = meta(); m.swap = v; store.set(m); } });
+  UI.swap = !!meta().swap;
   UI.project = DH.content.PROJECTS[params.get('project')] ? params.get('project') : DH.content.PROJECTS[meta().last] ? meta().last : 'greenfield';
   fit();
   if (params.get('selftest')) selftest();

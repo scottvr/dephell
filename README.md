@@ -15,8 +15,8 @@ Open `index.html` in a browser. No build, no install, no server.
 
 | | |
 |---|---|
-| Move | `WASD` |
-| Aim + fire | mouse (hold), or arrow keys |
+| Move | `WASD` (or arrows: press `K` on the title or help screen to swap) |
+| Aim + fire | mouse (hold), or arrow keys (WASD when swapped) |
 | Dash (brief invulnerability) | `Space` |
 | Use the registry terminal | `E` |
 | Map + fast travel | `Tab` |

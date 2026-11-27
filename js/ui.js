@@ -21,6 +21,7 @@
     $('overlay').addEventListener('click', onOverlayClick);
     $('full').addEventListener('click', (e) => {
       if (UI.mode === 'title') {
+        if (e.target.closest('[data-act="swap"]')) { UI.toggleSwap(); return; }
         // a project card selects on first click and starts on the second; anywhere else starts the selected one
         const card = e.target.closest('[data-proj]');
         if (card && card.dataset.proj !== UI.project) { pickProject(card.dataset.proj); return; }
@@ -29,6 +30,15 @@
         if (e.target.closest('[data-act="projects"]')) UI.open('title'); else hooks.newRun(UI.project);
       }
     });
+  };
+  // which cluster moves and which aims; main.js reads UI.swap in readInput
+  const moveKeys = () => (UI.swap ? 'Arrows' : 'WASD'), aimKeys = () => (UI.swap ? 'WASD' : 'Arrows');
+  UI.toggleSwap = function () {
+    UI.swap = !UI.swap;
+    hooks.setSwap(UI.swap);
+    if (UI.mode === 'title') $('full').innerHTML = titleHTML();
+    else if (UI.mode === 'help') renderHelp();
+    DH.Audio.sfx('ui');
   };
   UI.setGame = function (g) { game = g; cache = {}; seenCombat = false; mapSel = 'app'; $('log').innerHTML = ''; bannerQ = []; $('banner').className = ''; };
 
@@ -43,7 +53,7 @@
     const pk = G.packages(g);
     const downs = Object.keys(g.nodes).filter((id) => g.nodes[id].state === 'down');
     if (room.combat && !room.cleared) {
-      if (!seenCombat) return '<kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim + hold to fire (or <kbd>Arrows</kbd>) · <kbd>Space</kbd> dash through danger';
+      if (!seenCombat) return `<kbd>${moveKeys()}</kbd> move · <kbd>Mouse</kbd> aim + hold to fire (or <kbd>${aimKeys()}</kbd>) · <kbd>Space</kbd> dash through danger`;
       if (room.incident) return 'INCIDENT ROOM: clear it to bring the node back up.';
       return '';
     }
@@ -377,7 +387,8 @@
       <h4>NUMBERS</h4>
       <p><b>Stability</b> is health. <b>Commits</b> buy tools at the registry. <b>Tech debt</b> makes rooms nastier and the pager faster. <b>Observability</b> shows risks, enemy health, and pager forecasts.</p>
       <h4>CONTROLS</h4>
-      <p><kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim, hold to fire · <kbd>Arrows</kbd> fire without a mouse</p>
+      <p><kbd>${moveKeys()}</kbd> move · <kbd>Mouse</kbd> aim, hold to fire · <kbd>${aimKeys()}</kbd> fire without a mouse</p>
+      <p><kbd>K</kbd> <span class="swap" data-act="swap">swap: move with ${aimKeys()}, aim with ${moveKeys()}</span></p>
       <p><kbd>Space</kbd> dash (brief invulnerability) · <kbd>E</kbd> use terminal</p>
       <p><kbd>Tab</kbd> map + fast travel · <kbd>Q</kbd> feature flag · <kbd>R</kbd> rollback</p>
       <p><kbd>H</kbd> this screen · <kbd>N</kbd> sound · <kbd>Esc</kbd> pause</p></div></div></div>`;
@@ -397,8 +408,9 @@
           <div class="rec">${rec && rec.runs ? `shipped ${rec.wins}/${rec.runs}${rec.best ? ' · best ' + rec.best : ''}` : 'not attempted'}</div></div>`;
       }).join('')}</div>
       <div class="start">▶ ENTER — START: ${esc(PROJECTS[UI.project].name)} <span>◀ ▶ choose a project</span></div>
-      <div class="controls"><span><b>WASD</b> move</span><span><b>Mouse / Arrows</b> aim + fire</span><span><b>Space</b> dash</span><span><b>E</b> use</span>
-      <span><b>Tab</b> map</span><span><b>Q</b> feature flag</span><span><b>H</b> help, in game</span><span><b>N</b> sound</span></div>
+      <div class="controls"><span><b>${moveKeys()}</b> move</span><span><b>Mouse / ${aimKeys()}</b> aim + fire</span><span><b>Space</b> dash</span><span><b>E</b> use</span>
+      <span><b>Tab</b> map</span><span><b>Q</b> feature flag</span><span><b>H</b> help, in game</span><span><b>N</b> sound</span>
+      <span class="swap" data-act="swap"><b>K</b> swap: move with ${aimKeys()}, aim with ${moveKeys()}</span></div>
       <div class="meta">${m.runs ? `runs ${m.runs} · shipped ${m.wins} · best grade ${m.best || '—'}<br>` : ''}it is funny because it is true</div>`;
   }
 
@@ -445,6 +457,7 @@
     else if (el.dataset.act) {
       if (UI.mode === 'map') mapAct(el.dataset.act);
       else if (el.dataset.act === 'close') UI.close();
+      else if (el.dataset.act === 'swap') UI.toggleSwap();
       else if (el.dataset.act === 'ship') ship();
     }
   }
@@ -455,6 +468,7 @@
   // Returns true if the key was consumed by an overlay.
   UI.key = function (code, e) {
     if (!UI.mode) return false;
+    if (code === 'KeyK' && (UI.mode === 'title' || UI.mode === 'help')) { UI.toggleSwap(); return true; }
     if (UI.mode === 'title' || UI.mode === 'report') {
       // the report only takes Enter, and not instantly: a dash-masher should still get to read it
       if (UI.mode === 'title') {
