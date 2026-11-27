@@ -236,7 +236,7 @@
     if (run.ticksLeft > 0) {
       run.pager.in--;
       if (run.pager.in <= 0) fireIncident(game);
-      if (run.pager.in === 1) rollPagerTarget(game);
+      if (run.pager.in === 1 && run.ticksLeft > 1) rollPagerTarget(game); // no forecast for a page the freeze will cancel
     } else run.pager.target = null;
     if (run.ticksLeft <= 0 && !run.freeze) {
       run.freeze = true;

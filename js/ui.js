@@ -74,9 +74,17 @@
       if (room.incident) return 'INCIDENT ROOM: clear it to bring the node back up.';
       return '';
     }
-    if (run.freeze && downs.length) return `CHANGE FREEZE, but <b style="color:#ff4d5e">${esc(g.nodes[downs[0]].name)} is DOWN</b>: incident response is allowed. <kbd>Tab</kbd> map → travel there and fix it, then deploy.`;
+    if (run.freeze && downs.length) {
+      // only a down node with a vetted parent can be reached: frozen rooms cannot be crossed
+      const reach = downs.find((id) => G.enterable(g, id));
+      if (reach) return `CHANGE FREEZE, but <b style="color:#ff4d5e">${esc(g.nodes[reach].name)} is DOWN</b>: incident response is allowed. <kbd>Tab</kbd> map → travel there and fix it, then deploy.`;
+      return `CHANGE FREEZE: <b style="color:#ff4d5e">${esc(g.nodes[downs[0]].name)} is DOWN</b> behind rooms you never vetted. Hotfix it from the map (<kbd>Tab</kbd>, <kbd>H</kbd>)${run.tools.rollback ? ' or roll back (<kbd>R</kbd>)' : ''}, or deploy without it.`;
+    }
     if (run.freeze) return run.cur === 'app' ? 'CHANGE FREEZE: walk into the <b>DEPLOY</b> door on the west wall.' : 'CHANGE FREEZE: press <kbd>Tab</kbd> and travel back to <b>app</b> to deploy.';
     if (downs.length) return `<b style="color:#ff4d5e">${esc(g.nodes[downs[0]].name)} is DOWN</b> — everything that depends on it is offline. <kbd>Tab</kbd> map → travel there and clear it (or hotfix it).`;
+    // a charge bought and not yet placed: say where it goes
+    if (run.tools.container) return `You hold a <b>Container</b>: <kbd>Tab</kbd> map, pick a dependency, press <kbd>C</kbd>. Its outages will stay its own.`;
+    if (run.tools.pin) return `You hold a <b>Pin</b>: <kbd>Tab</kbd> map, pick an unvetted node, press <kbd>P</kbd>. The pager will skip it.`;
     if (run.cur === 'app') {
       if (!pk.length) return 'Walk up to the <b>REGISTRY</b> terminal and press <kbd>E</kbd>. Every package is a power — and a dungeon.';
       if (!run.offerTaken && run.offers.length) return 'The registry has new packages (<kbd>E</kbd> at the terminal). East doors lead into your dependencies.';
@@ -305,7 +313,7 @@
     const idle = game.room.cleared && run.phase === 'run';
     const acts = [];
     if (!n) return acts;
-    const travelWhy = !idle ? 'finish the fight first' : mapSel === run.cur ? 'you are here' : run.freeze && n.state === 'unvetted' ? 'change freeze: only outages can be fixed' : !G.enterable(g, mapSel) ? 'vet a node that requires it first' : '';
+    const travelWhy = !idle ? 'finish the fight first' : mapSel === run.cur ? 'you are here' : run.freeze && n.state === 'unvetted' ? 'change freeze: only outages can be fixed' : !G.enterable(g, mapSel) ? (run.freeze ? 'frozen rooms in the way: hotfix it instead' : 'vet a node that requires it first') : '';
     acts.push({ key: 'Enter', id: 'travel', label: n.state === 'vetted' || mapSel === 'app' ? 'Travel here' : n.state === 'down' ? 'Travel here and fix it (fight)' : n.kind === 'pkg' ? 'Travel here and integrate it (fight)' : 'Travel here and vet it (fight)', no: travelWhy });
     if (n.state === 'down') acts.push({ key: 'H', id: 'hotfix', label: `Hotfix from here (${TUNE.hotfixCommits}c, +${TUNE.hotfixDebt} debt)`, no: !idle ? 'finish the fight first' : run.commits < TUNE.hotfixCommits ? 'not enough commits' : '' });
     if ((n.state === 'unvetted' || S.yankable(n)) && mapSel !== 'app') acts.push({ key: 'P', id: 'pin', label: `Pin version (${run.tools.pin} charge${run.tools.pin === 1 ? '' : 's'})`, no: n.pinned ? 'already pinned' : run.tools.pin < 1 ? 'buy Pin Version at the registry' : '' });
@@ -493,9 +501,13 @@
   }
   function doInstall() { if (S.install(game, regSel)) UI.close(); else DH.Audio.sfx('denied'); }
   function buy(id) {
-    if (!S.buyTool(game, id)) DH.Audio.sfx('denied');
+    const ok = S.buyTool(game, id);
+    if (!ok) DH.Audio.sfx('denied');
     regSel = Math.min(regSel, Math.max(0, game.run.offers.length - 1)); // --force leaves fewer offers
     renderRegistry();
+    // bought with a number key, nobody hovered: say how to use it right there
+    const tl = TOOLS.find((t) => t.id === id);
+    if (ok && tl) $('toolhow').innerHTML = `<b>Bought ${esc(tl.name)}.</b> ${esc(tl.how)}`;
   }
   function ship() { UI.close(); S.deploy(game); }
 

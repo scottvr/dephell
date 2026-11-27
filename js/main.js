@@ -299,8 +299,13 @@
       UI.open('registry');
       document.querySelector('[data-tool="container"]').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       check('pointing at a tool explains how to use it', /press C/.test(document.getElementById('toolhow').textContent));
+      game.run.commits += 5; UI.key('Digit8', {});
+      check('buying with a key shows how to use it', game.run.tools.container >= 1 && /press C/.test(document.getElementById('toolhow').textContent));
       UI.key('KeyE', {});
       check('E closes the registry (no Esc needed: it also leaves browser full screen)', !UI.mode);
+      game.dirty = true; UI.sync(0, 0);
+      check('a held container says where to place it', /Container/.test(document.getElementById('hint').textContent));
+      game.run.tools.container = 0;
       UI.open('map'); document.querySelector('.ov [data-act="close"]').click();
       check('the close label closes the map', !UI.mode);
       UI.open('help'); document.getElementById('overlay').dispatchEvent(new MouseEvent('click', { bubbles: true }));

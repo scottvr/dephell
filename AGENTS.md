@@ -1,6 +1,7 @@
 # Dependency Hell — contributor and agent guide
 
-Read `README.md` for how to run it and `docs/design.md` for the rules. `docs/vision.md` is the
+Read `README.md` for how to run it and `docs/design.md` for the rules. What players have reported,
+and what came of it, is in `docs/playtest-notes.md`. `docs/vision.md` is the
 original treatment and still the north star for tone. Everything under `docs/archived/` describes
 an earlier prototype and is not current.
 

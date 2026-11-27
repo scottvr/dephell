@@ -30,6 +30,8 @@
       const yank = policy.pin !== false && Object.keys(nodes).find((id) => S.yankable(nodes[id]) && !nodes[id].pinned);
       if (yank && run.tools.pin < 1 && S.buyTool(game, 'pin')) return true;
       if (yank && S.pin(game, yank)) return true;
+      // policy.force: buy npm i --force whenever a second package from this restock is affordable and wanted
+      if (policy.force2 && run.offerTaken && !run.freeze && G.packages(g).length < (policy.maxPkgs || 4) && S.buyTool(game, 'force')) return true;
       if (run.stability < 55 && run.commits >= 4 && S.buyTool(game, 'drink')) return true;
       if (run.commits >= 9 && run.obsBase < 2 && S.buyTool(game, 'tests')) return true;
       if (run.commits >= 12 && run.tools.rollback < 1 && S.buyTool(game, 'rollback')) return true;
