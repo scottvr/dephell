@@ -341,6 +341,15 @@
         if (run.offerTaken || run.freeze) return false;
         rollOffers(game);
         break;
+      case 'force': {
+        // a second install from this restock's offers: more power now, its tree still lands on the map
+        const left = run.offers.filter((id) => !g.nodes[id]);
+        if (!run.offerTaken || run.freeze || !left.length) return false;
+        run.offers = left;
+        run.offerTaken = false;
+        addDebt(game, TUNE.forceDebt, 'npm install --force');
+        break;
+      }
       default: return false;
     }
     run.commits -= tool.cost;

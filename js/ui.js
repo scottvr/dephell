@@ -5,7 +5,7 @@
   const S = DH.Sim, G = DH.Graph, Rn = DH.Render;
   const { TUNE, PACKAGES, PROJECTS, TOOLS } = DH.content;
   const UI = { mode: null, reportAt: 0 };
-  const TOOL_KEYS = ['Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus']; // never letters: WASD/E are in the player's hands
+  const TOOL_KEYS = ['Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Minus', 'Equal']; // never letters: WASD/E are in the player's hands
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   let game = null, hooks = null;
@@ -276,10 +276,11 @@
       if (tl.id === 'drink' && run.stability >= run.maxStability) no = true;
       if (tl.id === 'refactor' && run.debt <= 0) no = true;
       if (tl.id === 'reroll' && (run.offerTaken || run.freeze)) no = true;
-      return `<div class="tool${no ? ' no' : ''}" data-tool="${tl.id}" data-i="${i}"><b>[${'4567890-'[i]}] ${esc(tl.name)}</b><i>${tl.cost}c</i><span>${esc(tl.desc)}</span></div>`;
+      if (tl.id === 'force' && (!run.offerTaken || run.freeze || run.offers.every((id) => g.nodes[id]))) no = true;
+      return `<div class="tool${no ? ' no' : ''}" data-tool="${tl.id}" data-i="${i}"><i>${tl.cost}c</i><b>[${'4567890-='[i]}] ${esc(tl.name)}</b><span>${esc(tl.desc)}</span></div>`;
     }).join('');
     // one tip, only when it is actionable right now
-    const key = (id) => '4567890-'[TOOLS.findIndex((tl) => tl.id === id)];
+    const key = (id) => '4567890-='[TOOLS.findIndex((tl) => tl.id === id)];
     const cost = (id) => TOOLS.find((tl) => tl.id === id).cost;
     let tip = '';
     if ((S.canDeploy(game) || run.freeze || run.ticksLeft <= 4) && !run.tools.rollback && run.commits >= cost('rollback')) tip = `Prod is close. A <b>Rollback Plan</b> [${key('rollback')}] is a heal you carry into the fight: press <kbd>R</kbd> when it gets bad.`;
@@ -490,7 +491,11 @@
     }
   }
   function doInstall() { if (S.install(game, regSel)) UI.close(); else DH.Audio.sfx('denied'); }
-  function buy(id) { if (!S.buyTool(game, id)) DH.Audio.sfx('denied'); renderRegistry(); }
+  function buy(id) {
+    if (!S.buyTool(game, id)) DH.Audio.sfx('denied');
+    regSel = Math.min(regSel, Math.max(0, game.run.offers.length - 1)); // --force leaves fewer offers
+    renderRegistry();
+  }
   function ship() { UI.close(); S.deploy(game); }
 
   // Returns true if the key was consumed by an overlay.

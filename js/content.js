@@ -16,6 +16,7 @@
     hotfixDebt: 10,
     shimDebt: 12,
     pinDebtPerTick: 2,
+    forceDebt: 4, // npm install --force: a second package from one restock
     monolithHp: 0.75, // its health relative to other bosses: its pairs soak your fire
     monolithPairHp: 0.5, // Distributed Monolith's summoned Circular Dependency pairs, relative to a room's
     replicaDamage: 0.6,
@@ -213,8 +214,8 @@
     'create-app': {
       name: 'create-whatever-app', eco: 'script', risk: 1, debt: 0, starter: true, deps: ['webpacked', 'polyfill-all', 'dev-server'],
       tag: 'One command. Seventeen dependencies. None of them yours.',
-      power: 'FAST REFRESH  shots fly 50% faster, +12% move speed', hard: 'shots 90% faster, you 20% faster',
-      fx: [{ stat: 'shotSpeed', op: 'mul', v: 1.5, hard: 1.9 }, { stat: 'speed', op: 'mul', v: 1.12, hard: 1.2 }],
+      power: 'FAST REFRESH  shots pierce an enemy and fly faster', hard: 'pierce two, faster still, you too',
+      fx: [{ stat: 'pierce', op: 'add', v: 1, hard: 2 }, { stat: 'shotSpeed', op: 'mul', v: 1.4, hard: 1.7 }, { stat: 'speed', op: 'mul', hard: 1.15 }],
     },
   };
 
@@ -276,6 +277,7 @@
     { id: 'refactor', name: 'Refactor', cost: 5, desc: 'Pay down 20 technical debt.', how: 'Debt adds enemies, speeds the pager and toughens prod. Nobody will thank you.' },
     { id: 'rollback', name: 'Rollback Plan', cost: 8, desc: 'Press R in a fight: heal, fix outages.', how: 'One use: +25 stability and every downed node comes back up. Works on prod, too.' },
     { id: 'reroll', name: 'Refresh Registry', cost: 2, desc: 'Three new package offers.', how: 'Only before you take a package this restock. The old offers were fine. Probably.' },
+    { id: 'force', name: 'npm i --force', cost: 6, desc: 'Take a second package this restock.', how: 'After installing one, take another of the offers. Its tree still lands on the map. +4 debt: it ignored the peer-dependency warnings.' },
   ];
 
   // ---------------------------------------------------------------- incident copy

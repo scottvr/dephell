@@ -266,6 +266,15 @@
       UI.key('ArrowRight', {}); UI.key('Enter', {});
       const pk = DH.Graph.packages(game.run.graph)[0];
       check('enter installs selected package', !!pk && !UI.mode, pk);
+      { // npm install --force: a second package from the same restock
+        const c0 = game.run.commits, n0 = DH.Graph.packages(game.run.graph).length;
+        game.run.commits = 20; UI.open('registry'); UI.key('Equal', {});
+        check('--force reopens the registry with the offers left', !game.run.offerTaken && game.run.offers.length === 2 && game.run.offers.every((id) => !game.run.graph.nodes[id]));
+        UI.key('Enter', {});
+        check('...and a second package installs', DH.Graph.packages(game.run.graph).length === n0 + 1 && game.run.offerTaken);
+        S.uninstall && S.uninstall(game, DH.Graph.packages(game.run.graph)[n0]);
+        game.run.commits = c0; UI.close();
+      }
       const door = game.room.doors.find((d) => d.to === pk);
       check('hub has a door to the package', !!door);
       walkTo(S.W - 30, door.y, () => Math.abs(game.player.y - door.y) < 3 && game.player.x > S.W - 60);
