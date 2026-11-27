@@ -22,7 +22,7 @@ clickable. Esc still works; nothing asks for it.
 
 ### Tool descriptions cut off in the registry (Mary)
 7 of 8 tools ended mid-sentence ("Observability +1, permanently. See more,").
-**Status:** shipped in dbafe47, not yet confirmed on her machine. Cause inferred, not confirmed:
+**Status:** fixed in dbafe47; owner confirmed in Safari on 2026-11-27 that all text fits. Cause inferred:
 most likely a Safari minimum font size, enlarging the 10px text before the stage scaling. (A text-only
 zoom would look the same and the fix would not help; if her big headings are oversized too, suspect that.) The stage is now laid out at 2x so no text is under 20 CSS px; tools have short plain
 descriptions plus a how-to line on hover. `tools/shots.js --minfont=16` checks it.
