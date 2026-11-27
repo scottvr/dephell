@@ -147,6 +147,8 @@ b { font-weight: 700; }
 .controls { position: absolute; left: 108px; bottom: 68px; display: grid; grid-template-columns: repeat(4, auto); gap: 8px 60px; font-size: 24px; color: var(--dim); }
 .controls b { color: var(--white); font-weight: 400; }
 .meta { position: absolute; right: 108px; bottom: 68px; text-align: right; color: var(--dim); font-size: 24px; }
+.manual { position: absolute; right: 108px; bottom: 156px; color: var(--cyan); font-size: 26px; text-decoration: none; } .manual b { color: var(--white); font-weight: 400; margin-right: 12px; } .manual:hover { text-decoration: underline; }
+.manual-line a { color: var(--cyan); }
 #title-graph { position: absolute; right: 80px; top: 120px; width: 840px; height: 840px; opacity: .55; }
 
 .report { display: grid; grid-template-columns: 1.25fr 1fr; gap: 0 68px; height: 100%; }

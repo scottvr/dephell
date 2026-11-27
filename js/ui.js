@@ -31,6 +31,7 @@
     $('overlay').addEventListener('click', onOverlayClick);
     $('full').addEventListener('click', (e) => {
       if (UI.mode === 'title') {
+        if (e.target.closest('a')) return; // the manual link opens in a new tab; do not start a run
         if (e.target.closest('[data-act="swap"]')) { UI.toggleSwap(); return; }
         // a project card selects on first click and starts on the second; anywhere else starts the selected one
         const card = e.target.closest('[data-proj]');
@@ -427,7 +428,8 @@
       <p><kbd>K</kbd> <span class="swap" data-act="swap">swap: move with ${aimKeys()}, aim with ${moveKeys()}</span></p>
       <p><kbd>Space</kbd> dash (brief invulnerability) · <kbd>E</kbd> use terminal</p>
       <p><kbd>Tab</kbd> map + fast travel · <kbd>Q</kbd> feature flag, from launch-dorkly · <kbd>R</kbd> rollback, if you bought one</p>
-      <p><kbd>H</kbd> this screen, and pause · <kbd>N</kbd> sound</p></div></div></div>`;
+      <p><kbd>H</kbd> this screen, and pause · <kbd>N</kbd> sound</p>
+      <p class="manual-line">Everything else is in the <a href="manual.html" target="_blank" rel="noopener">operator's manual</a>.</p></div></div></div>`;
   }
 
   // ---- title + report
@@ -447,6 +449,7 @@
       <div class="controls"><span><b>${moveKeys()}</b> move</span><span><b>Mouse / ${aimKeys()}</b> aim + fire</span><span><b>Space</b> dash</span><span><b>E</b> use</span>
       <span><b>Tab</b> map</span><span><b>Q</b> flag (launch-dorkly)</span><span><b>H</b> help, in game</span><span><b>N</b> sound</span>
       <span class="swap" data-act="swap"><b>K</b> swap: move with ${aimKeys()}, aim with ${moveKeys()}</span></div>
+      <a class="manual" href="manual.html" target="_blank" rel="noopener"><b>M</b> read the operator's manual</a>
       <div class="meta">${m.runs ? `runs ${m.runs} · shipped ${m.wins} · best grade ${m.best || '—'}<br>` : ''}it is funny because it is true</div>`;
   }
 
@@ -523,6 +526,7 @@
         else if (code === 'ArrowRight' || code === 'KeyD') pickProject(ids[(i + 1) % ids.length]);
         else if (code === 'ArrowLeft' || code === 'KeyA') pickProject(ids[(i + ids.length - 1) % ids.length]);
         else if (/^Digit[1-9]$/.test(code) && ids[+code.slice(5) - 1]) pickProject(ids[+code.slice(5) - 1]);
+        else if (code === 'KeyM') window.open('manual.html', '_blank', 'noopener');
       } else if (performance.now() - UI.reportAt > 700) {
         if (code === 'Enter') hooks.newRun(UI.project);
         else if (code === 'Escape' || code === 'KeyC') UI.open('title');

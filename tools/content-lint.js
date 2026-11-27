@@ -4,7 +4,7 @@
 //   node tools/content-lint.js --stats    also print the primitive x ecology coverage table
 const path = require('path');
 globalThis.window = globalThis;
-for (const f of ['rng', 'content', 'graph']) require(path.join(__dirname, '..', 'js', f + '.js'));
+for (const f of ['rng', 'content', 'graph', 'manual-copy']) require(path.join(__dirname, '..', 'js', f + '.js'));
 const { BASE_STATS, DEPS, PACKAGES, PROJECTS, ENEMIES, ECO, FX_OPS, INCIDENT_TEXT } = globalThis.DH.content;
 
 // Text has to fit its UI slot: registry card, sidebar line, room subtitle.
@@ -114,6 +114,16 @@ for (const [id, pj] of Object.entries(PROJECTS)) {
 }
 for (const [id, p] of Object.entries(PACKAGES)) {
   if (p.starter && !Object.values(PROJECTS).some((pj) => (pj.start || []).some((st) => st.pkg === id))) err(id, 'starter package is not used by any project');
+}
+
+// ---------------------------------------------------------------- manual
+// manual.html generates its reference pages from content, but the prose about each enemy, boss and
+// project lives in js/manual-copy.js: a new one without an entry would show up blank.
+{
+  const M = globalThis.DH.manualCopy, { BOSSES } = globalThis.DH.content;
+  for (const id in ENEMIES) if (!M.enemies[id] || !M.enemies[id].what) err('enemy ' + id, 'no entry in js/manual-copy.js (the manual\'s field guide)');
+  for (const id in BOSSES) if (!M.bosses[id] || !M.bosses[id].sig) err('boss ' + id, 'no entry in js/manual-copy.js (manual chapter 7)');
+  for (const id in PROJECTS) if (!M.projects[id]) err('project ' + id, 'no entry in js/manual-copy.js (manual chapter 10)');
 }
 
 // ---------------------------------------------------------------- similarity

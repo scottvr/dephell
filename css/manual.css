@@ -1,0 +1,132 @@
+/* Dependency Hell: Operator's Manual. A printed manual from a boxed game, which is also an
+   onboarding binder. Plain document CSS: text is 16px and up, so a browser minimum font size
+   leaves it alone; it reflows, and prints one page per sheet. */
+:root {
+  --paper: #f4eedc; --ink: #22201b; --dim: #6b6458; --rule: #cfc5ab; --red: #b3261e; --teal: #116b64;
+  --type: "American Typewriter", "Courier Prime", "Courier New", ui-monospace, monospace;
+  --book: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+* { box-sizing: border-box; }
+html { background: #2b2824; counter-reset: page; }
+body { margin: 0; padding: 32px 12px 64px; font: 18px/1.55 var(--book); color: var(--ink); }
+a { color: var(--teal); }
+canvas.px { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+/* ------------------------------------------------------------- pages */
+.page {
+  position: relative; max-width: 860px; margin: 0 auto 36px; padding: 72px 76px 80px;
+  background: var(--paper); box-shadow: 0 2px 0 #d8cfb6, 0 10px 30px rgba(0, 0, 0, .45);
+  counter-increment: page;
+}
+.page::before {
+  content: "DEPENDENCY HELL \00B7  OPERATOR'S MANUAL \00B7  REV. A"; position: absolute; top: 28px; left: 76px; right: 76px;
+  font: 13px/1 var(--type); letter-spacing: 2px; color: var(--dim); border-bottom: 1px solid var(--rule); padding-bottom: 8px;
+}
+.page::after { content: "\2014  " counter(page) "  \2014"; position: absolute; bottom: 28px; left: 0; right: 0; text-align: center; font: 14px var(--type); color: var(--dim); }
+.page.cover::before, .page.cover::after, .page.back::after { content: none; }
+
+h1, h2, h3 { font-family: var(--type); font-weight: 700; line-height: 1.2; }
+h1 { font-size: 40px; margin: 8px 0 24px; }
+h1 span { display: block; font-size: 15px; letter-spacing: 4px; text-transform: uppercase; color: var(--red); margin-bottom: 6px; }
+h2 { font-size: 26px; margin: 0 0 18px; }
+h3 { font-size: 20px; margin: 28px 0 8px; }
+p { margin: 0 0 14px; }
+.lede { font-size: 22px; font-style: italic; }
+kbd {
+  display: inline-block; min-width: 1.6em; padding: 1px 6px; margin: 0 1px; text-align: center;
+  font: 15px/1.4 var(--type); background: #fffdf5; border: 1px solid #a89f88; border-bottom-width: 3px; border-radius: 4px;
+}
+
+/* ------------------------------------------------------------- cover */
+.cover { background: #0b1416; color: #cfe9e4; text-align: center; padding-top: 110px; min-height: 900px; }
+.cover canvas#cover-title { width: 410px; max-width: 100%; height: auto; display: block; margin: 0 auto; }
+.cover-sub { font: 700 30px var(--type); letter-spacing: 10px; text-transform: uppercase; color: #eaffff; margin: 26px 0 30px; }
+.cover-px { width: 100%; max-width: 600px; height: auto; border: 2px solid #17383a; }
+.cover-rev { font: 16px/1.6 var(--type); color: #7fb0aa; margin-top: 30px; }
+.cover-small { font: 14px var(--type); color: #5d8a86; margin-top: 40px; }
+.stamp {
+  position: absolute; top: 40px; right: 34px; transform: rotate(8deg); padding: 8px 14px;
+  border: 3px solid #e2483f; color: #e2483f; font: 700 14px/1.35 var(--type); letter-spacing: 2px; opacity: .85;
+}
+
+/* ------------------------------------------------------------- front matter */
+.warning { border: 3px double var(--ink); padding: 6px 22px 10px; margin-bottom: 18px; }
+.warning h3 { margin-top: 14px; }
+.fine { font-size: 16px; color: #3e3a32; }
+.toc { margin-top: 30px; border-top: 1px solid var(--rule); }
+.toc ol { font-family: var(--type); font-size: 18px; line-height: 1.9; }
+.toc ol.appx { margin-top: 0; }
+.fn-inline { background: #fff3a8; padding: 0 5px; font-family: var(--type); font-size: 16px; }
+
+/* ------------------------------------------------------------- field notes */
+.fieldnote {
+  display: block; margin: 22px 0 8px; padding: 14px 18px 14px; background: #fff3a8; color: #2c2a1f;
+  font-size: 17px; box-shadow: 2px 3px 0 rgba(0, 0, 0, .12); transform: rotate(-.4deg);
+}
+.fieldnote b { display: block; font: 700 13px var(--type); letter-spacing: 3px; text-transform: uppercase; color: #8a6d00; margin-bottom: 4px; }
+
+/* ------------------------------------------------------------- tables & lists */
+table { width: 100%; border-collapse: collapse; margin: 8px 0 18px; font-size: 17px; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--rule); }
+th { font: 700 15px var(--type); }
+table.keys th { width: 34%; }
+dl { margin: 0 0 16px; }
+dt { font: 700 17px var(--type); margin-top: 12px; }
+dd { margin: 2px 0 0 0; }
+.states .u { color: #a3700b; } .states .v { color: #1d7a3c; } .states .d { color: var(--red); } .states .h { color: var(--teal); }
+.steps li { margin-bottom: 10px; }
+.gradeline { font: 18px var(--type); text-align: center; padding: 8px; border: 1px dashed var(--dim); }
+dl.tools dt { display: flex; gap: 10px; align-items: baseline; }
+.key { font: 700 14px var(--type); border: 1px solid #a89f88; border-bottom-width: 3px; border-radius: 4px; padding: 0 7px; background: #fffdf5; }
+.cost { margin-left: auto; color: var(--dim); font-weight: 400; font-size: 15px; }
+
+/* ------------------------------------------------------------- generated entries */
+.entry { display: grid; grid-template-columns: 172px 1fr; gap: 0 22px; padding: 22px 0; border-top: 1px solid var(--rule); }
+.entry.project, .entry.pkg { grid-template-columns: 1fr; }
+.entry h3 { margin: 0 0 4px; }
+.art { background: #0b1416; border-radius: 3px; padding: 10px; align-self: start; text-align: center; }
+.art canvas { width: 100%; height: auto; display: block; }
+.stats { font: 14px var(--type); color: var(--dim); margin-bottom: 8px; }
+.stats .off { opacity: .22; }
+.why { font-style: italic; color: var(--dim); }
+.where, .facts { font: 15px var(--type); color: var(--dim); }
+.level { font: 700 13px var(--type); letter-spacing: 3px; color: var(--red); margin-bottom: 2px; }
+.power b { font-family: var(--type); }
+.hard { color: var(--teal); font-size: 16px; }
+.tree { font: 15px/1.6 var(--type); background: #ece4cc; padding: 8px 12px; margin: 6px 0 10px; }
+.risk2 { color: #a3700b; } .risk3 { color: var(--red); }
+.flag { font: 12px var(--type); letter-spacing: 1px; text-transform: uppercase; color: var(--red); }
+.note { font-size: 16px; border-left: 3px solid var(--red); padding-left: 10px; }
+table.deps td { font-size: 16px; }
+table.deps .nm { font-family: var(--type); width: 24%; }
+table.deps .used { font-size: 14px; color: var(--dim); width: 24%; }
+.mix { font: 13px var(--type); color: var(--dim); margin-top: 3px; }
+
+/* ------------------------------------------------------------- quick reference card & back */
+.qrc { border: 3px dashed #8a826d; }
+.cut { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: #2b2824; color: #d8cfb6; font: 14px var(--type); padding: 2px 10px; }
+.qrc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
+.qrc-grid h3 { margin-top: 10px; }
+.qrc-grid p { font-size: 16px; }
+.back { text-align: center; }
+.ad { border: 4px solid var(--ink); padding: 28px; margin: 30px 0 40px; background: #fff7d6; transform: rotate(-1deg); }
+.ad-kicker { font: 700 14px var(--type); letter-spacing: 2px; text-transform: uppercase; color: var(--red); }
+.ad h2 { font-size: 34px; }
+.ad-price { font: 700 24px var(--type); }
+.credits { font-size: 16px; color: var(--dim); }
+.back-link { font: 18px var(--type); }
+
+@media (max-width: 700px) {
+  .page { padding: 64px 22px 72px; }
+  .page::before { left: 22px; right: 22px; }
+  .entry { grid-template-columns: 1fr; }
+  .art { max-width: 200px; }
+  .qrc-grid { grid-template-columns: 1fr; }
+  .stamp { position: static; display: inline-block; margin-bottom: 20px; }
+}
+@media print {
+  html { background: #fff; }
+  body { padding: 0; }
+  .page { box-shadow: none; margin: 0; max-width: none; break-after: page; }
+  .back-link { display: none; }
+}

@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dependency Hell: Operator's Manual</title>
+  <link rel="stylesheet" href="css/manual.css">
+</head>
+<body>
+<!-- The reference sections (data-gen) are generated from js/content.js by js/manual.js, so they
+     cannot drift from the game. The chapters are prose and must be kept true by hand. -->
+
+<section class="page cover">
+  <div class="stamp">PROPERTY OF ENGINEERING<br>DO NOT REMOVE FROM BUILDING</div>
+  <canvas id="cover-title" class="px" width="82" height="38" aria-label="Dependency Hell"></canvas>
+  <p class="cover-sub">Operator's Manual</p>
+  <div id="cover-art"></div>
+  <p class="cover-rev">Release 1.0 &middot; Rev. A<br>For use with Dependency Hell v1.0 and every version that claims to be compatible with it.</p>
+  <p class="cover-small">Contents: one (1) manual, one (1) quick reference card. Pager not included. Pager is never not included.</p>
+</section>
+
+<section class="page front">
+  <h2>Important information. Please read before operating.</h2>
+  <div class="warning">
+    <h3>Pager sensitivity warning</h3>
+    <p>A small percentage of engineers may experience sudden anxiety when exposed to certain notification sounds, red text, or the phrase <i>&ldquo;quick question&rdquo;</i>. If you experience any of the following while playing, stop and consult a senior engineer: flashbacks to a Friday deploy, an urge to rewrite everything, the belief that it is only a small change.</p>
+  </div>
+  <h3>Limited warranty</h3>
+  <p class="fine">This software is provided AS IS, which is also how it was received from upstream. The publisher makes no warranty that it is fit for any purpose, including the purpose it was installed for. Transitive dependencies are covered by their own warranties, where they exist, which they do not. Your statutory rights are unaffected because nobody read them.</p>
+  <h3>How to use this manual</h3>
+  <p>You do not need it. The game teaches itself, eventually; one of our playtesters can confirm it takes about thirty runs. This manual is for the other kind of engineer: the kind who reads the runbook <i>before</i> the incident. Chapters 1&ndash;3 get you playing. Chapters 4&ndash;9 explain why you lost. The appendices are reference, generated from the game itself, so they are true even when this prose is out of date.</p>
+  <p>Look for <span class="fn-inline">Field Notes</span> in the margins: tips from the engineers who came before you. They are honest, if not always specific. For a complete walkthrough, see the <i>Official Strategy Guide</i> (sold separately; see the back cover).</p>
+  <nav class="toc">
+    <h3>Contents</h3>
+    <ol>
+      <li><a href="#ch1">Welcome aboard</a></li>
+      <li><a href="#ch2">Getting started</a></li>
+      <li><a href="#ch3">Your first sprint</a></li>
+      <li><a href="#ch4">The graph is the dungeon</a></li>
+      <li><a href="#ch5">Pressure: the train, the pager and debt</a></li>
+      <li><a href="#ch6">Change freeze</a></li>
+      <li><a href="#ch7">Production</a></li>
+      <li><a href="#ch8">Tools of the trade</a></li>
+      <li><a href="#ch9">Postmortems and grades</a></li>
+      <li><a href="#ch10">Projects</a></li>
+      <li><a href="#ch11">A field guide to bugs</a></li>
+    </ol>
+    <ol class="appx" type="A">
+      <li><a href="#appA">The package catalog</a></li>
+      <li><a href="#appB">The dependency index</a></li>
+      <li><a href="#appC">Troubleshooting</a></li>
+      <li><a href="#qrc">Quick reference card</a></li>
+    </ol>
+  </nav>
+</section>
+
+<section class="page" id="ch1">
+  <h1><span>Chapter 1</span>Welcome aboard</h1>
+  <p class="lede">You are the last engineer awake. Version 1.0 ships tonight.</p>
+  <p>Dependency Hell is an action game about the software you install. You fight your way through rooms full of bugs, and every room is a piece of software your application depends on. You will need help. Help comes from the package registry.</p>
+  <p>Every <b>package</b> you install gives you a power the moment you install it: rapid fire, bouncing shots, a drone, a shield. Every package is also a <b>dungeon</b>: it brings its own dependencies, and they bring theirs, and every one of them becomes a room on your map. The more you install, the stronger you get, and the bigger the thing you are responsible for.</p>
+  <p>Rooms you have cleared are <b>vetted</b>: you have read the code, as it were, and it holds. Rooms you have not are liabilities. Every few rooms the <b>pager</b> goes off, and something you never looked at goes down, taking every package that depends on it with it. Your powers go dark mid-fight. That is the game.</p>
+  <p>Ship three features, then walk into the deploy door and face <b>production</b>: a boss built from your own architecture, which strikes every corner you cut.</p>
+  <aside class="fieldnote"><b>Field Note</b> The central joke is that you are building the maze while trying to escape it. It stops being a joke around room nine.</aside>
+</section>
+
+<section class="page" id="ch2">
+  <h1><span>Chapter 2</span>Getting started</h1>
+  <h3>Starting the game</h3>
+  <p>Open the game in a browser. Full screen is recommended; nothing in the game needs the Esc key, so it will not throw you out of full screen. The title screen offers four <b>projects</b> (chapter 10); start with <b>Greenfield</b>. Your record for each project appears on its card.</p>
+  <h3>Controls</h3>
+  <table class="keys">
+    <tr><th>Move</th><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td></tr>
+    <tr><th>Aim and fire</th><td>Mouse (hold the button), or the arrow keys</td></tr>
+    <tr><th>Swap move and aim keys</th><td><kbd>K</kbd> on the title or help screen: move with the arrows, aim with WASD</td></tr>
+    <tr><th>Dash</th><td><kbd>Space</kbd> or <kbd>Shift</kbd>. Brief invulnerability; carries you through bullets and beams</td></tr>
+    <tr><th>Use</th><td><kbd>E</kbd>: the registry terminal; also closes the registry</td></tr>
+    <tr><th>Map and fast travel</th><td><kbd>Tab</kbd> or <kbd>M</kbd></td></tr>
+    <tr><th>Feature flag</th><td><kbd>Q</kbd>, only if you installed launch-dorkly</td></tr>
+    <tr><th>Rollback</th><td><kbd>R</kbd>, only if you bought a Rollback Plan</td></tr>
+    <tr><th>Help, and pause</th><td><kbd>H</kbd></td></tr>
+    <tr><th>Sound</th><td><kbd>N</kbd></td></tr>
+  </table>
+  <h3>The screen</h3>
+  <dl class="hud">
+    <dt>Stability</dt><dd>Your health. At zero, the run ends in a postmortem. Clearing a room restores a little.</dd>
+    <dt>Commits</dt><dd>Currency. Dropped by defeated bugs and cleared rooms; spent on tools at the registry.</dd>
+    <dt>Tech debt</dt><dd>What your shortcuts cost. Chapter 5.</dd>
+    <dt>Observability</dt><dd>How much you can see. Chapter 5.</dd>
+    <dt>Release train</dt><dd>Rooms left on the clock, and how many rooms are still unvetted. Amber when you can no longer vet them all in time.</dd>
+    <dt>Pager</dt><dd>How long until the next incident, and (with enough observability) what it will hit.</dd>
+    <dt>Packages</dt><dd>What you have installed, and whether each power is online, hardened, or dark.</dd>
+    <dt>Map and log</dt><dd>A small copy of your dependency graph, and everything that has happened, newest at the bottom.</dd>
+  </dl>
+</section>
+
+<section class="page" id="ch3">
+  <h1><span>Chapter 3</span>Your first sprint</h1>
+  <ol class="steps">
+    <li><b>Install.</b> In <b>app</b>, your home room, walk to the <b>REGISTRY</b> terminal and press <kbd>E</kbd>. It offers three packages. Each card shows the power, the stronger <i>hardened</i> version of it, the dependency tree it will drag in, and what it costs. Take one. Its power is yours immediately.</li>
+    <li><b>The graph grows.</b> The package and its whole tree appear on the map as rooms. Doors on the <b>east</b> wall lead deeper into the tree; doors on the <b>west</b> wall lead back toward app.</li>
+    <li><b>Integrate.</b> Walk into the package's own room and clear it. That ships a <b>feature</b>.</li>
+    <li><b>Vet, or don't.</b> Every dependency room you clear is vetted. When a package's entire tree is vetted, the package is <b>hardened</b>: a stronger version of its power.</li>
+    <li><b>Keep going.</b> The registry restocks every few rooms; you may take one package per restock. Every room you clear moves the release train one step.</li>
+    <li><b>Deploy.</b> With three features shipped you may walk into the deploy door, on the west wall of app. When the clock runs out you must.</li>
+  </ol>
+  <aside class="fieldnote"><b>Field Note</b> Server racks stop bullets. You will learn this eventually. You could learn it now.</aside>
+  <aside class="fieldnote"><b>Field Note</b> Some packages are better together. A shot that bounces is good. Three shots that bounce are a different game.</aside>
+</section>
+
+<section class="page" id="ch4">
+  <h1><span>Chapter 4</span>The graph is the dungeon</h1>
+  <p>Every node in your dependency graph is a room, and every edge is a door. Press <kbd>Tab</kbd> to see it all: you can select any node and fast-travel to it.</p>
+  <h3>Node states</h3>
+  <dl class="states">
+    <dt class="u">&#9633; Unvetted</dt><dd>Never cleared. A liability: the pager can take it down, and production will strike it.</dd>
+    <dt class="v">&#9632; Vetted</dt><dd>Cleared. It holds: the pager passes it by and production's strikes bounce off it.</dd>
+    <dt class="d">&#9632; Down</dt><dd>Taken down by an incident. Every package that depends on it, directly or through other nodes, goes <b>offline</b>: its power switches off until the node is back up.</dd>
+    <dt class="h">&#9634; Hardened</dt><dd>A package whose whole tree is vetted. Its power is stronger.</dd>
+  </dl>
+  <h3>Getting in</h3>
+  <p>You can enter a room if any node that requires it has been vetted. A door marked <b>LOCKED</b> means nothing upstream of that room has been cleared yet: work your way down from the top.</p>
+  <h3>Shared nodes</h3>
+  <p>Packages share dependencies. That is efficient (a shared node is one room, not two) and dangerous: one outage there takes down every package that leans on it. The registry warns you when a new package would share a node with what you have.</p>
+  <h3>Version conflicts</h3>
+  <p>Two packages that need different major versions of one library <b>conflict</b>. In every fight, one side of the conflict fails to load, at random. The library's room also gets a Version Conflict to fight (chapter 11). Vet both versions and the conflict resolves itself; or buy a Compat Shim to paper over it, for debt.</p>
+  <h3>Risk and flags</h3>
+  <p>Some nodes are riskier than others (&#9650; risky, &#9760; very). The pager prefers them. Some carry a flag: a <b>known CVE</b> (ship it unvetted and production takes it personally), <b>abandoned</b>, <b>license trouble</b>, or <b>unpublishable</b>. The last is special: an unpublishable package can be pulled by its author no matter how well you vetted it. Only a pin protects it.</p>
+  <p>One package is special in another way. It grows.</p>
+  <h3>From the map</h3>
+  <p>Select a node, then: <kbd>Enter</kbd> travel there; <kbd>H</kbd> hotfix it if it is down; <kbd>P</kbd> pin it; <kbd>C</kbd> containerize it; <kbd>X</kbd> uninstall a package (from app only).</p>
+  <aside class="fieldnote"><b>Field Note</b> The registry shows you the tree before you install it. Read it. Count the rooms. Count your rooms.</aside>
+</section>
+
+<section class="page" id="ch5">
+  <h1><span>Chapter 5</span>Pressure: the train, the pager and debt</h1>
+  <h3>The release train</h3>
+  <p>Every room you clear is one step on the clock. Greenfield gives you fourteen. The registry restocks every three rooms. You will rarely have time to install much <i>and</i> vet all of it, which is the point. The sidebar shows rooms left beside rooms still unvetted; when the second number is bigger, you cannot vet everything any more, and should choose.</p>
+  <h3>The pager</h3>
+  <p>Every three rooms (every two once your debt reaches 50), the pager takes down one unvetted node, chosen at random but preferring risky and flagged ones. It picks its target one room ahead. With observability 2 or better you are told which node it is: vet it in time and the incident is <b>averted</b>, worth three commits. Pinned nodes are skipped.</p>
+  <h3>Outages</h3>
+  <p>A down node stays down until you clear its room, now an <b>incident room</b> with a tougher fight, or <b>hotfix</b> it from the map: two commits and ten debt, and the node comes back up still unvetted. A Container on a node stops its outages from spreading to the packages that depend on it.</p>
+  <h3>Technical debt</h3>
+  <p>Debt comes from shortcuts: shims, hotfixes, pins, feature flags, energy drinks, forced installs, some packages, and features you deploy without. It does three things. Every 25 points makes rooms bigger and their bugs more often elite. At 50 the pager speeds up. All of it makes production tougher. A Refactor pays down 20. Nobody will thank you.</p>
+  <h3>Observability</h3>
+  <table class="obs">
+    <tr><th>1</th><td>Where you start. Enemy health bars, risk markers on the map, the first level of a tree in the registry.</td></tr>
+    <tr><th>2</th><td>Pager forecasts: which node goes down next. Whole trees and exact version conflicts in the registry.</td></tr>
+    <tr><th>3</th><td>Warning rings on bugs about to fire, and a tell on things that are not what they seem.</td></tr>
+  </table>
+  <p>Raise it with a Test Suite, or with packages that add it. Deploy at 1 and you may meet the boss whose health you cannot see.</p>
+  <aside class="fieldnote"><b>Field Note</b> The pager is not random about what it hits. It is random about when you notice.</aside>
+</section>
+
+<section class="page" id="ch6">
+  <h1><span>Chapter 6</span>Change freeze</h1>
+  <p>When the last room on the clock is cleared, the release train leaves and a <b>change freeze</b> begins.</p>
+  <dl class="freeze">
+    <dt>Frozen</dt><dd>Installing packages and refreshing the registry. Entering any unvetted room, which means no more vetting, and no integrating a package you installed but never shipped.</dd>
+    <dt>Still allowed</dt><dd><b>Incident response.</b> A node that is down can be traveled to and its room fought; clearing it brings the node back. Hotfixes and the Rollback Plan work as usual, and tools can still be bought.</dd>
+    <dt>Silent</dt><dd>The pager. Nothing new goes down once the train has left, including on the room that started the freeze.</dd>
+    <dt>Required</dt><dd>Deploying. It is the only way forward. Every feature short of three adds ten debt and makes production a quarter angrier.</dd>
+  </dl>
+  <p>A down node behind rooms you never vetted cannot be reached during a freeze. Hotfix it from the map, roll back, or ship without it.</p>
+  <aside class="fieldnote"><b>Field Note</b> A freeze stops changes. It has never once stopped an incident.</aside>
+</section>
+
+<section class="page" id="ch7">
+  <h1><span>Chapter 7</span>Production</h1>
+  <p>The deploy door asks for confirmation and shows you what production will find: your features, your weak points, and who is waiting. Then you fight it.</p>
+  <h3>Production is built from your run</h3>
+  <p>Its identity comes from whatever dominates your architecture. Its health scales to <b>your own gun</b> (damage, shots, critical hits, fire rate) at the moment you deploy, and to your debt. Separate shooters and on-hit effects (drones, orbitals, bounces, blasts) are not counted against you.</p>
+  <h3>Strikes</h3>
+  <p>As its health drops, production strikes. Each strike hits one of your weak points: an unvetted node goes down (and every power that depends on it goes dark, mid-fight), a shim breaks, a pinned version is forced to upgrade. Strikes on vetted nodes visibly bounce off. This is where every shortcut you took comes due.</p>
+  <div data-gen="bosses"></div>
+  <aside class="fieldnote"><b>Field Note</b> A Rollback Plan works in production too. Nobody has ever regretted bringing one.</aside>
+</section>
+
+<section class="page" id="ch8">
+  <h1><span>Chapter 8</span>Tools of the trade</h1>
+  <p>Commits buy tools at the registry. Press a tool's key, or click it; after buying, its instructions appear under the list. Tools that are <i>charges</i> (Pin, Container, Rollback Plan) are bought now and used later: pins and containers from the map, rollbacks with <kbd>R</kbd> in a fight.</p>
+  <div data-gen="tools"></div>
+  <aside class="fieldnote"><b>Field Note</b> Saving commits for the end is a strategy. So is spending them all on Refresh Registry until the right package shows up. Both have won.</aside>
+</section>
+
+<section class="page" id="ch9">
+  <h1><span>Chapter 9</span>Postmortems and grades</h1>
+  <p>Every run ends in a report, built only from what actually happened: every line in it can be traced to an event in your run.</p>
+  <p>A run that fails ends in a <b>postmortem</b>: the root cause, the contributing factors, what went well, action items, and, first, <b>Next sprint, try</b>: one or two things that would most likely have saved this particular run.</p>
+  <p>A release that ships gets a <b>release report</b> and a grade, scored out of seven:</p>
+  <table class="grades">
+    <tr><th>Measured at release</th><th>2 points</th><th>1 point</th><th>0</th></tr>
+    <tr><td>Stability left</td><td>60+</td><td>30&ndash;59</td><td>under 30</td></tr>
+    <tr><td>Unvetted nodes</td><td>0</td><td>1&ndash;3</td><td>4+</td></tr>
+    <tr><td>Technical debt</td><td>under 25</td><td>25&ndash;49</td><td>50+</td></tr>
+    <tr><td>Production strikes that landed</td><td>&mdash;</td><td>none</td><td>any</td></tr>
+  </table>
+  <p class="gradeline"><b>S</b> 7 &middot; <b>A</b> 6 &middot; <b>B</b> 4&ndash;5 &middot; <b>C</b> 2&ndash;3 &middot; <b>D</b> 0&ndash;1 &middot; <b>F</b> did not ship</p>
+  <p>The report shows the breakdown, and what the next point needed.</p>
+  <aside class="fieldnote"><b>Field Note</b> An S is a flawless release: nothing unvetted, nothing struck, nothing owed. It has been done. Legal was suspicious.</aside>
+</section>
+
+<section class="page" id="ch10">
+  <h1><span>Chapter 10</span>Projects</h1>
+  <p>A project is a starting graph and a few numbers. Every rule after that is the same.</p>
+  <div data-gen="projects"></div>
+</section>
+
+<section class="page" id="ch11">
+  <h1><span>Chapter 11</span>A field guide to bugs</h1>
+  <p>Which bugs a room spawns depends on what kind of software it is: crypto libraries breed race conditions, legacy code breeds deprecated APIs, and so on. Elites are tougher versions of the same bug; debt and incidents make them more common.</p>
+  <div data-gen="enemies"></div>
+</section>
+
+<section class="page" id="appA">
+  <h1><span>Appendix A</span>The package catalog</h1>
+  <p>Every package the registry can offer, as of this printing. Rooms are counted on an empty project; on a real one, shared dependencies are already there.</p>
+  <div data-gen="packages"></div>
+</section>
+
+<section class="page" id="appB">
+  <h1><span>Appendix B</span>The dependency index</h1>
+  <p>The transitive dependencies you will meet, with what they are like. &#9650; risky, &#9760; very risky.</p>
+  <div data-gen="deps"></div>
+</section>
+
+<section class="page" id="appC">
+  <h1><span>Appendix C</span>Troubleshooting</h1>
+  <dl class="faq">
+    <dt>I press <kbd>Q</kbd> and nothing happens.</dt><dd>The feature flag comes with the launch-dorkly package. Without it there is no flag to flip, and the game will say so.</dd>
+    <dt>A door says LOCKED.</dt><dd>Nothing that requires that room has been vetted yet. Clear the room above it first.</dd>
+    <dt>A door says CHANGE FREEZE.</dt><dd>The release train has left. Only down nodes can be entered now. Chapter 6.</dd>
+    <dt>My power went dark in the middle of a fight.</dt><dd>Something it depends on is down, or it lost a version conflict this fight. The packages panel says which.</dd>
+    <dt>I vetted left-pad and it still went down.</dt><dd>It was unpublished. Vetting cannot stop that; a pin can.</dd>
+    <dt>A package I hardened is not hardened any more.</dt><dd>It grew. Go and read what it calls now.</dd>
+    <dt>The boss was much tougher than last time.</dt><dd>It scales to your gun and your debt, and every feature you deployed without makes it angrier.</dd>
+    <dt>A commit bit me.</dt><dd>It was not a commit.</dd>
+    <dt>I keep losing.</dt><dd>Read the first section of your postmortem. Then read it again. Then remember that one of our playtesters lost thirty-two runs in a row and then shipped an S.</dd>
+  </dl>
+</section>
+
+<section class="page qrc" id="qrc">
+  <div class="cut">&#9986; cut along the dotted line &#9986;</div>
+  <h1>Quick reference card</h1>
+  <div class="qrc-grid">
+    <div><h3>Keys</h3><p>WASD move &middot; mouse/arrows aim + fire &middot; Space dash &middot; E use &middot; Tab map &middot; H help &middot; Q flag &middot; R rollback &middot; N sound &middot; K swap move/aim</p></div>
+    <div><h3>The loop</h3><p>Install &rarr; integrate (clear its room: a feature) &rarr; vet its tree &rarr; harden &rarr; 3 features &rarr; deploy</p></div>
+    <div><h3>States</h3><p>&#9633; unvetted: a liability &middot; &#9632; vetted: holds &middot; &#9632; down: dependents dark &middot; &#9634; hardened: stronger</p></div>
+    <div><h3>Pressure</h3><p>Pager every 3 rooms (2 at 50 debt) &middot; restock every 3 &middot; debt per 25: bigger rooms</p></div>
+    <div><h3>Freeze</h3><p>No installs, no vetting. Incidents can still be fixed. Then deploy.</p></div>
+    <div><h3>Grades</h3><p>Stability 60+ &middot; 0 unvetted &middot; debt under 25 &middot; no strikes landed = S</p></div>
+  </div>
+</section>
+
+<section class="page back">
+  <div class="ad">
+    <p class="ad-kicker">Now available wherever books are sold to children at school</p>
+    <h2>The Official Dependency Hell Strategy Guide</h2>
+    <p>288 full-colour pages. Every node mapped. Every boss explained. The secret of the S grade revealed! Plus: a pull-out poster of the complete dependency graph of a production system, which does not fit on the poster.</p>
+    <p class="ad-price">$19.95 &middot; oversized softcover</p>
+  </div>
+  <p class="credits">Engineering: you. Quality assurance: our playtesters, who lost so that you might ship. No packages were harmed in the making of this game. Several were deprecated.</p>
+  <p class="back-link"><a href="index.html">&larr; Back to the game</a></p>
+</section>
+
+<script src="js/rng.js"></script>
+<script src="js/content.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/manual-copy.js"></script>
+<script src="js/manual.js"></script>
+</body>
+</html>

@@ -13,6 +13,11 @@ release report generated from what actually happened.
 
 Open `index.html` in a browser. No build, no install, no server.
 
+The operator's manual is `manual.html` (linked from the title screen, or press `M` there). Its
+reference pages (packages, dependencies, enemies, bosses, tools, projects) are generated from
+`js/content.js`; the prose about each enemy, boss and project is in `js/manual-copy.js`, and
+`tools/content-lint.js` fails if one is missing.
+
 | | |
 |---|---|
 | Move | `WASD` (or arrows: press `K` on the title or help screen to swap) |
