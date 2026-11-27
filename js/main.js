@@ -340,6 +340,12 @@
       check('weekend has a short clock', game.run.ticksLeft === 9 && game.run.commits === 12);
       UI.open('title'); UI.key('Digit1', {}); UI.key('Enter', {});
       check('greenfield starts empty', game.run.project === 'greenfield' && G.packages(game.run.graph).length === 0);
+      game.run.offers[0] = 'left-pad'; S.install(game, 0);
+      const lp = game.run.graph.nodes['left-pad'];
+      lp.state = 'vetted';
+      check('a vetted left-pad can still be unpublished', !!lp && S.yankable(lp));
+      game.run.tools.pin = 1;
+      check('vendoring it (a pin) is allowed and takes it off the pager', S.pin(game, 'left-pad') && lp.pinned && game.run.log.some((e) => e.kind === 'pin' && /vendored/.test(e.text)));
     } catch (e) { out.push('FAIL exception: ' + (e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e)); }
     const pre = document.createElement('pre');
     pre.id = 'selftest';

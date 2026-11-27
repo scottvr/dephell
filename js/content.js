@@ -97,8 +97,8 @@
     'left-pad': {
       name: 'left-pad@1.3', eco: 'tiny', risk: 3, flag: 'unpublish', debt: 0, deps: [],
       tag: 'A small package with no dependencies. Surely harmless.',
-      power: 'RAPID FIRE  +35% fire rate', hard: '+55% fire rate',
-      fx: [{ stat: 'fireDelay', op: 'mul', v: 0.74, hard: 0.64 }],
+      power: 'RAPID FIRE  +30% fire rate', hard: '+39% fire rate',
+      fx: [{ stat: 'fireDelay', op: 'mul', v: 0.77, hard: 0.72 }],
     },
     lowdash: {
       name: 'lowdash@4.17', eco: 'tiny', risk: 1, debt: 0, deps: ['is-even', 'is-number'],

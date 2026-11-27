@@ -39,6 +39,10 @@ registry. Records are kept per project.
   the node's room is cleared (an incident room: tougher) or hotfixed from the map (costs debt,
   and the node stays unvetted). The target is rolled one room ahead; with observability 2+ you
   are told which node it is and can vet it first.
+- **Unpublishable nodes** (`flag: 'unpublish'`, i.e. left-pad). Its author can pull it whatever
+  its code looks like, so vetting does not take it off the pager's list. A pin ("vendor a copy")
+  does, at the usual pin debt per room. A one-room package would otherwise be hardened, and safe,
+  the moment it ships.
 - **Version conflicts.** Two packages that pull different majors of one library conflict. In
   each fight one side fails to load. Vetting both versions resolves it; a shim hides it.
 - **Technical debt.** From shortcuts: shims, hotfixes, pins, flags, some packages. Every 25

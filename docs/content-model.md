@@ -124,7 +124,7 @@ primitives, never on package names, so they keep working as the package pool gro
 | --- | --- | --- |
 | `risk` 0–3 | How strongly the pager favours this node | Risk markers on the map (with observability) |
 | `eco` | Which enemy mix its room spawns | The fight in that room |
-| `flag` | `cve`, `abandoned`, `license`, `unpublish` | Incident text; `cve` shipped unvetted pulls the boss toward The Breach |
+| `flag` | `cve`, `abandoned`, `license`, `unpublish` | Incident text; `cve` shipped unvetted pulls the boss toward The Breach; `unpublish` stays a pager target even when vetted, until pinned |
 | `lib` | Two nodes with the same `lib` are two majors of one library | Version conflict: one side fails to load each fight |
 | `deps` | Further nodes it drags in | More rooms |
 

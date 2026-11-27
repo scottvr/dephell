@@ -124,7 +124,8 @@
         return `${who} ${were} offline because ${n ? n.name : c} had been down${inc ? ' since ' + T(inc) : ''} (${n && n.downWhy ? n.downWhy : 'cause unknown'})`;
       });
       s += ' At the time, ' + parts.join('; ') + '.';
-      if (incidentNode) s += ` ${incidentNode.name} ${incidentNode.bornTick === 0 && run.project !== 'greenfield' ? 'came with the project' : 'arrived at T-' + String(run.ticksTotal - incidentNode.bornTick).padStart(2, '0')} and was never vetted.`;
+      if (incidentNode && incidentNode.yanked) s += ` ${incidentNode.name} had been vetted; its author unpublished it anyway. Only a pin (vendoring a copy) stops that.`;
+      else if (incidentNode) s += ` ${incidentNode.name} ${incidentNode.bornTick === 0 && run.project !== 'greenfield' ? 'came with the project' : 'arrived at T-' + String(run.ticksTotal - incidentNode.bornTick).padStart(2, '0')} and was never vetted.`;
     } else if (Object.keys(d.suppressed).length) {
       const lib = Object.values(d.suppressed)[0];
       s += ` ${list(Object.keys(d.suppressed).map((p) => nodes[p].name))} had failed to load because of the unresolved ${lib} version conflict.`;

@@ -134,7 +134,7 @@
     let ptxt;
     if (run.phase === 'boss') ptxt = `<div class="tgt">prod is auditing your architecture</div>`;
     else if (run.freeze) ptxt = `<div class="q">silenced for the deploy</div>`;
-    else if (pg.target && st.obs >= 2) ptxt = `<div class="tgt">▶ ${esc(g.nodes[pg.target].name)}${riskGlyph(g.nodes[pg.target])} goes down next room</div><div class="q">vet it now, or pin it</div>`;
+    else if (pg.target && st.obs >= 2) ptxt = `<div class="tgt">▶ ${esc(g.nodes[pg.target].name)}${riskGlyph(g.nodes[pg.target])}${S.yankable(g.nodes[pg.target]) ? ' may be unpublished next room</div><div class="q">vetting will not help: pin it' : ' goes down next room</div><div class="q">vet it now, or pin it'}</div>`;
     else if (pg.in === 1 && pg.target) ptxt = `<div class="tgt">something goes down next room</div><div class="q">target unknown (observability 2 shows it)</div>`;
     else ptxt = `<div class="q">next incident in ${pg.in} rooms</div>`;
     setHTML('pager', `<h2>PAGER</h2>${ptxt}`);
@@ -252,7 +252,7 @@
           <div class="pw"><b>${esc(pname)}</b> ${esc(pdesc || '')}</div><div class="hd">★ hardened: ${esc(def.hard)}</div>
           <pre>${treeHTML(pv, obs)}</pre>
           <div class="cost">+${pv.rooms} room${pv.rooms > 1 ? 's' : ''} to the dungeon${def.debt ? ` · <span style="color:#ffc24a">+${def.debt} debt</span>` : ''}${def.risk >= 2 && obs >= 1 ? ` · <span style="color:#ffc24a">risky itself${def.flag ? ' (' + flagText[def.flag] + ')' : ''}</span>` : ''}</div>
-          ${warn}${couple}<div class="go">ENTER — npm install</div></div>`;
+          ${warn}${couple}${def.flag === 'unpublish' ? '<div class="warn">⚠ UNPUBLISHABLE: its author can pull it any time. Vetting will not stop the pager taking it down; a pin will.</div>' : ''}<div class="go">ENTER — npm install</div></div>`;
       }).join('') + '</div>';
     }
     const conflict = G.activeConflicts(g, run.shims).length;
@@ -293,7 +293,7 @@
     const travelWhy = !idle ? 'finish the fight first' : mapSel === run.cur ? 'you are here' : run.freeze && n.state !== 'vetted' ? 'change freeze' : !G.enterable(g, mapSel) ? 'vet a node that requires it first' : '';
     acts.push({ key: 'Enter', id: 'travel', label: n.state === 'vetted' || mapSel === 'app' ? 'Travel here' : n.state === 'down' ? 'Travel here and fix it (fight)' : n.kind === 'pkg' ? 'Travel here and integrate it (fight)' : 'Travel here and vet it (fight)', no: travelWhy });
     if (n.state === 'down') acts.push({ key: 'H', id: 'hotfix', label: `Hotfix from here (${TUNE.hotfixCommits}c, +${TUNE.hotfixDebt} debt)`, no: !idle ? 'finish the fight first' : run.commits < TUNE.hotfixCommits ? 'not enough commits' : '' });
-    if (n.state === 'unvetted' && mapSel !== 'app') acts.push({ key: 'P', id: 'pin', label: `Pin version (${run.tools.pin} charge${run.tools.pin === 1 ? '' : 's'})`, no: n.pinned ? 'already pinned' : run.tools.pin < 1 ? 'buy Pin Version at the registry' : '' });
+    if ((n.state === 'unvetted' || S.yankable(n)) && mapSel !== 'app') acts.push({ key: 'P', id: 'pin', label: `Pin version (${run.tools.pin} charge${run.tools.pin === 1 ? '' : 's'})`, no: n.pinned ? 'already pinned' : run.tools.pin < 1 ? 'buy Pin Version at the registry' : '' });
     if (n.kind !== 'pkg' && mapSel !== 'app') acts.push({ key: 'C', id: 'contain', label: `Containerize (${run.tools.container} charge${run.tools.container === 1 ? '' : 's'})`, no: n.contained ? 'already contained' : run.tools.container < 1 ? 'buy Container at the registry' : '' });
     if (n.kind === 'pkg') acts.push({ key: 'X', id: 'uninstall', label: confirmX === mapSel ? 'REALLY uninstall? press X again' : 'Uninstall package', no: run.cur !== 'app' ? 'only from app' : !idle ? 'finish the fight first' : '' });
     return acts;
@@ -304,7 +304,7 @@
     if (!n) return;
     const known = obs >= 1 || n.visited || n.kind !== 'dep';
     const deps = [...G.dependents(g, mapSel)].filter((id) => g.nodes[id].kind === 'pkg').map((id) => g.nodes[id].name);
-    let html = `<h3>${esc(n.name)}</h3><div class="st ${mapSel === 'app' ? 'vetted' : n.state}">${mapSel === 'app' ? 'HOME' : n.state.toUpperCase()}${n.pinned ? ' · PINNED' : ''}${n.contained ? ' · CONTAINED' : ''}${n.hotfixed ? ' · HOTFIXED' : ''}</div>`;
+    let html = `<h3>${esc(n.name)}</h3><div class="st ${mapSel === 'app' ? 'vetted' : n.state}">${mapSel === 'app' ? 'HOME' : n.state.toUpperCase()}${n.pinned ? ' · PINNED' : S.yankable(n) ? ' · UNPUBLISHABLE: the pager can still take it; pin it' : ''}${n.contained ? ' · CONTAINED' : ''}${n.hotfixed ? ' · HOTFIXED' : ''}</div>`;
     html += `<p><i>${esc(n.blurb)}</i></p>`;
     if (n.state === 'down') html += `<p style="color:#ff4d5e">${esc(n.downWhy)}. Everything that requires it is offline until it is fixed.</p>`;
     if (mapSel !== 'app') html += `<p>Risk: ${known ? ['none', 'low', '▲ medium', '☠ high'][n.risk] + (n.flag ? ' — ' + flagText[n.flag] : '') : '? (observability 1 shows it)'}</p>`;

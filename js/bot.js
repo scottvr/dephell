@@ -25,6 +25,10 @@
         }
         if (want) { S.install(game, policy.pick != null ? policy.pick % run.offers.length : run.rng.int(run.offers.length)); return true; }
       }
+      // vendor anything that can be unpublished: vetting does not protect it (policy.pin === false to measure without)
+      const yank = policy.pin !== false && Object.keys(nodes).find((id) => S.yankable(nodes[id]) && !nodes[id].pinned);
+      if (yank && run.tools.pin < 1 && S.buyTool(game, 'pin')) return true;
+      if (yank && S.pin(game, yank)) return true;
       if (run.stability < 55 && run.commits >= 4 && S.buyTool(game, 'drink')) return true;
       if (run.commits >= 9 && run.obsBase < 2 && S.buyTool(game, 'tests')) return true;
       if (run.commits >= 12 && run.tools.rollback < 1 && S.buyTool(game, 'rollback')) return true;

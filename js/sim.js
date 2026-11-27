@@ -144,16 +144,20 @@
   };
 
   // ------------------------------------------------------------------ the pager
+  // An unpublishable node can be yanked by its author however well you read it: vetting does not
+  // protect it, only a pin (vendoring your own copy) does. That is left-pad's whole cost.
+  const yankable = (n) => n.flag === 'unpublish' && n.state === 'vetted';
+  S.yankable = yankable;
+  const pageable = (n) => (n.state === 'unvetted' || yankable(n)) && !n.pinned && !n.hotfixed;
+
   function rollPagerTarget(game) {
     const run = game.run;
     const nodes = run.graph.nodes;
-    const cands = Object.keys(nodes).filter((id) => {
-      const n = nodes[id];
-      return n.state === 'unvetted' && !n.pinned && !n.hotfixed && id !== 'app';
-    });
+    const cands = Object.keys(nodes).filter((id) => id !== 'app' && pageable(nodes[id]));
     const pick = run.rng.weighted(cands, (id) => (nodes[id].risk + 0.5) * (nodes[id].flag ? 1.5 : 1));
     run.pager.target = pick || null;
-    if (pick) banner(game, 'PAGER', game.stats.obs >= 2 ? `${nodes[pick].name} goes down after the next room. Vet it now, or pin it.` : 'Something goes down after the next room. (Observability 2 would say what.)', 'warn');
+    const advice = pick && yankable(nodes[pick]) ? 'may be unpublished after the next room. Vetting will not help: pin it.' : 'goes down after the next room. Vet it now, or pin it.';
+    if (pick) banner(game, 'PAGER', game.stats.obs >= 2 ? `${nodes[pick].name} ${advice}` : 'Something goes down after the next room. (Observability 2 would say what.)', 'warn');
     if (pick && game.stats.obs >= 2) {
       run.stats.forecastSeen++;
       log(game, 'forecast', `pager forecast: ${nodes[pick].name} looks shaky`, { node: pick });
@@ -177,8 +181,9 @@
     const nodes = run.graph.nodes;
     const id = run.pager.target;
     const n = id && nodes[id];
-    if (n && n.state === 'unvetted' && !n.pinned && !n.hotfixed) {
+    if (n && pageable(n)) {
       const why = (INCIDENT_TEXT[n.flag] || INCIDENT_TEXT.none)(n.name);
+      n.yanked = n.state === 'vetted'; // the reports must not call this one "never vetted"
       const hit = takeDown(game, id, why);
       run.stats.incidents++;
       const names = hit.map((p) => nodes[p].name);
@@ -358,10 +363,11 @@
   S.pin = function (game, id) {
     const run = game.run;
     const n = run.graph.nodes[id];
-    if (!n || run.phase !== 'run' || run.tools.pin < 1 || n.state !== 'unvetted' || n.pinned || id === 'app') return false;
+    if (!n || run.phase !== 'run' || run.tools.pin < 1 || !(n.state === 'unvetted' || yankable(n)) || n.pinned || id === 'app') return false;
     run.tools.pin--;
+    const vendored = yankable(n);
     n.pinned = true;
-    log(game, 'pin', `pinned ${n.name}: the pager will skip it; prod will not`, { node: id });
+    log(game, 'pin', vendored ? `vendored ${n.name}: a copy nobody can unpublish (+${TUNE.pinDebtPerTick} debt per room)` : `pinned ${n.name}: the pager will skip it; prod will not`, { node: id });
     sfx(game, 'buy');
     game.dirty = true;
     return true;
