@@ -312,8 +312,9 @@
     },
     monolith: {
       name: 'THE INHERITED MONOLITH', tag: 'The last team left. Their code did not.',
-      brief: 'Two features are already shipped, on top of five rooms nobody ever checked. You start in debt.',
-      start: [{ pkg: 'enterprise-bus', shipped: true }, { pkg: 'legacy-auth', shipped: true }], debt: 10, level: 'STRONG START, ROTTEN BASE',
+      brief: 'Two features shipped, a Kubernetes migration abandoned halfway, twelve rooms nobody checked. Deep in debt. 13 rooms.',
+      // ...and a Kubernetes migration somebody started and walked away from
+      start: [{ pkg: 'enterprise-bus', shipped: true }, { pkg: 'legacy-auth', shipped: true }, { pkg: 'kubernot' }], ticks: 13, debt: 10, level: 'STRONG START, ROTTEN BASE',
     },
     template: {
       name: 'THE STARTER TEMPLATE', tag: 'One command. What could it install?',

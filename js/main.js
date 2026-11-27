@@ -350,7 +350,8 @@
       keys.clear();
       UI.key('Digit2', {}); UI.key('Enter', {});
       const G = DH.Graph, g2 = game.run.graph;
-      check('monolith starts with two shipped features in debt', game.run.project === 'monolith' && S.features(game) === 2 && game.run.debt >= 25 && game.stats.pierce > 0);
+      check('monolith starts with two shipped features in debt', game.run.project === 'monolith' && S.features(game) === 2 && game.run.debt >= 25 && game.stats.pierce > 0 && game.run.ticksLeft === 13);
+      check('...and an unfinished kubernot migration', !!game.run.graph.nodes.kubernot && !DH.Graph.isIntegrated(game.run.graph, 'kubernot'));
       check('monolith tree is unvetted', G.packages(g2).every((p) => !G.isHardened(g2, p)));
       UI.open('title'); UI.key('Digit3', {}); UI.key('Enter', {});
       check('template starts with its package unshipped and tools', game.run.project === 'template' && S.features(game) === 0 && Object.keys(game.run.graph.nodes).length >= 20 && game.run.tools.rollback === 1 && game.run.ticksLeft === 26 && game.stats.obs >= 2);

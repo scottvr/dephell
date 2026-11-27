@@ -22,7 +22,7 @@ few numbers (`PROJECTS` in `js/content.js`); every rule after that is the same.
 | Project | What you start with | What it asks of you |
 | --- | --- | --- |
 | Greenfield | Nothing. 14 rooms on the clock. | The standard sprint. |
-| The Inherited Monolith | Two packages already shipped, sharing a risk-3 node with a CVE; five unvetted rooms; 35 debt. | You have power on day one and one feature to go. Decide how much of someone else's tree to clean up before prod audits it. |
+| The Inherited Monolith | Two packages already shipped, sharing a risk-3 node with a CVE, plus a kubernot migration installed and never finished; twelve unvetted rooms; 43 debt; 13 rooms on the clock. | You have power on day one and one feature to go. Decide how much of someone else's tree to clean up, and whether to finish their migration, before prod audits it. |
 | The Starter Template | One unshipped package with a seventeen-node tree built from the dependencies other packages use (20 rooms to vet); 26 rooms on the clock; observability 2 (pager forecasts); a rollback plan and a container. | Vetting it all is possible, barely, if you waste nothing. New packages add few rooms because their tree is already there, and already fragile. Choose which hubs to protect first. |
 | The Weekend Rewrite | Nothing, 9 rooms, 12 commits, registry restocks every 2 rooms. | Ship fast and buy your way out. |
 
@@ -30,7 +30,8 @@ The Template's clock is sized so a careful player can finish: vet everything and
 Finishing is what makes Greenfield satisfying, and a playtester found the Template's 20 starting
 rooms on a 14-room clock simply impossible (0 of 40 bot runs ever finished). Difficulty follows
 progress through the release rather than the room number, so its 26 rooms ramp like Greenfield's 14.
-Balance gauge, 80 runs: the bot wins about 43% there against about 75% in Greenfield, and a bot
+Balance gauge, 80 runs: the bot wins about 55% there against about 78% in Greenfield (the
+Monolith about 81%, the Weekend Rewrite about 71%), and a bot
 that vets before shipping finishes everything in 14-24% of runs (Greenfield: about 22%).
 
 Inherited packages are logged as installs at T-0, so the reports can say that a node "came with
