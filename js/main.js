@@ -125,10 +125,11 @@
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   function fit() {
-    const k = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    // the stage is laid out at 2560x1440 (see css/game.css) and scaled to the window
+    const k = Math.min(window.innerWidth / 2560, window.innerHeight / 1440);
     stage.style.transform = `scale(${k})`;
-    stage.style.left = Math.round((window.innerWidth - 1280 * k) / 2) + 'px';
-    stage.style.top = Math.round((window.innerHeight - 720 * k) / 2) + 'px';
+    stage.style.left = Math.round((window.innerWidth - 2560 * k) / 2) + 'px';
+    stage.style.top = Math.round((window.innerHeight - 1440 * k) / 2) + 'px';
   }
   window.addEventListener('resize', fit);
 
@@ -286,6 +287,10 @@
       UI.open('help'); check('help opens', UI.mode === 'help'); UI.key('Escape', {});
       UI.open('registry'); UI.key('Digit5', {}); UI.key('Escape', {});
       check('registry tool purchase path ran', !UI.mode);
+      UI.open('registry');
+      document.querySelector('[data-tool="container"]').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      check('pointing at a tool explains how to use it', /press C/.test(document.getElementById('toolhow').textContent));
+      UI.key('Escape', {});
       const left0 = game.run.ticksLeft, commits0 = game.run.commits;
       game.run.ticksLeft = 3; game.run.commits = 10; UI.open('registry');
       check('registry suggests a rollback plan when prod is close', /Rollback Plan/.test((document.querySelector('.ov .tip') || {}).textContent || ''));

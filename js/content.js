@@ -266,15 +266,16 @@
   };
 
   // ---------------------------------------------------------------- registry tools
+  // desc: what it does, short enough for its card at any font size. how: the full how-to, shown when the tool is hovered.
   const TOOLS = [
-    { id: 'drink', name: 'Energy Drink', cost: 4, desc: '+25 Stability. +2 debt. The can says "morale".' },
-    { id: 'tests', name: 'Test Suite', cost: 6, desc: 'Observability +1, permanently. See more, be surprised less.' },
-    { id: 'shim', name: 'Compat Shim', cost: 5, desc: 'Papers over one version conflict. +12 debt. Shims break under load.' },
-    { id: 'pin', name: 'Pin Version', cost: 3, desc: 'Charge: pin a node from the MAP. The pager skips it; debt accrues; prod will force the upgrade.' },
-    { id: 'container', name: 'Container', cost: 5, desc: 'Charge: wrap a node from the MAP. Its outages stop cascading to dependents.' },
-    { id: 'refactor', name: 'Refactor', cost: 5, desc: 'Pay down 20 Technical Debt. Nobody will thank you.' },
-    { id: 'rollback', name: 'Rollback Plan', cost: 8, desc: 'Charge: press [R] in a fight to restore every downed node and 25 Stability.' },
-    { id: 'reroll', name: 'Refresh Registry', cost: 2, desc: 'New package offers. The old ones were fine. Probably.' },
+    { id: 'drink', name: 'Energy Drink', cost: 4, desc: '+25 stability now. +2 debt.', how: 'Drink it between fights. The can says "morale".' },
+    { id: 'tests', name: 'Test Suite', cost: 6, desc: 'Observability +1, for good.', how: 'See more: risk markers, enemy health, version conflicts, and which node the pager hits next.' },
+    { id: 'shim', name: 'Compat Shim', cost: 5, desc: 'Hide one version conflict. +12 debt.', how: 'Both versions load again. Prod breaks the shim under load, mid-fight.' },
+    { id: 'pin', name: 'Pin Version', cost: 3, desc: 'The pager skips one node. Costs debt.', how: 'After buying: map (Tab), pick an unvetted node, press P. +2 debt every room, and prod forces the upgrade anyway.' },
+    { id: 'container', name: 'Container', cost: 5, desc: "One node's outage stays its own.", how: 'After buying: map (Tab), pick a dependency, press C. When it goes down, nothing that needs it goes dark.' },
+    { id: 'refactor', name: 'Refactor', cost: 5, desc: 'Pay down 20 technical debt.', how: 'Debt adds enemies, speeds the pager and toughens prod. Nobody will thank you.' },
+    { id: 'rollback', name: 'Rollback Plan', cost: 8, desc: 'Press R in a fight: heal, fix outages.', how: 'One use: +25 stability and every downed node comes back up. Works on prod, too.' },
+    { id: 'reroll', name: 'Refresh Registry', cost: 2, desc: 'Three new package offers.', how: 'Only before you take a package this restock. The old offers were fine. Probably.' },
   ];
 
   // ---------------------------------------------------------------- incident copy

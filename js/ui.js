@@ -15,8 +15,18 @@
   const setHTML = (id, v) => { if (cache[id] !== v) { cache[id] = v; $(id).innerHTML = v; } };
   const setClass = (id, v) => { if (cache['c:' + id] !== v) { cache['c:' + id] = v; $(id).className = v; } };
 
+  const TOOL_HOW_DEFAULT = 'Tools cost commits: press the key on a tool or click it. Point at a tool to see how it works.';
   UI.init = function (h) {
     hooks = h;
+    // the registry's how-to line follows whichever tool is under the pointer
+    $('overlay').addEventListener('mouseover', (e) => {
+      if (UI.mode !== 'registry') return;
+      const el = e.target.closest('[data-tool]'), how = $('toolhow');
+      if (!how) return;
+      const tl = el && TOOLS[+el.dataset.i];
+      const txt = tl ? `<b>${esc(tl.name)}</b> — ${esc(tl.how)}` : TOOL_HOW_DEFAULT;
+      if (how.innerHTML !== txt) how.innerHTML = txt;
+    });
     $('minimap').addEventListener('click', () => { if (!UI.mode && game) UI.open('map'); });
     $('overlay').addEventListener('click', onOverlayClick);
     $('full').addEventListener('click', (e) => {
@@ -263,7 +273,7 @@
       if (tl.id === 'drink' && run.stability >= run.maxStability) no = true;
       if (tl.id === 'refactor' && run.debt <= 0) no = true;
       if (tl.id === 'reroll' && (run.offerTaken || run.freeze)) no = true;
-      return `<div class="tool${no ? ' no' : ''}" data-tool="${tl.id}"><b>[${'4567890-'[i]}] ${esc(tl.name)}</b><i>${tl.cost}c</i><span>${esc(tl.desc)}</span></div>`;
+      return `<div class="tool${no ? ' no' : ''}" data-tool="${tl.id}" data-i="${i}"><b>[${'4567890-'[i]}] ${esc(tl.name)}</b><i>${tl.cost}c</i><span>${esc(tl.desc)}</span></div>`;
     }).join('');
     // one tip, only when it is actionable right now
     const key = (id) => '4567890-'[TOOLS.findIndex((tl) => tl.id === id)];
@@ -273,7 +283,7 @@
     else if (UI.novice && G.packages(g).length && !run.offerTaken && !run.freeze && run.offers.length && run.commits >= cost('reroll')) tip = `None of these fit your build? <b>Refresh Registry</b> [${key('reroll')}] rerolls all three for ${cost('reroll')} commits.`;
     $('overlay').innerHTML = `<div class="ov"><span class="close"><kbd>Esc</kbd> close</span><h2>REGISTRY</h2>
       <div class="lede">Take one package per restock. You get its power now. Its dependency tree becomes rooms: vet them all and the package hardens; ignore them and the pager finds them. <b style="color:#eaffff">${run.commits} commits</b> to spend on tools.</div>
-      ${tip ? `<div class="tip">${tip}</div>` : ''}${body}<div class="tools">${tools}</div></div>`;
+      ${tip ? `<div class="tip">${tip}</div>` : ''}${body}<div class="tools">${tools}</div><div class="toolhow" id="toolhow">${TOOL_HOW_DEFAULT}</div></div>`;
   }
 
   // ---- map

@@ -13,6 +13,10 @@ an earlier prototype and is not current.
 - The target machine is an old Intel laptop. The arena is a 320x192 canvas scaled by CSS; keep
   per-frame work to `fillRect`/`drawImage`, and keep CSS effects static (no filters, no
   per-frame DOM writes — `UI.sync` only touches the DOM when something changed).
+- The DOM stage is laid out at 2560x1440 and scaled down by `fit()`: every CSS size is double what
+  it looks like, and no text is under 20 CSS px. That keeps a browser minimum-font-size setting
+  (common in Safari) from enlarging already-scaled text and clipping it. Text that explains a rule
+  never goes in a fixed-height box with `overflow: hidden`.
 
 ## Design rules
 
@@ -28,6 +32,7 @@ an earlier prototype and is not current.
 node tools/bot-run.js 40     # no "stuck" runs; win rate in a sane band
 node tools/selftest.js       # all PASS
 node tools/shots.js          # look at shots/*.png
+node tools/shots.js --minfont=16   # same screens with a browser minimum font size: nothing clipped
 node tools/content-lint.js    # 0 errors, when content changed (--stats for coverage)
 ```
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Screenshot harness: renders ?shot= states with headless Chrome into shots/.
-//   node tools/shots.js [name ...] [--seed=HEX] [--project=ID]   (default: all)   CHROME_PATH overrides the browser
+//   node tools/shots.js [name ...] [--seed=HEX] [--project=ID] [--minfont=PX]   (default: all)   CHROME_PATH overrides the browser
+//   --minfont emulates a browser "never use font sizes smaller than" setting (Safari > Advanced), via a Chrome profile.
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -11,14 +12,23 @@ const all = ['title', 'hub', 'registry', 'registry2', 'combat', 'combat2', 'inci
 const names = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const seedArg = process.argv.find((a) => a.startsWith('--seed='));
 const projArg = process.argv.find((a) => a.startsWith('--project='));
+const minArg = process.argv.find((a) => a.startsWith('--minfont='));
 const outDir = path.join(root, 'shots');
 fs.mkdirSync(outDir, { recursive: true });
+let profile = null;
+if (minArg) {
+  profile = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dh-shots-'));
+  fs.mkdirSync(path.join(profile, 'Default'));
+  const px = +minArg.split('=')[1];
+  fs.writeFileSync(path.join(profile, 'Default', 'Preferences'), JSON.stringify({ webkit: { webprefs: { minimum_font_size: px, minimum_logical_font_size: px } } }));
+}
 
 for (const name of names.length ? names : all) {
-  const out = path.join(outDir, name + (projArg ? '-' + projArg.split('=')[1] : '') + '.png');
+  const out = path.join(outDir, name + (projArg ? '-' + projArg.split('=')[1] : '') + (minArg ? '-min' + minArg.split('=')[1] : '') + '.png');
   const url = 'file://' + path.join(root, 'index.html') + '?shot=' + name + (seedArg ? '&seed=' + seedArg.split('=')[1] : '') + (projArg ? '&project=' + projArg.split('=')[1] : '');
   const r = spawnSync(chrome, [
     '--headless=new', '--disable-gpu', '--hide-scrollbars', '--mute-audio', '--no-first-run',
+    ...(profile ? ['--user-data-dir=' + profile] : []),
     '--window-size=1280,720', '--virtual-time-budget=2500', '--enable-logging=stderr', '--v=0',
     '--screenshot=' + out, url,
   ], { encoding: 'utf8', timeout: 120000 });
