@@ -18,7 +18,12 @@
     get() { try { return JSON.parse(localStorage.getItem('dephell.meta') || '{}'); } catch (e) { return {}; } },
     set(m) { try { localStorage.setItem('dephell.meta', JSON.stringify(m)); } catch (e) { /* private mode */ } },
   };
-  const meta = () => Object.assign({ runs: 0, wins: 0, best: '', proj: {}, last: 'greenfield' }, store.get());
+  const meta = () => {
+    const m = Object.assign({ runs: 0, wins: 0, best: '', proj: {}, last: 'greenfield' }, store.get());
+    // records from before projects existed were all greenfield runs; credit them there
+    if (m.runs && !Object.keys(m.proj).length) m.proj.greenfield = { runs: m.runs, wins: m.wins, best: m.best };
+    return m;
+  };
   function recordEnd(won) {
     const m = meta();
     const pj = (m.proj[game.run.project] = Object.assign({ runs: 0, wins: 0, best: '' }, m.proj[game.run.project]));
@@ -300,6 +305,11 @@
       check('enter starts a new run', game.run.phase === 'run' && game.run.tick === 0 && !UI.mode);
       UI.open('title');
       check('title lists every project', document.querySelectorAll('.proj').length === Object.keys(DH.content.PROJECTS).length);
+      const saved = store.get();
+      store.set({ runs: 33, wins: 3, best: 'S' });
+      const mig = meta().proj.greenfield;
+      check('pre-project records carry over to greenfield', mig && mig.runs === 33 && mig.wins === 3 && mig.best === 'S');
+      store.set(saved);
       UI.key('Digit2', {}); UI.key('Enter', {});
       const G = DH.Graph, g2 = game.run.graph;
       check('monolith starts with two shipped features in debt', game.run.project === 'monolith' && S.features(game) === 2 && game.run.debt >= 25 && game.stats.pierce > 0);
