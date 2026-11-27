@@ -286,16 +286,28 @@
       UI.open('help'); check('help opens', UI.mode === 'help'); UI.key('Escape', {});
       UI.open('registry'); UI.key('Digit5', {}); UI.key('Escape', {});
       check('registry tool purchase path ran', !UI.mode);
+      const left0 = game.run.ticksLeft, commits0 = game.run.commits;
+      game.run.ticksLeft = 3; game.run.commits = 10; UI.open('registry');
+      check('registry suggests a rollback plan when prod is close', /Rollback Plan/.test((document.querySelector('.ov .tip') || {}).textContent || ''));
+      UI.key('Escape', {}); game.run.ticksLeft = left0; game.run.commits = commits0;
       // force the end states
       game.run.freeze = true; UI.open('deploy'); UI.key('Enter', {});
       check('deploy enters the boss room', game.run.phase === 'boss' && game.room.kind === 'boss');
       stepWith(() => Bot.input(game), 60 * 6);
       check('boss fight runs', game.enemies.some((e) => e.type === 'boss'));
+      const hint = () => { game.dirty = true; UI.sync(0, 0); return document.getElementById('hint').textContent; }; // the HUD redraws on dirty or every 0.25s
+      game.run.tools.rollback = 1; game.run.stability = 30;
+      check('low stability with a rollback charge says press R', /press R/.test(hint()));
+      game.run.tools.rollback = 0; game.run.stability = game.run.maxStability; UI.novice = true; game.player.shotAt = game.run.time;
+      check('a beginner who was just shot is told about cover', /racks stop bullets/.test(hint()));
+      UI.novice = false;
+      check('...and nobody else is', !/racks stop bullets/.test(hint()));
       game.run.stability = 1; game.player.inv = 0;
       stepWith(() => ({ mx: 0, my: 0 }), 60 * 30, () => game.run.phase === 'lost');
       check('death ends the run', game.run.phase === 'lost');
       UI.open('report');
       check('postmortem renders', !!document.querySelector('.report') && document.querySelector('.report h2').textContent === 'POSTMORTEM');
+      check('postmortem says what to try next', [...document.querySelectorAll('.report h4')].some((h) => h.textContent === 'NEXT SPRINT, TRY'));
       UI.key('Enter', {});
       check('report ignores an instant Enter', UI.mode === 'report');
       UI.reportAt -= 1000; UI.key('Enter', {});

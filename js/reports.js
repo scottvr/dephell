@@ -134,6 +134,21 @@
     return s;
   }
 
+  // What would most likely have saved this run, phrased as something to do next time. At most two,
+  // most useful first; each one is gated on a fact from this run so it is never generic advice.
+  function nextTry(f) {
+    const out = [], run = f.run, s = run.stats, d = run.death;
+    const cost = (id) => DH.content.TOOLS.find((t) => t.id === id).cost;
+    const rb = run.tools.rollback || 0;
+    if (rb) out.push(`You died holding ${rb > 1 ? rb + ' Rollback Plans' : 'a Rollback Plan'}. Press R mid-fight: +25 stability and every downed node comes back.`);
+    else if (run.commits >= cost('rollback')) out.push(`You died with ${run.commits} unspent commits. A Rollback Plan (${cost('rollback')} at the registry) is a heal you carry into a fight: press R when it gets bad.`);
+    else if (run.commits >= cost('drink') && !d.inBoss) out.push(`You died with ${run.commits} unspent commits. An Energy Drink (${cost('drink')} at the registry) is +25 stability before the next fight.`);
+    if (s.dmgTaken > 0 && s.dmgShot / s.dmgTaken >= 0.5) out.push(`${Math.round(s.dmgShot)} of the ${Math.round(s.dmgTaken)} stability you lost was bullets. Server racks stop bullets: fight from behind them and step out to shoot.`);
+    if (f.pk.length <= 1) out.push(`You fought with ${f.pk.length ? 'one package' : 'nothing but the patch gun'}. Every package is a weapon; if no offer fits, Refresh Registry (${cost('reroll')} commits) rerolls all three.`);
+    if (d.inBoss && s.strikesLanded >= 2) out.push(`Prod struck ${s.strikesLanded} things nobody had vetted and switched your powers off mid-fight. Vetted nodes hold.`);
+    return out.slice(0, 2);
+  }
+
   function factors(f) {
     const out = [];
     const run = f.run, s = run.stats;
@@ -207,7 +222,7 @@
       won: false, title: 'POSTMORTEM', sub: d.inBoss ? 'Production outage during release deployment.' : `Total outage at ${T(d)}, ${Math.min(f.features, TUNE.featuresNeeded)}/${TUNE.featuresNeeded} features shipped.`,
       grade: 'F',
       fields: [['Root cause', rootCause(f)], ['Build identity', identity(f)], ['Final architecture', architecture(f)]],
-      sections: [['CONTRIBUTING FACTORS', factors(f)], ['WHAT WENT WELL', wentWell(f)], ['ACTION ITEMS', actionItems(f, true)]],
+      sections: [['NEXT SPRINT, TRY', nextTry(f)], ['CONTRIBUTING FACTORS', factors(f)], ['WHAT WENT WELL', wentWell(f)], ['ACTION ITEMS', actionItems(f, true)]].filter((x) => x[1].length),
     });
   };
 

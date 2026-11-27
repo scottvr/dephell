@@ -40,7 +40,8 @@
     else if (UI.mode === 'help') renderHelp();
     DH.Audio.sfx('ui');
   };
-  UI.setGame = function (g) { game = g; cache = {}; seenCombat = false; mapSel = 'app'; $('log').innerHTML = ''; bannerQ = []; $('banner').className = ''; };
+  // UI.novice: no shipped release yet, so show the beginner hints
+  UI.setGame = function (g) { game = g; UI.novice = !(hooks.meta().wins > 0); cache = {}; seenCombat = false; mapSel = 'app'; $('log').innerHTML = ''; bannerQ = []; $('banner').className = ''; };
 
   // ------------------------------------------------------------------ HUD sync
   const riskGlyph = (n) => (n.risk >= 3 ? ' ☠' : n.risk === 2 ? ' ▲' : '');
@@ -48,6 +49,12 @@
 
   function hintText() {
     const run = game.run, room = game.room, g = run.graph;
+    const fighting = run.phase === 'boss' || (run.phase === 'run' && room.combat && !room.cleared);
+    if (fighting && seenCombat) {
+      // the two things a struggling player most needs mid-fight, both learned the hard way by a playtester
+      if (run.tools.rollback && run.stability <= 40) return 'Stability low: press <kbd>R</kbd> to roll back (+25 stability, every downed node restored).';
+      if (UI.novice && run.time - game.player.shotAt < 3) return 'Server racks stop bullets. Fight from behind them; step out to shoot.';
+    }
     if (run.phase === 'boss') return 'Prod strikes every <b>unvetted</b> node as its health drops. Vetted nodes hold.';
     if (run.phase !== 'run') return '';
     const pk = G.packages(g);
@@ -258,9 +265,15 @@
       if (tl.id === 'reroll' && (run.offerTaken || run.freeze)) no = true;
       return `<div class="tool${no ? ' no' : ''}" data-tool="${tl.id}"><b>[${'4567890-'[i]}] ${esc(tl.name)}</b><i>${tl.cost}c</i><span>${esc(tl.desc)}</span></div>`;
     }).join('');
+    // one tip, only when it is actionable right now
+    const key = (id) => '4567890-'[TOOLS.findIndex((tl) => tl.id === id)];
+    const cost = (id) => TOOLS.find((tl) => tl.id === id).cost;
+    let tip = '';
+    if ((S.canDeploy(game) || run.freeze || run.ticksLeft <= 4) && !run.tools.rollback && run.commits >= cost('rollback')) tip = `Prod is close. A <b>Rollback Plan</b> [${key('rollback')}] is a heal you carry into the fight: press <kbd>R</kbd> when it gets bad.`;
+    else if (UI.novice && G.packages(g).length && !run.offerTaken && !run.freeze && run.offers.length && run.commits >= cost('reroll')) tip = `None of these fit your build? <b>Refresh Registry</b> [${key('reroll')}] rerolls all three for ${cost('reroll')} commits.`;
     $('overlay').innerHTML = `<div class="ov"><span class="close"><kbd>Esc</kbd> close</span><h2>REGISTRY</h2>
       <div class="lede">Take one package per restock. You get its power now. Its dependency tree becomes rooms: vet them all and the package hardens; ignore them and the pager finds them. <b style="color:#eaffff">${run.commits} commits</b> to spend on tools.</div>
-      ${body}<div class="tools">${tools}</div></div>`;
+      ${tip ? `<div class="tip">${tip}</div>` : ''}${body}<div class="tools">${tools}</div></div>`;
   }
 
   // ---- map

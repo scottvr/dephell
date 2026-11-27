@@ -74,6 +74,7 @@ b { font-weight: 700; }
 #overlay { position: absolute; left: 0; top: 64px; width: 960px; height: 656px; background: rgba(3, 7, 8, .97); padding: 16px 20px; overflow: hidden; cursor: default; }
 .ov h2 { margin: 0 0 2px; font-size: 20px; letter-spacing: 3px; color: var(--cyan); }
 .ov .lede { color: var(--dim); margin-bottom: 12px; font-size: 12px; }
+.ov .tip { color: #ffe9a8; border-left: 2px solid var(--amber); padding: 2px 0 2px 8px; margin: -4px 0 10px; font-size: 12px; } .ov .tip b { color: var(--amber); } .ov .tip + .cards .card { height: 386px; } /* keeps the tool row on screen */
 .ov .close { position: absolute; right: 22px; top: 18px; color: var(--dim); font-size: 12px; }
 .cards { display: flex; gap: 14px; }
 .card { flex: 1; min-width: 0; border: 1px solid var(--line); background: #040b0d; padding: 10px 12px; cursor: pointer; position: relative; height: 410px; overflow: hidden; }

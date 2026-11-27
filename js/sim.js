@@ -59,7 +59,7 @@
     return {
       x: W / 2, y: H / 2 + 28, r: 5, vx: 0, vy: 0, aim: 0, fireCd: 0, dashCd: 0, dashT: 0, dvx: 0, dvy: 0,
       inv: 0, still: 0, shotCount: 0, echoT: 0, shield: 0, flagCd: 0, regenT: 0, cronT: 0, orbA: 0,
-      drones: [], dashHit: null, doorGrace: 0, walk: 0, hurtT: 0,
+      drones: [], dashHit: null, shotAt: -99, doorGrace: 0, walk: 0, hurtT: 0,
     };
   }
 
@@ -76,7 +76,7 @@
       shims: {}, log: [], suppressed: {}, degraded: {}, hardened: {}, freeze: false, phase: 'run',
       boss: null, death: null, everInstalled: [],
       stats: { kills: 0, dmgTaken: 0, rooms: 0, incidents: 0, averted: 0, hotfixes: 0, flags: 0, shots: 0,
-        dmgBy: {}, debtBy: {}, strikesHeld: 0, strikesLanded: 0, uninstalls: 0, forecastSeen: 0 },
+        dmgBy: {}, debtBy: {}, strikesHeld: 0, strikesLanded: 0, dmgShot: 0, uninstalls: 0, forecastSeen: 0 },
     };
     const game = {
       run, room: null, player: makePlayer(), stats: Object.assign({}, BASE_STATS), enemies: [], bullets: [],
@@ -747,7 +747,7 @@
   }
 
   // ------------------------------------------------------------------ damage
-  function hurt(game, dmg, source) {
+  function hurt(game, dmg, source, shot) {
     const run = game.run, p = game.player;
     if (p.inv > 0 || (run.phase !== 'run' && run.phase !== 'boss')) return;
     if (p.shield > 0) {
@@ -761,6 +761,7 @@
     run.stability -= dmg;
     run.stats.dmgTaken += dmg;
     run.stats.dmgBy[source] = (run.stats.dmgBy[source] || 0) + dmg;
+    if (shot) { run.stats.dmgShot += dmg; p.shotAt = run.time; } // projectiles, as opposed to contact: racks would have stopped these
     p.inv = 0.8;
     p.hurtT = 0.25;
     game.shake = Math.max(game.shake, 3);
@@ -1632,7 +1633,7 @@
       for (const b of game.ebullets) {
         b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
         if (solidAt(game.room, Math.floor(b.x / TS), Math.floor(b.y / TS))) { b.life = 0; continue; }
-        if (Math.hypot(b.x - p.x, b.y - p.y) < b.r + p.r - 1 && p.inv <= 0) { b.life = 0; hurt(game, b.dmg, b.src); }
+        if (Math.hypot(b.x - p.x, b.y - p.y) < b.r + p.r - 1 && p.inv <= 0) { b.life = 0; hurt(game, b.dmg, b.src, true); }
       }
       game.ebullets = game.ebullets.filter((b) => b.life > 0);
     }
