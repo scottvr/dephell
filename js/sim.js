@@ -759,7 +759,8 @@
     refresh(game);
     p.shield = game.stats.shield;
     const s = game.stats;
-    const dps = (s.damage * s.dmgMult * s.shots * (1 + s.crit * (s.critMult - 1))) / s.fireDelay * (s.cache ? 1 + 1 / s.cache : 1) * (1 + 0.5 * s.drones);
+    // a drone adds one half-damage bullet per volley, not half of every shot in it
+    const dps = (s.damage * s.dmgMult * (s.shots + 0.5 * s.drones) * (1 + s.crit * (s.critMult - 1))) / s.fireDelay * (s.cache ? 1 + 1 / s.cache : 1);
     const hp = Math.max(1500, dps * 40) * (1 + run.debt / 250);
     const boss = spawnEnemy(game, 'boss', W / 2, 52, false, { name: run.boss.name, variant: run.boss.variant });
     boss.hp = boss.maxHp = hp;

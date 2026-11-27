@@ -118,6 +118,11 @@
     const l = Math.hypot(fx, fy);
     if (l > 0.15) { inp.mx = fx / l; inp.my = fy / l; }
     if (danger && p.dashCd <= 0) inp.dash = true;
+    // a damaging dash (oauth-everything) is an attack: go through the nearest enemy when it is in reach
+    else if (game.stats.dashDamage && target && p.dashCd <= 0 && td < 52 && DH.Sim.los(game.room, p.x, p.y, target.x, target.y)) {
+      const dx = target.x - p.x, dy = target.y - p.y, d = Math.hypot(dx, dy) || 1;
+      inp.mx = dx / d; inp.my = dy / d; inp.dash = true;
+    }
     if (game.stats.flag && game.ebullets.length > 10) inp.ability = true;
     if (game.run.tools.rollback && (game.run.stability < 30 || Object.keys(game.run.degraded).length >= 2)) inp.rollback = true;
     return inp;
