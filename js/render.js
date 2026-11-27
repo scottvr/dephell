@@ -298,8 +298,8 @@
     if (s.orbitals) {
       for (let k = 0; k < s.orbitals; k++) {
         const a = p.orbA + (k * TAU) / s.orbitals;
-        disc(ctx, p.x + Math.cos(a) * 19, p.y + Math.sin(a) * 19, 3, COL.cyan);
-        disc(ctx, p.x + Math.cos(a) * 19, p.y + Math.sin(a) * 19, 1, COL.white);
+        disc(ctx, p.x + Math.cos(a) * DH.content.TUNE.orbitRadius, p.y + Math.sin(a) * DH.content.TUNE.orbitRadius, 3, COL.cyan);
+        disc(ctx, p.x + Math.cos(a) * DH.content.TUNE.orbitRadius, p.y + Math.sin(a) * DH.content.TUNE.orbitRadius, 1, COL.white);
       }
     }
     if (s.duck) {

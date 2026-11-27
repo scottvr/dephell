@@ -16,6 +16,10 @@
     hotfixDebt: 10,
     shimDebt: 12,
     pinDebtPerTick: 2,
+    monolithHp: 0.75, // its health relative to other bosses: its pairs soak your fire
+    monolithPairHp: 0.5, // Distributed Monolith's summoned Circular Dependency pairs, relative to a room's
+    replicaDamage: 0.6,
+    orbitRadius: 26, // micro-everything's sidecars; wide enough to reach an enemy you are fighting // a kubernot replica fires your whole volley at this fraction of your damage
     flagDebt: 3,
   };
 
@@ -23,7 +27,7 @@
   const BASE_STATS = {
     damage: 10, fireDelay: 0.26, shotSpeed: 250, shots: 1, pierce: 0, bounce: 0, homing: 0,
     chain: 0, split: 0, explode: 0, crit: 0, critMult: 2.5, speed: 92, dashCd: 0.85,
-    dashDamage: 0, drones: 0, orbitals: 0, shield: 0, regen: 0, cron: 0, duck: 0, cache: 0,
+    dashDamage: 0, redirect: 0, drones: 0, orbitals: 0, shield: 0, regen: 0, cron: 0, duck: 0, cache: 0,
     hallucinate: 0, flag: 0, flagCd: 14, dmgMult: 1, legacySlow: 0, obs: 0,
   };
 
@@ -128,7 +132,7 @@
     kubernot: {
       name: 'kubernot@1.28', eco: 'yaml', risk: 2, debt: 8, deps: ['etc-d', 'helm-chart', 'ingress-ctl'],
       tag: 'Solves problems you did not have until you installed it.',
-      power: 'REPLICA  a drone fires alongside you', hard: 'two replicas, self-healing',
+      power: 'REPLICA  a drone fires your volley too', hard: 'two replicas, self-healing',
       fx: [{ stat: 'drones', op: 'add', v: 1, hard: 2 }, { stat: 'regen', op: 'add', hard: 1 }],
     },
     memcashed: {
@@ -200,10 +204,10 @@
       fx: [{ stat: 'cron', op: 'set', v: 5, hard: 3 }],
     },
     'oauth-everything': {
-      name: 'oauth-everything@2', eco: 'net', risk: 1, debt: 0, deps: ['http-client', 'jwt-lib', 'json-parse'],
+      name: 'oauth-everything@2', eco: 'net', risk: 1, debt: 0, deps: ['http-client', 'jwt-lib'],
       tag: 'Redirects you somewhere else to prove who you are.',
-      power: 'REDIRECT  fast dash that damages on contact', hard: 'faster, harder-hitting dash',
-      fx: [{ stat: 'dashCd', op: 'mul', v: 0.6, hard: 0.45 }, { stat: 'dashDamage', op: 'add', v: 30, hard: 60 }],
+      power: 'REDIRECT  dash sends bullets back at the shooters', hard: 'redirects hit twice as hard',
+      fx: [{ stat: 'redirect', op: 'max', v: 20, hard: 40 }, { stat: 'dashCd', op: 'mul', v: 0.6, hard: 0.45 }],
     },
     // starter: never offered by the registry; arrives with a project (see PROJECTS).
     'create-app': {

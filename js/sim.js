@@ -759,9 +759,11 @@
     refresh(game);
     p.shield = game.stats.shield;
     const s = game.stats;
-    // a drone adds one half-damage bullet per volley, not half of every shot in it
-    const dps = (s.damage * s.dmgMult * (s.shots + 0.5 * s.drones) * (1 + s.crit * (s.critMult - 1))) / s.fireDelay * (s.cache ? 1 + 1 / s.cache : 1);
-    const hp = Math.max(1500, dps * 40) * (1 + run.debt / 250);
+    // Your own gun only. Separate shooters (replicas, orbitals, the cron ring) and on-hit effects are
+    // not counted, so they are not cancelled out by a tougher boss.
+    const dps = (s.damage * s.dmgMult * s.shots * (1 + s.crit * (s.critMult - 1))) / s.fireDelay * (s.cache ? 1 + 1 / s.cache : 1);
+    // the Distributed Monolith is spread thin: its summoned pairs soak your fire, so less of it is in the room
+    const hp = Math.max(1500, dps * 40) * (1 + run.debt / 250) * (run.boss.variant === 'monolith' ? TUNE.monolithHp : 1);
     const boss = spawnEnemy(game, 'boss', W / 2, 52, false, { name: run.boss.name, variant: run.boss.variant });
     boss.hp = boss.maxHp = hp;
     boss.enrage = 1 + 0.25 * run.boss.missing;
@@ -908,7 +910,8 @@
       if (wild) ang = run.rng.next() * TAU;
       spawnBullet(game, ox, oy, ang, s.damage * mult, { pierce, wild });
     }
-    for (const d of p.drones) spawnBullet(game, d.x, d.y, p.aim, s.damage * 0.5 * mult, { drone: true });
+    // a replica (kubernot) fires your whole volley, at reduced damage
+    for (const d of p.drones) for (let i = 0; i < n; i++) spawnBullet(game, d.x, d.y, p.aim + (i - (n - 1) / 2) * 0.13, s.damage * TUNE.replicaDamage * mult, { drone: true });
     if (!echo) {
       run.stats.shots++;
       if (s.cache) { p.shotCount++; if (p.shotCount % s.cache === 0) p.echoT = 0.07; }
@@ -944,6 +947,18 @@
             damageEnemy(game, e, s.dashDamage * s.dmgMult, p.dvx / 380, p.dvy / 380, false);
             game.rings.push({ x: e.x, y: e.y, r: 2, max: 14, life: 0.18, color: '#3ef0e0' });
           }
+        }
+      }
+      // REDIRECT (oauth-everything): bullets you dash through are sent back, at the nearest enemy
+      if (s.redirect) {
+        for (const b of game.ebullets) {
+          if (b.life <= 0 || Math.hypot(b.x - p.x, b.y - p.y) > p.r + 18) continue;
+          b.life = 0;
+          let to = null, td = 1e9;
+          for (const e of game.enemies) { const d = dist(e, b); if (targetable(e) && !e.dead && d < td) { td = d; to = e; } }
+          const ang = to ? Math.atan2(to.y - b.y, to.x - b.x) : Math.atan2(-b.vy, -b.vx);
+          spawnBullet(game, b.x, b.y, ang, s.redirect, {});
+          game.rings.push({ x: b.x, y: b.y, r: 2, max: 8, life: 0.15, color: '#3ef0e0' });
         }
       }
     } else {
@@ -997,7 +1012,7 @@
       p.orbA += dt * 3.2;
       for (let k = 0; k < s.orbitals; k++) {
         const a = p.orbA + (k * TAU) / s.orbitals;
-        const ox = p.x + Math.cos(a) * 19, oy = p.y + Math.sin(a) * 19;
+        const ox = p.x + Math.cos(a) * TUNE.orbitRadius, oy = p.y + Math.sin(a) * TUNE.orbitRadius;
         for (const e of game.enemies) {
           if (!targetable(e) || e.dead) continue;
           if (e.orbCd > 0) continue;
@@ -1074,7 +1089,7 @@
             const base = Math.atan2(b.vy, b.vx);
             for (let i = 0; i < s.split; i++) spawnBullet(game, b.x, b.y, base + (rnd(game) - 0.5) * 2.6, b.dmg * 0.35, { shard: true, life: 0.45, skip: e.id });
           }
-          if (s.explode) explode(game, b, e);
+          if (s.explode) explode(game, b, null); // the blast catches the enemy it hit too: it works on a boss
         }
         if (b.pierce > 0) b.pierce--; else { b.life = 0; break; }
       }
@@ -1413,11 +1428,12 @@
         done(1.6);
         break;
       case 'monolith': {
-        const alive = game.enemies.filter((o) => o !== e && !o.dead).length;
-        if (alive < 3) { // one linked pair at a time: two beams plus the boss left no safe ground
+        // one linked pair at a time, and only once the last one is dead: killing a pair buys a breather
+        const pairUp = game.enemies.some((o) => o.type === 'cycle' && !o.dead) || game.room.queue.some((q) => q.spec.type === 'cycle');
+        if (!pairUp) {
           const pos = spawnPoint(game, run.rng, 66);
           for (const k of [0, 1]) {
-            game.room.queue.push({ t: 0.7, spec: { type: 'cycle', elite: false }, x: clamp(pos.x + k * 22, 26, W - 26), y: pos.y });
+            game.room.queue.push({ t: 0.7, spec: { type: 'cycle', elite: false, hpMul: TUNE.monolithPairHp }, x: clamp(pos.x + k * 22, 26, W - 26), y: pos.y });
             game.marks.push({ x: clamp(pos.x + k * 22, 26, W - 26), y: pos.y, life: 0.7, max: 0.7 });
           }
         }
@@ -1538,6 +1554,7 @@
       q.t -= dt;
       if (q.t <= 0) {
         const e = spawnEnemy(game, q.spec.type, q.x, q.y, q.spec.elite);
+        if (q.spec.hpMul) { e.hp *= q.spec.hpMul; e.maxHp *= q.spec.hpMul; }
         game.rings.push({ x: e.x, y: e.y, r: 12, max: 2, life: 0.2, color: '#ff4d5e' });
       }
     }

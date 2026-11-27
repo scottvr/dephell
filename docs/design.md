@@ -70,6 +70,18 @@ scales to the player's damage output at deploy time. As its health drops it stri
 unvetted node, breaks every shim and force-upgrades every pin — so each shortcut is called in
 mid-fight, as powers going dark. Vetted nodes visibly hold.
 
+Its health scales to **your own gun** only: damage, shots, crits, fire rate, echo shots. Separate
+shooters (kubernot's replicas, orbitals, the cron ring) and on-hit effects (bounce, split, blast,
+redirect) are not counted, so the boss does not cancel them out. Counting replicas used to
+double-punish kubernot: the boss was sized for a replica that its strikes then switched off.
+
+The Distributed Monolith summons one linked Circular Dependency pair at a time, only after the last
+pair is dead, at half health; and has three quarters of the usual health, because the pairs soak
+your fire. Sprawl summons it, so before this it was the real reason big-tree packages
+(enterprise-bus, micro-everything, kubernot) lost: it won 58% of its fights against the bot,
+against 13–23% for the others. Now about 40%, most of the gap being prod striking more unvetted
+nodes in a sprawling graph, which is the point.
+
 ## Grades
 
 A run that does not ship is graded **F**. A shipped release scores up to 7 points

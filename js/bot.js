@@ -109,6 +109,17 @@
       fx += (-b.vy / sp) * side * k * 4 + (dx / d) * k; fy += (b.vx / sp) * side * k * 4 + (dy / d) * k;
       if (d < 13) danger++;
     }
+    // a Circular Dependency pair's beam: step off the line, or dash through it when it is about to land
+    for (const e of game.enemies) {
+      if (e.type !== 'cycle' || e.dead || e.flank !== 1) continue;
+      const m = game.enemies.find((o) => o.id === e.mate && !o.dead && !o.dormant);
+      if (!m) continue;
+      const vx = m.x - e.x, vy = m.y - e.y, len2 = vx * vx + vy * vy || 1;
+      const tt = Math.max(0, Math.min(1, ((p.x - e.x) * vx + (p.y - e.y) * vy) / len2));
+      const cx = e.x + vx * tt, cy = e.y + vy * tt, dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1;
+      if (d < 24) { const k = (24 - d) / 24; fx += (dx / d) * k * 5; fy += (dy / d) * k * 5; }
+      if (d < 9) danger++;
+    }
     for (const u of game.puddles) {
       const dx = p.x - u.x, dy = p.y - u.y, d = Math.hypot(dx, dy) || 1;
       if (d < u.r + 10) { fx += (dx / d) * 3; fy += (dy / d) * 3; }
