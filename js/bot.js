@@ -12,6 +12,7 @@
     if (run.phase !== 'run' || !game.room.cleared) return false;
     policy = policy || {};
     const vetAll = policy.vet !== false;
+    const pkgsOn = (id) => [...G.dependents(g, id)].filter((x) => nodes[x].kind === 'pkg').length; // packages an outage here takes down
 
     if (run.cur === 'app') {
       if (!run.offerTaken && run.offers.length && !run.freeze) {
@@ -33,6 +34,12 @@
       if (run.commits >= 9 && run.obsBase < 2 && S.buyTool(game, 'tests')) return true;
       if (run.commits >= 12 && run.tools.rollback < 1 && S.buyTool(game, 'rollback')) return true;
     }
+    // containers go on the unvetted dependency that would take down the most packages
+    if (policy.contain !== false && run.tools.container > 0) {
+      const hub = Object.keys(nodes).filter((id) => nodes[id].kind !== 'pkg' && id !== 'app' && nodes[id].state !== 'vetted' && !nodes[id].contained)
+        .sort((a, b) => pkgsOn(b) - pkgsOn(a) || nodes[b].risk - nodes[a].risk)[0];
+      if (hub && pkgsOn(hub) >= 2 && S.contain(game, hub)) return true;
+    }
     const ids = Object.keys(nodes).filter((id) => id !== 'app' && nodes[id].state !== 'vetted' && S.canTravel(game, id));
     const score = (id) => {
       const n = nodes[id];
@@ -41,6 +48,7 @@
       if (id === run.pager.target && game.stats.obs >= 2) s += 60;
       if (n.kind === 'pkg') s += 40;
       s += n.risk * 3 - n.depth;
+      if (policy.hubs) s += pkgsOn(id) * 4; // experimental: protect hubs first
       return s;
     };
     const feats = S.features(game);

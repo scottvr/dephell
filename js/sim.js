@@ -70,7 +70,7 @@
     const run = {
       project, ticksTotal: ticks, restockEvery: restock,
       seed: seed >>> 0, rng: DH.makeRng(seed), crng: DH.makeRng((seed ^ 0x9e3779b9) >>> 0), tick: 0, ticksLeft: ticks, time: 0,
-      stability: TUNE.stability, maxStability: TUNE.stability, commits: pj.commits != null ? pj.commits : 3, debt: 0, obsBase: 1,
+      stability: TUNE.stability, maxStability: TUNE.stability, commits: pj.commits != null ? pj.commits : 3, debt: 0, obsBase: pj.obs || 1,
       graph: Graph.make(), cur: 'app', offers: [], offerTaken: false, restockIn: restock,
       pager: { in: TUNE.pagerEvery, target: null }, tools: { pin: 0, container: 0, rollback: 0 },
       shims: {}, log: [], suppressed: {}, degraded: {}, hardened: {}, freeze: false, phase: 'run',
