@@ -284,7 +284,7 @@
     let tip = '';
     if ((S.canDeploy(game) || run.freeze || run.ticksLeft <= 4) && !run.tools.rollback && run.commits >= cost('rollback')) tip = `Prod is close. A <b>Rollback Plan</b> [${key('rollback')}] is a heal you carry into the fight: press <kbd>R</kbd> when it gets bad.`;
     else if (UI.novice && G.packages(g).length && !run.offerTaken && !run.freeze && run.offers.length && run.commits >= cost('reroll')) tip = `None of these fit your build? <b>Refresh Registry</b> [${key('reroll')}] rerolls all three for ${cost('reroll')} commits.`;
-    $('overlay').innerHTML = `<div class="ov"><span class="close"><kbd>Esc</kbd> close</span><h2>REGISTRY</h2>
+    $('overlay').innerHTML = `<div class="ov"><span class="close" data-act="close"><kbd>E</kbd> close</span><h2>REGISTRY</h2>
       <div class="lede">Take one package per restock. You get its power now. Its dependency tree becomes rooms: vet them all and the package hardens; ignore them and the pager finds them. <b style="color:#eaffff">${run.commits} commits</b> to spend on tools.</div>
       ${tip ? `<div class="tip">${tip}</div>` : ''}${body}<div class="tools">${tools}</div><div class="toolhow" id="toolhow">${TOOL_HOW_DEFAULT}</div></div>`;
   }
@@ -336,7 +336,7 @@
   }
 
   function renderMap() {
-    $('overlay').innerHTML = `<div class="ov"><span class="close"><kbd>Tab</kbd>/<kbd>Esc</kbd> close</span><h2>DEPENDENCY GRAPH</h2>
+    $('overlay').innerHTML = `<div class="ov"><span class="close" data-act="close"><kbd>Tab</kbd> close</span><h2>DEPENDENCY GRAPH</h2>
       <div class="lede">The graph is the dungeon. Every node is a room; every edge is a door. What you install grows it.</div>
       <div id="mapwrap"><canvas id="bigmap" width="1280" height="1140"></canvas><div id="mapinfo"></div></div></div>`;
     drawBigMap(performance.now() / 1000);
@@ -389,14 +389,14 @@
       if (plan.down) html += `<li class="bad">${plan.down} node${plan.down > 1 ? 's' : ''} still DOWN: those packages stay offline</li>`;
       html += `<li>${obs >= 2 ? 'waiting for you: <b style="color:#eaffff">' + plan.name + '</b> — ' + esc(plan.why) : 'waiting for you: ??? (observability 2 would say)'}</li>`;
       if (!run.freeze && run.ticksLeft > 0) html += `<li class="ok">${run.ticksLeft} room${run.ticksLeft > 1 ? 's' : ''} left on the clock if you would rather keep vetting</li>`;
-      html += `</ul><div class="btns"><span class="btn" data-act="ship">ENTER — SHIP IT</span><span class="btn dim" data-act="close">ESC — not yet</span></div>`;
+      html += `</ul><div class="btns"><span class="btn" data-act="ship">ENTER — SHIP IT</span><span class="btn dim" data-act="close">E — not yet</span></div>`;
     }
     $('overlay').innerHTML = html + '</div></div>';
   }
 
   // ---- help
   function renderHelp() {
-    $('overlay').innerHTML = `<div class="ov"><span class="close"><kbd>Esc</kbd> close</span><h2>HOW TO SHIP</h2>
+    $('overlay').innerHTML = `<div class="ov"><span class="close" data-act="close"><kbd>H</kbd> close</span><h2>HOW TO SHIP</h2>
       <div class="lede">You are the last engineer awake. Ship v1.0 before the release train leaves.</div><div class="help">
       <div><h4>THE LOOP</h4>
       <p>1. At the <b>REGISTRY</b> (in <b>app</b>) install a package. You get its power immediately.</p>
@@ -416,8 +416,8 @@
       <p><kbd>${moveKeys()}</kbd> move · <kbd>Mouse</kbd> aim, hold to fire · <kbd>${aimKeys()}</kbd> fire without a mouse</p>
       <p><kbd>K</kbd> <span class="swap" data-act="swap">swap: move with ${aimKeys()}, aim with ${moveKeys()}</span></p>
       <p><kbd>Space</kbd> dash (brief invulnerability) · <kbd>E</kbd> use terminal</p>
-      <p><kbd>Tab</kbd> map + fast travel · <kbd>Q</kbd> feature flag · <kbd>R</kbd> rollback</p>
-      <p><kbd>H</kbd> this screen · <kbd>N</kbd> sound · <kbd>Esc</kbd> pause</p></div></div></div>`;
+      <p><kbd>Tab</kbd> map + fast travel · <kbd>Q</kbd> feature flag, from launch-dorkly · <kbd>R</kbd> rollback, if you bought one</p>
+      <p><kbd>H</kbd> this screen, and pause · <kbd>N</kbd> sound</p></div></div></div>`;
   }
 
   // ---- title + report
@@ -435,7 +435,7 @@
       }).join('')}</div>
       <div class="start">▶ ENTER — START: ${esc(PROJECTS[UI.project].name)} <span>◀ ▶ choose a project</span></div>
       <div class="controls"><span><b>${moveKeys()}</b> move</span><span><b>Mouse / ${aimKeys()}</b> aim + fire</span><span><b>Space</b> dash</span><span><b>E</b> use</span>
-      <span><b>Tab</b> map</span><span><b>Q</b> feature flag</span><span><b>H</b> help, in game</span><span><b>N</b> sound</span>
+      <span><b>Tab</b> map</span><span><b>Q</b> flag (launch-dorkly)</span><span><b>H</b> help, in game</span><span><b>N</b> sound</span>
       <span class="swap" data-act="swap"><b>K</b> swap: move with ${aimKeys()}, aim with ${moveKeys()}</span></div>
       <div class="meta">${m.runs ? `runs ${m.runs} · shipped ${m.wins} · best grade ${m.best || '—'}<br>` : ''}it is funny because it is true</div>`;
   }
@@ -451,7 +451,7 @@
       <div class="stats">${r.stats.map(([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`).join('')}</div>
       <h4>TIMELINE</h4><div class="tl">${r.timeline.map((e) => `<div class="${e.bad ? 'bad' : e.good ? 'good' : ''}"><i>${e.t}</i> ${esc(e.text)}</div>`).join('')}</div></div>`;
     return `<div class="report${r.won ? ' won' : ''}">${left}${right}<div class="grade" style="color:${r.won ? '#5bff8a' : '#ff4d5e'}">${r.grade}</div>
-      <div class="again">▶ ENTER — NEXT SPRINT <span data-act="projects">ESC — change project</span></div><div class="seed">${esc(PROJECTS[game.run.project].name.toLowerCase())} · run #${m.runs} · seed ${r.seed} · ${esc(r.identity)}</div></div>`;
+      <div class="again">▶ ENTER — NEXT SPRINT <span data-act="projects">C — change project</span></div><div class="seed">${esc(PROJECTS[game.run.project].name.toLowerCase())} · run #${m.runs} · seed ${r.seed} · ${esc(r.identity)}</div></div>`;
   }
   function drawReportGraph() {
     const cv = $('report-graph');
@@ -462,6 +462,8 @@
 
   // ------------------------------------------------------------------ input
   function onOverlayClick(e) {
+    // a click on the dimmed backdrop, outside the panel, closes it (nobody should need Esc)
+    if (e.target === $('overlay') && UI.mode !== 'deploy') { UI.close(); return; }
     const el = e.target.closest('[data-card],[data-tool],[data-act]');
     if (UI.mode === 'map' && e.target.id === 'bigmap' && mapPos) {
       const r = e.target.getBoundingClientRect();
@@ -481,8 +483,8 @@
       if (i === regSel) doInstall(); else { regSel = i; DH.Audio.sfx('ui'); renderRegistry(); }
     } else if (el.dataset.tool) { buy(el.dataset.tool); }
     else if (el.dataset.act) {
-      if (UI.mode === 'map') mapAct(el.dataset.act);
-      else if (el.dataset.act === 'close') UI.close();
+      if (el.dataset.act === 'close') UI.close();
+      else if (UI.mode === 'map') mapAct(el.dataset.act);
       else if (el.dataset.act === 'swap') UI.toggleSwap();
       else if (el.dataset.act === 'ship') ship();
     }
@@ -505,7 +507,7 @@
         else if (/^Digit[1-9]$/.test(code) && ids[+code.slice(5) - 1]) pickProject(ids[+code.slice(5) - 1]);
       } else if (performance.now() - UI.reportAt > 700) {
         if (code === 'Enter') hooks.newRun(UI.project);
-        else if (code === 'Escape') UI.open('title');
+        else if (code === 'Escape' || code === 'KeyC') UI.open('title');
       }
       return true;
     }
@@ -518,6 +520,7 @@
       else if (/^Digit[1-3]$/.test(code) && open && +code[5] <= n) { regSel = +code[5] - 1; DH.Audio.sfx('ui'); renderRegistry(); }
       else if (code === 'Enter' && open) doInstall();
       else if (TOOL_KEYS.indexOf(code) >= 0 && !e.repeat) buy(TOOLS[TOOL_KEYS.indexOf(code)].id);
+      else if (code === 'KeyE' && !e.repeat) UI.close(); // the key that opened it closes it: Esc also leaves browser full screen
       return true;
     }
     if (UI.mode === 'map') {
@@ -533,7 +536,7 @@
       else if (code === 'KeyX') mapAct('uninstall');
       return true;
     }
-    if (UI.mode === 'deploy') { if (code === 'Enter' && S.canDeploy(game)) ship(); return true; }
+    if (UI.mode === 'deploy') { if (code === 'Enter' && S.canDeploy(game)) ship(); else if (code === 'KeyE' && !e.repeat) UI.close(); return true; }
     if (UI.mode === 'help') { if (code === 'KeyH' || code === 'Enter') UI.close(); return true; }
     return true;
   };

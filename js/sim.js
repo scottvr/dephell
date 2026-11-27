@@ -778,6 +778,15 @@
   }
 
   // ------------------------------------------------------------------ damage
+  // a key pressed for a tool you do not have says so, instead of nothing happening (throttled)
+  function noTool(game, text) {
+    const p = game.player;
+    if (game.t - (p.noToolAt || -9) < 2.5) return;
+    p.noToolAt = game.t;
+    floater(game, p.x, p.y - 14, text, '#8a8f98');
+    sfx(game, 'denied');
+  }
+
   function hurt(game, dmg, source, shot) {
     const run = game.run, p = game.player;
     if (p.inv > 0 || (run.phase !== 'run' && run.phase !== 'boss')) return;
@@ -990,7 +999,8 @@
       floater(game, p.x, p.y - 14, 'FLAG OFF', '#ffc24a');
       sfx(game, 'flag');
     }
-    if (inp.rollback) S.rollback(game);
+    if (inp.rollback && !S.rollback(game) && !run.tools.rollback) noTool(game, 'NO ROLLBACK PLAN: buy one at the registry');
+    if (inp.ability && !s.flag && fighting) noTool(game, 'NO FLAG: it comes with launch-dorkly');
     if (s.regen && fighting) {
       p.regenT += dt;
       if (p.regenT >= 4) { p.regenT = 0; if (run.stability < run.maxStability) { run.stability = Math.min(run.maxStability, run.stability + s.regen); game.dirty = true; } }

@@ -290,7 +290,12 @@
       UI.open('registry');
       document.querySelector('[data-tool="container"]').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       check('pointing at a tool explains how to use it', /press C/.test(document.getElementById('toolhow').textContent));
-      UI.key('Escape', {});
+      UI.key('KeyE', {});
+      check('E closes the registry (no Esc needed: it also leaves browser full screen)', !UI.mode);
+      UI.open('map'); document.querySelector('.ov [data-act="close"]').click();
+      check('the close label closes the map', !UI.mode);
+      UI.open('help'); document.getElementById('overlay').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      check('a click on the backdrop closes help', !UI.mode);
       const left0 = game.run.ticksLeft, commits0 = game.run.commits;
       game.run.ticksLeft = 3; game.run.commits = 10; UI.open('registry');
       check('registry suggests a rollback plan when prod is close', /Rollback Plan/.test((document.querySelector('.ov .tip') || {}).textContent || ''));

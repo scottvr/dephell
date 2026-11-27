@@ -9,14 +9,16 @@ set; won her first run, an S, on run 33).
 ## 2026-11-26
 
 ### Feature flag (Q) "does nothing" (Mary)
-**Status:** confirmed bug, not fixed yet. launch-dorkly's FEATURE FLAG sets a 2.5s room freeze
-(`game.freezeT`) and the screen shows "FLAG OFF 2.5", but nothing in the sim reads the timer:
-enemies keep moving and firing. All Q does is erase the bullets on screen and add debt.
+**Status:** fixed (legibility). The flag itself works: it erases bullets and freezes enemies for
+2.5s. But it only exists if you installed launch-dorkly, while the title and help listed "Q feature
+flag" as a basic control, and pressing Q without it did nothing at all. Now the controls say where
+Q (and R) come from, and pressing either without the item says so on screen.
 
 ### Esc closes a screen, then also exits browser full screen (Mary)
-**Status:** not fixed yet. Safari treats Esc as "leave full screen" even after the page handled it.
-Plan: no screen should need Esc. The key that opened it closes it (E registry, Tab map, H help),
-and so does a click outside.
+**Status:** fixed. Safari treats Esc as "leave full screen" even after the page handled it. No
+screen needs Esc any more: E closes the registry and declines the deploy prompt, Tab the map, H
+help, C leaves the report for the project list; the close label and the dimmed backdrop are
+clickable. Esc still works; nothing asks for it.
 
 ### Tool descriptions cut off in the registry (Mary)
 7 of 8 tools ended mid-sentence ("Observability +1, permanently. See more,").
