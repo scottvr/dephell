@@ -32,13 +32,16 @@ of your packages built by the time the change freeze came ... I'm pretty sure do
 version is impossible."
 **Status:** confirmed. The Template starts with 20 rooms to vet on a 14-room clock: 0 of 40 bot runs
 ever finished. In progress: a clock that can be finished if you play well, and the sidebar showing
-rooms left against rooms unvetted. Also planned: incident response (fighting a down node's room)
-allowed during a freeze, and the pager silent through it.
+rooms left against rooms unvetted.
+**Status:** done. 0a1fff6: the Template has 26 rooms (difficulty ramps over the whole clock) and the
+sidebar shows "T-6 rooms · 9 unvetted", amber once finishing no longer fits. Change freeze spec
+(docs/design.md): incident response is allowed during a freeze; the pager is silent from the room
+that starts it.
 
 ### Template: weak starting weapon, and "let me buy better weapons with my commits" (Mary)
 "I didn't know what the container or the pin do anyway."
-**Status:** planned. Give create-whatever-app a real attack; an `npm install --force` tool to take a
-second package for commits (its tree still lands on the map); Pin/Container how-tos are now on hover.
+**Status:** done in e0946ed. create-whatever-app's shots pierce; `npm i --force` takes a second
+package for commits (its tree still lands on the map); Pin/Container how-tos show on hover.
 
 ### Move/aim keys swapped (Mary)
 **Status:** done in 993390b. K on the title or help screen.

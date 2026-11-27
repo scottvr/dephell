@@ -74,6 +74,7 @@
       if (room.incident) return 'INCIDENT ROOM: clear it to bring the node back up.';
       return '';
     }
+    if (run.freeze && downs.length) return `CHANGE FREEZE, but <b style="color:#ff4d5e">${esc(g.nodes[downs[0]].name)} is DOWN</b>: incident response is allowed. <kbd>Tab</kbd> map → travel there and fix it, then deploy.`;
     if (run.freeze) return run.cur === 'app' ? 'CHANGE FREEZE: walk into the <b>DEPLOY</b> door on the west wall.' : 'CHANGE FREEZE: press <kbd>Tab</kbd> and travel back to <b>app</b> to deploy.';
     if (downs.length) return `<b style="color:#ff4d5e">${esc(g.nodes[downs[0]].name)} is DOWN</b> — everything that depends on it is offline. <kbd>Tab</kbd> map → travel there and clear it (or hotfix it).`;
     if (run.cur === 'app') {
@@ -304,7 +305,7 @@
     const idle = game.room.cleared && run.phase === 'run';
     const acts = [];
     if (!n) return acts;
-    const travelWhy = !idle ? 'finish the fight first' : mapSel === run.cur ? 'you are here' : run.freeze && n.state !== 'vetted' ? 'change freeze' : !G.enterable(g, mapSel) ? 'vet a node that requires it first' : '';
+    const travelWhy = !idle ? 'finish the fight first' : mapSel === run.cur ? 'you are here' : run.freeze && n.state === 'unvetted' ? 'change freeze: only outages can be fixed' : !G.enterable(g, mapSel) ? 'vet a node that requires it first' : '';
     acts.push({ key: 'Enter', id: 'travel', label: n.state === 'vetted' || mapSel === 'app' ? 'Travel here' : n.state === 'down' ? 'Travel here and fix it (fight)' : n.kind === 'pkg' ? 'Travel here and integrate it (fight)' : 'Travel here and vet it (fight)', no: travelWhy });
     if (n.state === 'down') acts.push({ key: 'H', id: 'hotfix', label: `Hotfix from here (${TUNE.hotfixCommits}c, +${TUNE.hotfixDebt} debt)`, no: !idle ? 'finish the fight first' : run.commits < TUNE.hotfixCommits ? 'not enough commits' : '' });
     if ((n.state === 'unvetted' || S.yankable(n)) && mapSel !== 'app') acts.push({ key: 'P', id: 'pin', label: `Pin version (${run.tools.pin} charge${run.tools.pin === 1 ? '' : 's'})`, no: n.pinned ? 'already pinned' : run.tools.pin < 1 ? 'buy Pin Version at the registry' : '' });
@@ -404,7 +405,7 @@
       <p>2. Its dependency tree becomes new rooms. Clear the package's room to <b>integrate</b> it: that ships a feature.</p>
       <p>3. Ship ${TUNE.featuresNeeded} features, then walk into the <b>DEPLOY</b> door and beat production.</p>
       <h4>THE CLOCK</h4>
-      <p>Every room you clear moves the train one step. At T-0: change freeze, deploy with what you have.</p>
+      <p>Every room you clear moves the train one step. At T-0: change freeze. No new installs or vetting, but outages can still be fixed. Then deploy with what you have.</p>
       <h4>THE GRAPH</h4>
       <p><span class="a">□ Unvetted</span> nodes are liabilities. Every few rooms the <b>pager</b> takes one <span class="r">■ down</span>, and every package that depends on it — directly or transitively — goes <span class="r">offline</span> until you clear its room (or hotfix it for debt).</p>
       <p><span class="g">■ Vetted</span> nodes are safe. Vet a package's <i>whole</i> tree and it becomes <span class="g">★ hardened</span>: a stronger power.</p>

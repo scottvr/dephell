@@ -61,6 +61,24 @@ registry. Records are kept per project.
 - **Observability.** 1–4 (you start at 1). Gates enemy health bars, risk markers, how much of a tree the registry
   shows, conflict warnings, pager forecasts, and whether you can even see the boss's health.
 
+## Change freeze
+
+At T-0 (the last room of the clock is cleared) the release train leaves.
+
+- **Frozen:** installing, refreshing the registry, entering any unvetted room. That includes the
+  room of a package you installed but never integrated, so its feature does not ship.
+- **Still allowed:** incident response. A node that is down can be traveled to and its incident
+  room fought; clearing it brings the node back, vetted. The clock is already at 0, so this costs
+  stability and risk, not time. Hotfixes (map) and the Rollback Plan (R) work as usual, and tools
+  can still be bought.
+- **The pager is silent** from the room that starts the freeze on, so an outage cannot land at the
+  very moment you lose the means to fight it.
+- **Deploy** whenever you are ready; it is the only way forward. Each feature short of three adds
+  10 debt and makes the boss 25% angrier.
+
+A playtester read the earlier version (down rooms frozen too, pager live on the last room) as
+helplessness. Real freezes stop changes, not incident response.
+
 ## Production
 
 The boss is built from the run. Its identity comes from what dominates the architecture (debt →

@@ -371,6 +371,13 @@
       S.grow(game);
       check('...then its cron job grows an unvetted dependency and it un-hardens', dnd.deps.length === 1 && !DH.Graph.isHardened(game.run.graph, 'do-not-delete') && game.run.log.some((e) => e.kind === 'grew'));
       check('rubber-duck has a tree now', DH.Graph.preview(game.run.graph, 'rubber-duck').rooms > 1);
+      { // change freeze: stops changes, not incident response
+        const nodes = game.run.graph.nodes, grown = dnd.deps[0];
+        game.run.freeze = true; nodes.runtime.state = 'down';
+        check('in a freeze you can still travel to a down node to fix it', S.canTravel(game, 'runtime'));
+        check('...but not into an unvetted room', nodes[grown].state === 'unvetted' && !S.canTravel(game, grown));
+        nodes.runtime.state = 'vetted'; game.run.freeze = false;
+      }
       check('vendoring it (a pin) is allowed and takes it off the pager', S.pin(game, 'left-pad') && lp.pinned && game.run.log.some((e) => e.kind === 'pin' && /vendored/.test(e.text)));
     } catch (e) { out.push('FAIL exception: ' + (e && e.stack ? e.stack.split('\n').slice(0, 4).join(' | ') : e)); }
     const pre = document.createElement('pre');

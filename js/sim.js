@@ -232,13 +232,16 @@
       emit(game, 'restock');
       grow(game);
     }
-    run.pager.in--;
-    if (run.pager.in <= 0) fireIncident(game);
-    if (run.pager.in === 1) rollPagerTarget(game);
+    // the pager stops once the train leaves: no incident lands on the room that starts the freeze
+    if (run.ticksLeft > 0) {
+      run.pager.in--;
+      if (run.pager.in <= 0) fireIncident(game);
+      if (run.pager.in === 1) rollPagerTarget(game);
+    } else run.pager.target = null;
     if (run.ticksLeft <= 0 && !run.freeze) {
       run.freeze = true;
-      log(game, 'freeze', 'CHANGE FREEZE: the release train is leaving. Report to app.');
-      banner(game, 'CHANGE FREEZE', 'The release train is leaving. Return to app and deploy.', 'warn');
+      log(game, 'freeze', 'CHANGE FREEZE: no new changes. Outages can still be fixed. Report to app.');
+      banner(game, 'CHANGE FREEZE', 'No new changes. Outages can still be fixed. Then deploy.', 'warn');
       sfx(game, 'incident');
     }
   }
@@ -363,7 +366,7 @@
     const run = game.run;
     const n = run.graph.nodes[id];
     if (!n || !roomIdle(game) || id === run.cur) return false;
-    if (run.freeze && n.state !== 'vetted') return false;
+    if (run.freeze && n.state === 'unvetted') return false; // a freeze stops changes, not incident response
     return Graph.enterable(run.graph, id);
   };
   S.travel = function (game, id) {
@@ -1638,7 +1641,7 @@
         p.doorGrace = 0.6;
         if (door.to === 'prod') { emit(game, 'deployPrompt'); break; }
         const n = run.graph.nodes[door.to];
-        if (run.freeze && n.state !== 'vetted') { floater(game, p.x, p.y - 14, 'CHANGE FREEZE', '#ffc24a'); sfx(game, 'denied'); break; }
+        if (run.freeze && n.state === 'unvetted') { floater(game, p.x, p.y - 14, 'CHANGE FREEZE', '#ffc24a'); sfx(game, 'denied'); break; }
         if (!Graph.enterable(run.graph, door.to)) { floater(game, p.x, p.y - 14, 'LOCKED', '#ffc24a'); sfx(game, 'denied'); break; }
         enterNode(game, door.to, room.id);
         break;
