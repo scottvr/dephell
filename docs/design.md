@@ -55,6 +55,23 @@ scales to the player's damage output at deploy time. As its health drops it stri
 unvetted node, breaks every shim and force-upgrades every pin — so each shortcut is called in
 mid-fight, as powers going dark. Vetted nodes visibly hold.
 
+## Grades
+
+A run that does not ship is graded **F**. A shipped release scores up to 7 points
+(`R.build` in `js/reports.js`):
+
+| Measured at release | 2 points | 1 point | 0 points |
+| --- | --- | --- | --- |
+| Stability left | 60+ | 30–59 | under 30 |
+| Unvetted nodes (including any that are down) | 0 | 1–3 | 4+ |
+| Technical debt | under 25 | 25–49 | 50+ |
+| Prod strikes that landed on an unvetted node or broke a shim | — | 0 | 1+ |
+
+Points → grade: **S** 7 (a flawless release), **A** 6, **B** 4–5, **C** 2–3, **D** 0–1. The
+release report shows the breakdown and, for every row short of full marks, what the next point
+needs, so a grade always tells the player what to do differently. Records keep the best grade per
+project.
+
 ## Why these choices
 
 - The old prototype tracked consequences in ledgers the player could not feel. Here the only

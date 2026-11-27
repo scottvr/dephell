@@ -406,6 +406,7 @@
     const r = DH.Reports.build(game);
     const m = hooks.meta();
     const left = `<div><h2>${r.title}</h2><div class="sub">${esc(r.sub)}</div>` +
+      (r.rubric ? `<div class="f gw"><b>Grade ${r.grade} · ${r.points}/7 points <i>(S 7 · A 6 · B 4–5 · C 2–3 · D 0–1)</i></b>${r.rubric.map((x) => esc(x).replace(/ /g, '&nbsp;')).join(' · ')}</div>` : '') +
       r.fields.map(([k, v]) => `<div class="f"><b>${esc(k)}</b>${esc(v)}</div>`).join('') +
       r.sections.map(([h, items]) => `<h4>${esc(h)}</h4><ul>${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`).join('') + '</div>';
     const right = `<div><h4>FINAL ARCHITECTURE</h4><canvas id="report-graph" width="920" height="420"></canvas>

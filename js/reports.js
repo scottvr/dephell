@@ -174,10 +174,20 @@
       const version = '1.0.0' + (hot ? `-hotfix.${hot}` : '') + (run.freeze && f.features < TUNE.featuresNeeded ? '-mvp' : '');
       const impact = run.stability >= 70 ? 'Minimal' : run.stability >= 40 ? 'Noticeable, but nobody has tweeted yet' : run.stability >= 15 ? 'Significant. Support has been "looped in"' : 'The status page is also down';
       const known = f.unvetted.length + f.down.length;
-      const grade = (run.stability >= 60 ? 2 : run.stability >= 30 ? 1 : 0) + (known === 0 ? 2 : known <= 3 ? 1 : 0) + (run.debt < 25 ? 2 : run.debt < 50 ? 1 : 0) + (s.strikesLanded === 0 ? 1 : 0);
+      // the rubric is in docs/design.md ("Grades"); each row: label, value, points, max, what the next point needs
+      const stab = Math.round(run.stability), debt = Math.round(run.debt);
+      const rubric = [
+        ['stability', stab, stab >= 60 ? 2 : stab >= 30 ? 1 : 0, 2, stab >= 30 ? '60+' : '30+'],
+        ['unvetted nodes', known, known === 0 ? 2 : known <= 3 ? 1 : 0, 2, known <= 3 ? '0' : '3 or fewer'],
+        ['debt', debt, debt < 25 ? 2 : debt < 50 ? 1 : 0, 2, debt < 50 ? 'under 25' : 'under 50'],
+        ['prod strikes landed', s.strikesLanded, s.strikesLanded === 0 ? 1 : 0, 1, '0'],
+      ];
+      const points = rubric.reduce((a, r) => a + r[2], 0);
       return Object.assign(common, {
         won: true, title: 'RELEASE COMPLETE', sub: `v${version} is live. The pager is quiet.`,
-        grade: ['D', 'D', 'C', 'C', 'B', 'B', 'A', 'S'][grade],
+        grade: ['D', 'D', 'C', 'C', 'B', 'B', 'A', 'S'][points],
+        points,
+        rubric: rubric.map(([k, v, p, max, need]) => `${k} ${v}: ${p}/${max}` + (p < max ? ` (needs ${need})` : '')),
         fields: [
           ['Version', version],
           ['Defeated', run.boss.name + ' — ' + run.boss.why],
@@ -203,7 +213,9 @@
 
   R.text = function (game) {
     const r = R.build(game);
-    const out = [`${r.title} // seed ${r.seed} // grade ${r.grade}`, r.sub, ''];
+    const out = [`${r.title} // seed ${r.seed} // grade ${r.grade}`, r.sub];
+    if (r.rubric) out.push(`${r.points}/7 points: ${r.rubric.join(' · ')}`);
+    out.push('');
     for (const [k, v] of r.fields) out.push(`${k}: ${v}`);
     for (const [h, items] of r.sections) { out.push('', h); for (const i of items) out.push('  - ' + i); }
     out.push('', 'TIMELINE');
