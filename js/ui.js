@@ -134,7 +134,10 @@
     // sidebar: release train
     const used = run.ticksTotal - run.ticksLeft;
     const feats = S.features(game);
-    setHTML('train', `<h2>RELEASE TRAIN <b>${run.freeze ? 'CHANGE FREEZE' : 'T-' + run.ticksLeft + ' rooms'}</b></h2>` +
+    // rooms left against rooms still to vet: amber once vetting everything no longer fits
+    const todo = Object.keys(g.nodes).filter((id) => id !== 'app' && g.nodes[id].state !== 'vetted').length;
+    const todoTxt = run.freeze ? '' : ` <span style="color:${todo > run.ticksLeft ? '#ffc24a' : '#5d8a86'}">· ${todo} unvetted</span>`;
+    setHTML('train', `<h2>RELEASE TRAIN <b>${run.freeze ? 'CHANGE FREEZE' : 'T-' + run.ticksLeft + ' rooms'}${todoTxt}</b></h2>` +
       `<div class="pips"><i>${'■'.repeat(used)}</i>${'■'.repeat(run.ticksLeft)}</div>` +
       `<div>features shipped <b style="color:${feats >= TUNE.featuresNeeded ? '#5bff8a' : '#ffc24a'}">${feats}/${TUNE.featuresNeeded}</b>` +
       (run.offerTaken || run.freeze ? ` <span style="color:#5d8a86">· registry restocks in ${run.restockIn}</span>` : ' <span style="color:#5bff8a">· registry: NEW</span>') + '</div>');

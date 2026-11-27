@@ -23,15 +23,15 @@ few numbers (`PROJECTS` in `js/content.js`); every rule after that is the same.
 | --- | --- | --- |
 | Greenfield | Nothing. 14 rooms on the clock. | The standard sprint. |
 | The Inherited Monolith | Two packages already shipped, sharing a risk-3 node with a CVE; five unvetted rooms; 35 debt. | You have power on day one and one feature to go. Decide how much of someone else's tree to clean up before prod audits it. |
-| The Starter Template | One unshipped package with a seventeen-node tree built from the dependencies other packages use; observability 2 (pager forecasts); a rollback plan and a container. | You cannot vet it all. New packages add few rooms because their tree is already there, and already fragile. Choose which hubs to protect. |
+| The Starter Template | One unshipped package with a seventeen-node tree built from the dependencies other packages use (20 rooms to vet); 26 rooms on the clock; observability 2 (pager forecasts); a rollback plan and a container. | Vetting it all is possible, barely, if you waste nothing. New packages add few rooms because their tree is already there, and already fragile. Choose which hubs to protect first. |
 | The Weekend Rewrite | Nothing, 9 rooms, 12 commits, registry restocks every 2 rooms. | Ship fast and buy your way out. |
 
-The Template once had 16 rooms to make up for its tree. It played worse: nobody runs out of
-things to vet there, so the two extra rooms were fought at full difficulty with powers dark and
-stability worn down. It has the standard 14 and starts with dashboards instead, so the pager's
-next target is visible and protecting it is a choice. Balance gauge: the bot wins about 25% there
-vetting by risk and about 50% with `--hubs` (vet what most packages lean on first), against about
-70% in Greenfield.
+The Template's clock is sized so a careful player can finish: vet everything and still ship.
+Finishing is what makes Greenfield satisfying, and a playtester found the Template's 20 starting
+rooms on a 14-room clock simply impossible (0 of 40 bot runs ever finished). Difficulty follows
+progress through the release rather than the room number, so its 26 rooms ramp like Greenfield's 14.
+Balance gauge, 80 runs: the bot wins about 43% there against about 75% in Greenfield, and a bot
+that vets before shipping finishes everything in 14-24% of runs (Greenfield: about 22%).
 
 Inherited packages are logged as installs at T-0, so the reports can say that a node "came with
 the project and was never vetted". Starter packages (`starter: true`) never appear in the

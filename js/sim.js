@@ -610,10 +610,14 @@
     return room;
   }
 
+  // Difficulty follows progress through the release. A clock longer than the standard one (the
+  // Starter Template) ramps over its whole length instead of running past the standard end.
+  const progressTick = (run) => (run.ticksTotal > TUNE.ticksTotal ? (run.tick * TUNE.ticksTotal) / run.ticksTotal : run.tick);
+
   function planWaves(game, node, rng, incident) {
     const run = game.run;
     const lvl = S.debtLevel(run);
-    let budget = 4 + Math.min(node.depth, 3) * 1.5 + Math.min(run.tick, 14) * 0.7 + lvl + (node.kind === 'pkg' ? 2 : 0) + (incident ? 2 : 0);
+    let budget = 4 + Math.min(node.depth, 3) * 1.5 + Math.min(progressTick(run), 14) * 0.7 + lvl + (node.kind === 'pkg' ? 2 : 0) + (incident ? 2 : 0);
     const table = ECO[node.eco] || ECO.core;
     const types = Object.keys(table);
     const list = [];
@@ -676,7 +680,7 @@
   function spawnEnemy(game, type, x, y, elite, extra) {
     const def = ENEMIES[type];
     const run = game.run;
-    const scale = 1 + 0.1 * run.tick + 0.25 * Graph.packages(run.graph).length;
+    const scale = 1 + 0.1 * progressTick(run) + 0.25 * Graph.packages(run.graph).length;
     const e = Object.assign({
       id: game.nextId++, type, name: def.name, x, y, r: def.r, spd: def.spd, dmg: def.dmg,
       hp: def.hp * scale, maxHp: def.hp * scale, t: 0, st: 'seek', stT: 0, flash: 0, kx: 0, ky: 0, elite: !!elite,

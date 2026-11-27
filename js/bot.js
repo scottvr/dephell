@@ -64,7 +64,8 @@
       return true;
     }
     if (run.cur !== 'app') { S.travel(game, 'app'); return true; }
-    if (S.canDeploy(game) && (run.freeze || !targets.length || feats >= 3)) { S.deploy(game); return true; }
+    // policy.finish: a player who wants everything vetted before shipping (the playtester's style)
+    if (S.canDeploy(game) && (run.freeze || !targets.length || (feats >= 3 && !policy.finish))) { S.deploy(game); return true; }
     return false;
   };
 

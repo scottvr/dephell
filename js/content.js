@@ -315,8 +315,8 @@
     },
     template: {
       name: 'THE STARTER TEMPLATE', tag: 'One command. What could it install?',
-      brief: 'One package with seventeen dependencies. Everything you add leans on them. Comes with dashboards, a rollback plan and a container.',
-      start: [{ pkg: 'create-app' }], commits: 8, obs: 2, tools: { rollback: 1, container: 1 }, level: 'HARD',
+      brief: 'Seventeen dependencies before you write a line. 26 rooms on the clock. Comes with dashboards, a rollback plan and a container.',
+      start: [{ pkg: 'create-app' }], ticks: 26, commits: 8, obs: 2, tools: { rollback: 1, container: 1 }, level: 'HARD',
     },
     weekend: {
       name: 'THE WEEKEND REWRITE', tag: '"We can redo it by Monday."',

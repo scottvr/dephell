@@ -109,7 +109,8 @@ for (const [id, pj] of Object.entries(PROJECTS)) {
   tooLong('project ' + id, 'brief', pj.brief, 130);
   tooLong('project ' + id, 'level', pj.level, 28);
   for (const st of pj.start || []) if (!PACKAGES[st.pkg]) err('project ' + id, `starts with unknown package '${st.pkg}'`);
-  if (pj.ticks != null && !(pj.ticks >= 6 && pj.ticks <= 20)) err('project ' + id, `ticks ${pj.ticks} outside 6..20`);
+  // clocks longer than the standard 14 ramp difficulty over their whole length (progressTick in sim.js)
+  if (pj.ticks != null && !(pj.ticks >= 6 && pj.ticks <= 30)) err('project ' + id, `ticks ${pj.ticks} outside 6..30`);
 }
 for (const [id, p] of Object.entries(PACKAGES)) {
   if (p.starter && !Object.values(PROJECTS).some((pj) => (pj.start || []).some((st) => st.pkg === id))) err(id, 'starter package is not used by any project');

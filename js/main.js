@@ -339,7 +339,7 @@
       check('monolith starts with two shipped features in debt', game.run.project === 'monolith' && S.features(game) === 2 && game.run.debt >= 25 && game.stats.pierce > 0);
       check('monolith tree is unvetted', G.packages(g2).every((p) => !G.isHardened(g2, p)));
       UI.open('title'); UI.key('Digit3', {}); UI.key('Enter', {});
-      check('template starts with its package unshipped and tools', game.run.project === 'template' && S.features(game) === 0 && Object.keys(game.run.graph.nodes).length >= 20 && game.run.tools.rollback === 1 && game.run.ticksLeft === 14 && game.stats.obs >= 2);
+      check('template starts with its package unshipped and tools', game.run.project === 'template' && S.features(game) === 0 && Object.keys(game.run.graph.nodes).length >= 20 && game.run.tools.rollback === 1 && game.run.ticksLeft === 26 && game.stats.obs >= 2);
       check('starter package is never offered', !game.run.offers.includes('create-app'));
       UI.open('title'); UI.key('Digit4', {}); UI.key('Enter', {});
       check('weekend has a short clock', game.run.ticksLeft === 9 && game.run.commits === 12);
